@@ -1,0 +1,27 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: are-chat
+  # 默认使用 H2 内存库：开箱即用，无需安装数据库（建表脚本见 schema.sql，仅嵌入式库自动执行）
+  datasource:
+    url: jdbc:h2:mem:arechat;MODE=MySQL;DATABASE_TO_LOWER=TRUE;CASE_INSENSITIVE_IDENTIFIERS=TRUE;DB_CLOSE_DELAY=-1
+    driver-class-name: org.h2.Driver
+    username: sa
+    password: ""
+  servlet:
+    multipart:
+      max-file-size: 20MB
+      max-request-size: 25MB
+  # MP starter 的自动配置面向 Boot 3，Boot 4 下改由 MybatisPlusConfig 手工装配
+  autoconfigure:
+    exclude: com.baomidou.mybatisplus.autoconfigure.MybatisPlusAutoConfiguration
+
+arechat:
+  storage:
+    base-dir: ./uploads
+
+logging:
+  level:
+    com.smart.chat: INFO

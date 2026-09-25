@@ -1,0 +1,7 @@
+target/
+.idea/
+*.iml
+uploads/
+*.log
+hs_err_pid*.log
+.mvn/wrapper/maven-wrapper.jar
