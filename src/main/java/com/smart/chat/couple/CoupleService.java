@@ -208,8 +208,9 @@ public class CoupleService {
             return new OverviewVO(null, incoming, outgoing, null, 0);
         }
         long now = System.currentTimeMillis();
+        // 我还没兑现的逾期承诺数（给「还有 N 件事你没做到哦~」提醒条用）
         long overdue = promiseMapper.findBySpace(space.getId()).stream()
-                .filter(p -> p.getCreditor().equals(me) && p.isOverdue(now))
+                .filter(p -> p.getPromiser().equals(me) && p.isOverdue(now))
                 .count();
         return new OverviewVO(toSpaceVO(space, me), incoming, outgoing, checkinState(space, me), overdue);
     }

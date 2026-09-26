@@ -39,8 +39,8 @@ public class CoupleReminderJob {
         if (overdue.isEmpty()) {
             return;
         }
-        // 按受益人聚合：一次性给出「还有 N 件事」的汇总提醒
-        Map<String, List<String>> byCreditor = new LinkedHashMap<>();
+        // 按承诺人聚合：一次性给出「还有 N 件事」的汇总提醒（没做到的人自己收提醒）
+        Map<String, List<String>> byPromiser = new LinkedHashMap<>();
         int reminded = 0;
         for (CouplePromise promise : overdue) {
             if (today.equals(promise.getLastRemindDay())) {
@@ -48,11 +48,11 @@ public class CoupleReminderJob {
             }
             promise.setLastRemindDay(today);
             promiseMapper.updateById(promise);
-            byCreditor.computeIfAbsent(promise.getCreditor(), k -> new ArrayList<>())
+            byPromiser.computeIfAbsent(promise.getPromiser(), k -> new ArrayList<>())
                     .add("「" + promise.getContent() + "」");
             reminded++;
         }
-        for (Map.Entry<String, List<String>> entry : byCreditor.entrySet()) {
+        for (Map.Entry<String, List<String>> entry : byPromiser.entrySet()) {
             List<String> items = entry.getValue();
             String joined = String.join("、", items);
             String detail = items.size() == 1
