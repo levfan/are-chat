@@ -1,5 +1,6 @@
 package com.smart.chat.im;
 
+import com.smart.chat.auth.AppUserService;
 import com.smart.chat.common.ApiResponse;
 import com.smart.chat.common.BusinessException;
 import com.smart.chat.common.Sessions;
@@ -32,10 +33,12 @@ public class ProfileController {
 
     private final UserProfileMapper profileMapper;
     private final FriendMapper friendMapper;
+    private final AppUserService userService;
 
-    public ProfileController(UserProfileMapper profileMapper, FriendMapper friendMapper) {
+    public ProfileController(UserProfileMapper profileMapper, FriendMapper friendMapper, AppUserService userService) {
         this.profileMapper = profileMapper;
         this.friendMapper = friendMapper;
+        this.userService = userService;
     }
 
     @GetMapping
@@ -64,6 +67,8 @@ public class ProfileController {
                 throw new BusinessException(400, "昵称需为 1~32 个字");
             }
             profile.setNickname(nickname);
+            // 登录后修改昵称：同步 app_user（auth/me、管理后台用户列表显示的就是这里的昵称）
+            userService.updateNickname(username, nickname);
         }
         if (req.signature() != null) {
             String signature = req.signature().trim();
