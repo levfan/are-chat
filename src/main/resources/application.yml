@@ -21,6 +21,27 @@ spring:
 arechat:
   storage:
     base-dir: ./uploads
+  # 77 管理员引导：库里没有 ADMIN 时自动创建该账号（生产请用环境变量覆盖默认密码）
+  admin:
+    username: ${ARECHAT_ADMIN_USERNAME:admin}
+    password: ${ARECHAT_ADMIN_PASSWORD:admin123456}
+  # 78 注册审批通知（全部免费渠道，按需配置，可同时启用多个；都不配则仅站内待办）
+  # 企业微信群机器人 Webhook：免费、无条数限制，推荐首选（企业微信建群 → 添加群机器人 → 复制 Webhook）
+  notify:
+    wecom-webhook: ${ARECHAT_NOTIFY_WECOM_WEBHOOK:}
+    # WxPusher（https://wxpusher.zjiecode.com 免费）：appToken + 关注后拿到的 uid（逗号分隔）
+    wxpusher-app-token: ${ARECHAT_NOTIFY_WXPUSHER_TOKEN:}
+    wxpusher-uids: ${ARECHAT_NOTIFY_WXPUSHER_UIDS:}
+    # Server酱（https://sct.ftqq.com 免费额度每天 5 条）：SendKey
+    serverchan-sendkey: ${ARECHAT_NOTIFY_SERVERCHAN_KEY:}
+  # 86 敏感词过滤：mode=censor 替换为 ＊ / block 直接拦截；词库可继续追加
+  moderation:
+    enabled: true
+    mode: censor
+    sensitive-words: []
+  # 87 发送频率限制（防刷屏）：单用户每分钟最多条数
+  im:
+    send-limit-per-minute: 30
 
 logging:
   level:

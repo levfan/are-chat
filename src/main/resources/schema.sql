@@ -21,11 +21,13 @@ CREATE TABLE IF NOT EXISTS uploaded_file (
 --   ALTER TABLE friend_request ADD COLUMN message VARCHAR(100);
 --   ALTER TABLE user_profile ADD COLUMN presence_status VARCHAR(16) DEFAULT 'online';
 
--- ============ 账号体系（手机号注册） ============
+-- ============ 账号体系（手机号注册 + 管理员审批，77） ============
 -- 只有 app_user 里有记录的账号才是合法用户；用户名与手机号均唯一。
 -- 老库升级：
 --   CREATE TABLE app_user (...);  -- 同下方结构
+--   ALTER TABLE app_user ADD COLUMN role VARCHAR(16) DEFAULT 'USER';  -- 77 管理员角色
 --   之后为存量用户名补手机号与初始密码（password_hash 由应用生成）
+--   演示账号 alice/bob/carol 会被 AdminBootstrapper 启动时自动禁用（模拟用户不能登录）
 
 CREATE TABLE IF NOT EXISTS app_user (
     ID              VARCHAR(36) PRIMARY KEY,
@@ -36,12 +38,27 @@ CREATE TABLE IF NOT EXISTS app_user (
     avatar          VARCHAR(16),
     signature       VARCHAR(100),
     presence_status VARCHAR(16) DEFAULT 'online',
-    status          VARCHAR(16) NOT NULL DEFAULT 'ACTIVE',  -- ACTIVE / DISABLED
+    status          VARCHAR(16) NOT NULL DEFAULT 'ACTIVE',  -- ACTIVE / DISABLED / CLOSED(84 注销)
+    role            VARCHAR(16) NOT NULL DEFAULT 'USER',    -- USER / ADMIN（77）
     created         BIGINT NOT NULL,
     last_login_at   BIGINT,
     CONSTRAINT uq_app_user_username UNIQUE (username),
     CONSTRAINT uq_app_user_phone UNIQUE (phone)
 );
+
+-- 77 注册申请：审批通过才建 app_user；密码哈希在申请行里暂存
+CREATE TABLE IF NOT EXISTS registration_application (
+    ID           VARCHAR(36) PRIMARY KEY,
+    phone        VARCHAR(20) NOT NULL,
+    username     VARCHAR(64) NOT NULL,
+    password_hash VARCHAR(255) NOT NULL,
+    status       VARCHAR(16) NOT NULL,          -- PENDING / APPROVED / REJECTED
+    reject_reason VARCHAR(200),
+    created      BIGINT NOT NULL,
+    reviewed_at  BIGINT,
+    reviewed_by  VARCHAR(64)
+);
+CREATE INDEX IF NOT EXISTS idx_reg_app_status ON registration_application (status);
 
 CREATE TABLE IF NOT EXISTS friend (
     ID              VARCHAR(36) PRIMARY KEY,
@@ -107,4 +124,43 @@ CREATE TABLE IF NOT EXISTS message_star (
     msg_id   VARCHAR(36) NOT NULL,
     created  BIGINT NOT NULL,
     CONSTRAINT uq_star UNIQUE (username, msg_id)
+);
+
+-- ============ 新一轮功能（77–96） ============
+
+-- 84 会话内置顶消息：每会话一条，user_a/user_b 为字典序规范化后的双方用户名
+CREATE TABLE IF NOT EXISTS conversation_pin (
+    ID         VARCHAR(36) PRIMARY KEY,
+    user_a     VARCHAR(64) NOT NULL,
+    user_b     VARCHAR(64) NOT NULL,
+    msg_id     VARCHAR(36) NOT NULL,
+    created_by VARCHAR(64) NOT NULL,
+    created    BIGINT NOT NULL,
+    CONSTRAINT uq_conv_pin UNIQUE (user_a, user_b)
+);
+
+-- 88 全站公告 + 已读记录
+CREATE TABLE IF NOT EXISTS announcement (
+    ID         VARCHAR(36) PRIMARY KEY,
+    content    VARCHAR(500) NOT NULL,
+    created_by VARCHAR(64) NOT NULL,
+    enabled    TINYINT DEFAULT 1,
+    created    BIGINT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS announcement_read (
+    username        VARCHAR(64) NOT NULL,
+    announcement_id VARCHAR(36) NOT NULL,
+    read_at         BIGINT NOT NULL,
+    CONSTRAINT uq_ann_read UNIQUE (username, announcement_id)
+);
+
+-- 93 管理员操作审计
+CREATE TABLE IF NOT EXISTS admin_audit (
+    ID      VARCHAR(36) PRIMARY KEY,
+    actor   VARCHAR(64) NOT NULL,
+    action  VARCHAR(32) NOT NULL,
+    target  VARCHAR(64),
+    detail  VARCHAR(500),
+    created BIGINT NOT NULL
 );
