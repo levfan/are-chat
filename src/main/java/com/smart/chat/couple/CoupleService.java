@@ -45,8 +45,8 @@ public class CoupleService {
     public record CheckinStateVO(CheckinHalf me, CheckinHalf partner, int streak) {
     }
 
-    public record OverviewVO(SpaceVO space, InviteVO incoming, InviteVO outgoing, CheckinStateVO checkins,
-                             long overdueCount) {
+    public record OverviewVO(SpaceVO space, List<InviteVO> incoming, List<InviteVO> outgoing,
+                             CheckinStateVO checkins, long overdueCount) {
     }
 
     public record PromiseVO(String id, String promiser, String creditor, String content, Long dueAt,
@@ -199,10 +199,9 @@ public class CoupleService {
     // ========== 总览 ==========
 
     public OverviewVO overview(String me) {
-        List<CoupleInvite> incomingList = inviteMapper.findPendingTo(me);
-        List<CoupleInvite> outgoingList = inviteMapper.findPendingFrom(me);
-        InviteVO incoming = incomingList.isEmpty() ? null : InviteVO.of(incomingList.get(0));
-        InviteVO outgoing = outgoingList.isEmpty() ? null : InviteVO.of(outgoingList.get(0));
+        // 待处理邀请返回全部（可能同时收到多人邀请），按时间新→旧
+        List<InviteVO> incoming = inviteMapper.findPendingTo(me).stream().map(InviteVO::of).toList();
+        List<InviteVO> outgoing = inviteMapper.findPendingFrom(me).stream().map(InviteVO::of).toList();
         CoupleSpace space = spaceMapper.findActiveByUser(me).orElse(null);
         if (space == null) {
             return new OverviewVO(null, incoming, outgoing, null, 0);

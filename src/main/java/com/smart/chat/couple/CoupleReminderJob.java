@@ -11,6 +11,8 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * 约定逾期提醒：每天早上扫描「待兑现且过了截止时间」的承诺卡，
@@ -22,10 +24,12 @@ public class CoupleReminderJob {
 
     private static final Logger log = LoggerFactory.getLogger(CoupleReminderJob.class);
 
+    private final CoupleSpaceMapper spaceMapper;
     private final CouplePromiseMapper promiseMapper;
     private final ImPushService push;
 
-    public CoupleReminderJob(CouplePromiseMapper promiseMapper, ImPushService push) {
+    public CoupleReminderJob(CoupleSpaceMapper spaceMapper, CouplePromiseMapper promiseMapper, ImPushService push) {
+        this.spaceMapper = spaceMapper;
         this.promiseMapper = promiseMapper;
         this.push = push;
     }
@@ -35,10 +39,16 @@ public class CoupleReminderJob {
     public void remindOverdue() {
         long now = System.currentTimeMillis();
         String today = LocalDate.now().toString();
-        List<CouplePromise> overdue = promiseMapper.findPendingWithDueBefore(now);
-        if (overdue.isEmpty()) {
+        // 只提醒生效中的情侣空间：已解除的关系不再打扰
+        Set<String> activeSpaceIds = spaceMapper.findAllActive().stream()
+                .map(CoupleSpace::getId)
+                .collect(Collectors.toSet());
+        if (activeSpaceIds.isEmpty()) {
             return;
         }
+        List<CouplePromise> overdue = promiseMapper.findPendingWithDueBefore(now).stream()
+                .filter(p -> activeSpaceIds.contains(p.getSpaceId()))
+                .toList();
         // 按承诺人聚合：一次性给出「还有 N 件事」的汇总提醒（没做到的人自己收提醒）
         Map<String, List<String>> byPromiser = new LinkedHashMap<>();
         int reminded = 0;
