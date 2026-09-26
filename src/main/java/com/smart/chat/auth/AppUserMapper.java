@@ -47,4 +47,23 @@ public interface AppUserMapper extends BaseMapperCompat<AppUser> {
     default long countUsers() {
         return selectCount(new LambdaQueryWrapper<>());
     }
+
+    /** 79 用户管理：按用户名/手机号模糊搜索全部状态用户（管理员视角） */
+    default List<AppUser> searchAll(String keyword, int limit) {
+        LambdaQueryWrapper<AppUser> wrapper = new LambdaQueryWrapper<>();
+        if (keyword != null && !keyword.isBlank()) {
+            String kw = keyword.trim();
+            wrapper.and(w -> w.like(AppUser::getUsername, kw).or().like(AppUser::getPhone, kw));
+        }
+        wrapper.orderByAsc(AppUser::getUsername).last("LIMIT " + Math.max(1, Math.min(limit, 200)));
+        return selectList(wrapper);
+    }
+
+    default List<AppUser> findAdmins() {
+        return selectList(new LambdaQueryWrapper<AppUser>().eq(AppUser::getRole, AppUser.ROLE_ADMIN));
+    }
+
+    default long countAdmins() {
+        return selectCount(new LambdaQueryWrapper<AppUser>().eq(AppUser::getRole, AppUser.ROLE_ADMIN));
+    }
 }

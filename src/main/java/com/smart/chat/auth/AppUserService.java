@@ -1,6 +1,7 @@
 package com.smart.chat.auth;
 
 import com.smart.chat.common.BusinessException;
+import com.smart.chat.im.FriendMapper;
 import com.smart.chat.im.UserProfile;
 import com.smart.chat.im.UserProfileMapper;
 import org.springframework.stereotype.Service;
@@ -11,8 +12,8 @@ import java.util.Optional;
 import java.util.regex.Pattern;
 
 /**
- * 用户账号服务：手机号注册 → 合法用户；登录支持「手机号或用户名 + 密码」。
- * 原先的固定体验账号名单已被本服务取代（注册数据是唯一身份来源）。
+ * 用户账号服务：手机号注册申请 → 管理员审批（77）→ 合法用户；登录支持「手机号或用户名 + 密码」。
+ * 演示账号播种已移除（模拟用户不能登录，存量演示账号由 AdminBootstrapper 启动时禁用）。
  */
 @Service
 public class AppUserService {
@@ -24,13 +25,15 @@ public class AppUserService {
 
     private final AppUserMapper userMapper;
     private final UserProfileMapper profileMapper;
+    private final FriendMapper friendMapper;
     private final PasswordHasher passwordHasher;
     private final SmsCodeService smsCodeService;
 
-    public AppUserService(AppUserMapper userMapper, UserProfileMapper profileMapper,
+    public AppUserService(AppUserMapper userMapper, UserProfileMapper profileMapper, FriendMapper friendMapper,
                           PasswordHasher passwordHasher, SmsCodeService smsCodeService) {
         this.userMapper = userMapper;
         this.profileMapper = profileMapper;
+        this.friendMapper = friendMapper;
         this.passwordHasher = passwordHasher;
         this.smsCodeService = smsCodeService;
     }
@@ -54,27 +57,94 @@ public class AppUserService {
         return account == null ? "" : account.trim().toLowerCase();
     }
 
+    /**
+     * 77 创建账号（注册申请审批通过 / 管理员引导时调用；密码必须先经 PasswordHasher 编码）。
+     * 原直接注册入口已由 RegistrationService 的审批流取代。
+     */
     @Transactional
-    public AppUser register(String phone, String username, String password, String code) {
+    public AppUser createAccount(String phone, String username, String passwordHash, String role) {
         String validPhone = requireValidPhone(phone);
         String name = normalizeUsername(username);
         if (!USERNAME.matcher(name).matches()) {
             throw new BusinessException(400, "用户名需为 3~20 位小写字母、数字或下划线");
         }
-        validatePassword(password);
-
         if (userMapper.findByPhone(validPhone).isPresent()) {
             throw new BusinessException(409, "该手机号已经注册过了，直接登录吧");
         }
         if (userMapper.findByUsername(name).isPresent()) {
             throw new BusinessException(409, "用户名已被占用，换一个试试");
         }
-        smsCodeService.verifyAndConsume(validPhone, code);
-
-        AppUser user = AppUser.of(validPhone, name, passwordHasher.encode(password), name, "c0");
+        AppUser user = AppUser.of(validPhone, name, passwordHash, name, "c0", role);
         userMapper.insert(user);
         ensureProfile(user);
         return user;
+    }
+
+    /** 80 修改密码：校验旧密码 + 新密码强度 */
+    @Transactional
+    public void changePassword(String username, String oldPassword, String newPassword) {
+        AppUser user = find(username).orElseThrow(() -> new BusinessException(404, "账号不存在"));
+        if (oldPassword == null || !passwordHasher.matches(oldPassword, user.getPasswordHash())) {
+            throw new BusinessException(400, "旧密码不正确");
+        }
+        validatePassword(newPassword);
+        if (passwordHasher.matches(newPassword == null ? "" : newPassword, user.getPasswordHash())) {
+            throw new BusinessException(400, "新密码不能与旧密码相同");
+        }
+        user.setPasswordHash(passwordHasher.encode(newPassword));
+        userMapper.updateById(user);
+    }
+
+    /** 84 账号自助注销：标记 CLOSED（保留唯一性占位），清理双向好友关系，不再可登录/被搜索/被加好友 */
+    @Transactional
+    public void deactivate(String username, String password) {
+        AppUser user = find(username).orElseThrow(() -> new BusinessException(404, "账号不存在"));
+        if (password == null || !passwordHasher.matches(password, user.getPasswordHash())) {
+            throw new BusinessException(400, "密码不正确，无法注销");
+        }
+        user.setStatus(AppUser.STATUS_CLOSED);
+        userMapper.updateById(user);
+        friendMapper.deleteAllByOwner(username);
+        friendMapper.deleteAllByFriend(username);
+    }
+
+    /** 79 管理员启用/禁用用户账号 */
+    @Transactional
+    public void setStatus(String username, String status) {
+        AppUser user = find(username).orElseThrow(() -> new BusinessException(404, "账号不存在"));
+        if (!AppUser.STATUS_ACTIVE.equals(status) && !AppUser.STATUS_DISABLED.equals(status)) {
+            throw new BusinessException(400, "状态仅支持 ACTIVE / DISABLED");
+        }
+        user.setStatus(status);
+        userMapper.updateById(user);
+    }
+
+    /** 79 管理员重置密码：返回一次性展示的新密码 */
+    @Transactional
+    public String resetPassword(String username, String newPassword) {
+        AppUser user = find(username).orElseThrow(() -> new BusinessException(404, "账号不存在"));
+        validatePassword(newPassword);
+        user.setPasswordHash(passwordHasher.encode(newPassword));
+        userMapper.updateById(user);
+        return newPassword;
+    }
+
+    /** 管理员鉴权：非 ADMIN 一律 403（79 管理控制台入口） */
+    public AppUser requireAdmin(String username) {
+        AppUser user = find(username)
+                .orElseThrow(() -> new BusinessException(401, "账号不存在或已注销"));
+        if (!user.isAdmin()) {
+            throw new BusinessException(403, "需要管理员权限");
+        }
+        return user;
+    }
+
+    public List<AppUser> admins() {
+        return userMapper.findAdmins();
+    }
+
+    public boolean hasAdmin() {
+        return userMapper.countAdmins() > 0;
     }
 
     /** 登录：account 可以是手机号或用户名 */
@@ -93,6 +163,9 @@ public class AppUserService {
         }
         if (AppUser.STATUS_DISABLED.equals(user.getStatus())) {
             throw new BusinessException(403, "该账号已被禁用，联系管理员处理");
+        }
+        if (AppUser.STATUS_CLOSED.equals(user.getStatus())) {
+            throw new BusinessException(403, "该账号已注销，如需使用请重新申请");
         }
         user.setLastLoginAt(System.currentTimeMillis());
         userMapper.updateById(user);
@@ -116,8 +189,8 @@ public class AppUserService {
                 .toList();
     }
 
-    /** 注册时同步建资料行，保证既有资料/资料卡逻辑可直接使用 */
-    private void ensureProfile(AppUser user) {
+    /** 注册时同步建资料行，保证既有资料/资料卡逻辑可直接使用（RegistrationService 复用） */
+    public void ensureProfile(AppUser user) {
         if (profileMapper.selectById(user.getUsername()) != null) {
             return;
         }
@@ -131,7 +204,8 @@ public class AppUserService {
         profileMapper.insert(profile);
     }
 
-    private void validatePassword(String password) {
+    /** 密码规则：6~64 位、无空格、必须同时含字母和数字（注册申请与改密共用） */
+    public void validatePassword(String password) {
         String value = password == null ? "" : password;
         if (value.length() < 6 || value.length() > 64) {
             throw new BusinessException(400, "密码长度需为 6~64 位");

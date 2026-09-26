@@ -32,6 +32,16 @@ public interface FriendMapper extends BaseMapperCompat<Friend> {
                 .eq(Friend::getFriendUsername, a));
     }
 
+    /** 84 注销清理：删除以该用户为发起人的全部好友关系 */
+    default void deleteAllByOwner(String owner) {
+        delete(new LambdaQueryWrapper<Friend>().eq(Friend::getOwnerUsername, owner));
+    }
+
+    /** 84 注销清理：删除以该用户为对方的其他人的好友关系 */
+    default void deleteAllByFriend(String friendUsername) {
+        delete(new LambdaQueryWrapper<Friend>().eq(Friend::getFriendUsername, friendUsername));
+    }
+
     /** 刷新某用户在所有好友列表里的「最近在线」时间。 */
     default void updateLastSeenByUsername(String friendUsername, Long lastSeenAt) {
         update(null, new LambdaUpdateWrapper<Friend>()

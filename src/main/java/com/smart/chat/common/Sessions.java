@@ -18,4 +18,9 @@ public final class Sessions {
         }
         return user.toString();
     }
+
+    /** 已由 LoginInterceptor 保证登录的取值（拦截器 401，这里不再重复判空） */
+    public static String username(HttpSession session) {
+        return requireUser(session);
+    }
 }

@@ -15,6 +15,11 @@ public class AppUser {
 
     public static final String STATUS_ACTIVE = "ACTIVE";
     public static final String STATUS_DISABLED = "DISABLED";
+    /** 84 账号自助注销：保留用户名/手机号占位，禁止登录、不可被搜索/加好友 */
+    public static final String STATUS_CLOSED = "CLOSED";
+
+    public static final String ROLE_USER = "USER";
+    public static final String ROLE_ADMIN = "ADMIN";
 
     @TableId(value = "ID", type = IdType.INPUT)
     private String id;
@@ -26,10 +31,16 @@ public class AppUser {
     private String signature;
     private String presenceStatus;
     private String status;
+    /** USER / ADMIN（管理员可审批注册申请、管理用户与公告） */
+    private String role;
     private Long created;
     private Long lastLoginAt;
 
     public static AppUser of(String phone, String username, String passwordHash, String nickname, String avatar) {
+        return of(phone, username, passwordHash, nickname, avatar, ROLE_USER);
+    }
+
+    public static AppUser of(String phone, String username, String passwordHash, String nickname, String avatar, String role) {
         AppUser user = new AppUser();
         user.id = UUID.randomUUID().toString();
         user.phone = phone;
@@ -40,6 +51,7 @@ public class AppUser {
         user.signature = "";
         user.presenceStatus = "online";
         user.status = STATUS_ACTIVE;
+        user.role = role == null || role.isBlank() ? ROLE_USER : role;
         user.created = System.currentTimeMillis();
         return user;
     }
@@ -122,6 +134,18 @@ public class AppUser {
 
     public void setStatus(String status) {
         this.status = status;
+    }
+
+    public String getRole() {
+        return role;
+    }
+
+    public void setRole(String role) {
+        this.role = role;
+    }
+
+    public boolean isAdmin() {
+        return ROLE_ADMIN.equals(role);
     }
 
     public Long getCreated() {
