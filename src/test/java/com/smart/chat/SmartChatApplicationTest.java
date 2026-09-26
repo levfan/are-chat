@@ -43,20 +43,21 @@ class SmartChatApplicationTest {
 
     @Test
     void loginThenAccessProtectedApi() throws Exception {
-        // 演示账号由 DemoUserSeeder 播种（alice / arechat123）
+        // 管理员账号由 AdminBootstrapper 引导（admin / admin123456，配置可覆盖）
         HttpRequest request = HttpRequest.newBuilder(URI.create("http://localhost:" + port + "/api/auth/login"))
                 .header("Content-Type", "application/json")
-                .POST(HttpRequest.BodyPublishers.ofString("{\"account\":\"alice\",\"password\":\"arechat123\"}"))
+                .POST(HttpRequest.BodyPublishers.ofString("{\"account\":\"admin\",\"password\":\"admin123456\"}"))
                 .build();
 
         HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
 
         assertThat(response.statusCode()).isEqualTo(200);
-        assertThat(response.body()).contains("alice");
+        assertThat(response.body()).contains("admin");
+        assertThat(response.body()).contains("ADMIN");
     }
 
     @Test
-    void registerWithPhoneCreatesLegitimateUser() throws Exception {
+    void registerGoesIntoApprovalQueueInsteadOfDirectLogin() throws Exception {
         String phone = "13900009999";
         HttpRequest sms = HttpRequest.newBuilder(URI.create("http://localhost:" + port + "/api/auth/sms-code"))
                 .header("Content-Type", "application/json")
@@ -66,6 +67,7 @@ class SmartChatApplicationTest {
         assertThat(smsResponse.statusCode()).isEqualTo(200);
         String code = smsResponse.body().replaceAll(".*\"devCode\":\"(\\d+)\".*", "$1");
 
+        // 77 注册只产生待审批申请，不再直接建号登录
         HttpRequest register = HttpRequest.newBuilder(URI.create("http://localhost:" + port + "/api/auth/register"))
                 .header("Content-Type", "application/json")
                 .POST(HttpRequest.BodyPublishers.ofString("{\"phone\":\"" + phone + "\",\"username\":\"newbie\","
@@ -75,6 +77,21 @@ class SmartChatApplicationTest {
 
         assertThat(registered.statusCode()).isEqualTo(200);
         assertThat(registered.body()).contains("newbie");
+        assertThat(registered.body()).contains("PENDING");
+
+        // 审批进度可查询
+        HttpResponse<String> status = get("/api/auth/register-status?account=newbie");
+        assertThat(status.statusCode()).isEqualTo(200);
+        assertThat(status.body()).contains("PENDING");
+
+        // 申请在途时登录给出审批提示（而不是「账号或密码不正确」）
+        HttpRequest login = HttpRequest.newBuilder(URI.create("http://localhost:" + port + "/api/auth/login"))
+                .header("Content-Type", "application/json")
+                .POST(HttpRequest.BodyPublishers.ofString("{\"account\":\"newbie\",\"password\":\"abc12345\"}"))
+                .build();
+        HttpResponse<String> loginResponse = client.send(login, HttpResponse.BodyHandlers.ofString());
+        assertThat(loginResponse.statusCode()).isEqualTo(403);
+        assertThat(loginResponse.body()).contains("审批");
     }
 
     @Test

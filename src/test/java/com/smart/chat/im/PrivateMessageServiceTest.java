@@ -42,6 +42,15 @@ class PrivateMessageServiceTest {
     @Mock
     private AppUserService userService;
 
+    @Mock
+    private com.smart.chat.im.ModerationService moderation;
+
+    @Mock
+    private com.smart.chat.im.MessageRateLimiter rateLimiter;
+
+    @Mock
+    private ConversationPinMapper pinMapper;
+
     @InjectMocks
     private PrivateMessageService service;
 
@@ -51,6 +60,10 @@ class PrivateMessageServiceTest {
         lenient().when(userService.normalizeUsername(org.mockito.ArgumentMatchers.anyString()))
                 .thenAnswer(inv -> inv.getArgument(0, String.class).trim().toLowerCase());
         lenient().when(userService.exists(org.mockito.ArgumentMatchers.anyString())).thenReturn(true);
+        // 86 敏感词过滤默认放行（返回原文）；限流默认不触发（void 方法空实现）
+        lenient().when(moderation.clean(org.mockito.ArgumentMatchers.anyString(),
+                        org.mockito.ArgumentMatchers.anyString()))
+                .thenAnswer(inv -> inv.getArgument(1, String.class));
     }
 
     private void stubFriendship(String me, String peer) {
@@ -411,5 +424,65 @@ class PrivateMessageServiceTest {
         assertThatThrownBy(() -> service.edit("alice", message.getId(), "   "))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("不能为空");
+    }
+
+    // ---------- 新一轮：82 文件消息 / 86 敏感词 / 87 限流 / 84 置顶 / 85 清空 ----------
+
+    @Test
+    void sendFileMessageRequiresInAppPayload() {
+        stubFriendship("alice", "bob");
+        when(push.isOnline("bob")).thenReturn(false);
+
+        String payload = "{\"name\":\"报表.xlsx\",\"size\":1024,\"url\":\"/api/files/abc/download\"}";
+        PrivateMessage sent = service.send("alice", "bob", payload, "file", null);
+        assertThat(sent.getMsgType()).isEqualTo(PrivateMessage.TYPE_FILE);
+        assertThat(sent.getContent()).isEqualTo(payload);
+
+        // 非站内地址 / 缺名称直接拒绝
+        assertThatThrownBy(() -> service.send("alice", "bob",
+                "{\"name\":\"a.exe\",\"size\":1,\"url\":\"http://evil/a.exe\"}", "file", null))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("站内");
+        assertThatThrownBy(() -> service.send("alice", "bob", "{\"size\":1,\"url\":\"/api/files/a/download\"}", "file", null))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("站内");
+    }
+
+    @Test
+    void sensitiveWordsAreCleanedBeforeSend() {
+        stubFriendship("alice", "bob");
+        when(push.isOnline("bob")).thenReturn(false);
+        lenient().when(moderation.clean(eq("alice"), org.mockito.ArgumentMatchers.anyString()))
+                .thenAnswer(inv -> ((String) inv.getArgument(1)).replace("赌博", "＊＊"));
+
+        PrivateMessage sent = service.send("alice", "bob", "这里有赌博内容", "text", null);
+        assertThat(sent.getContent()).isEqualTo("这里有＊＊内容");
+    }
+
+    @Test
+    void rateLimitRejectsFloodBeforeFriendshipCheck() {
+        org.mockito.Mockito.doThrow(new BusinessException(429, "发送太快了"))
+                .when(rateLimiter).check("alice");
+        assertThatThrownBy(() -> service.send("alice", "bob", "在吗", "text", null))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("发送太快");
+        verify(messageMapper, never()).insert(any(PrivateMessage.class));
+    }
+
+    @Test
+    void pinReplacesPreviousPinAndUnpinClears() {
+        stubFriendship("alice", "bob");
+        PrivateMessage message = PrivateMessage.of("alice", "bob", "重点", PrivateMessage.TYPE_TEXT);
+        when(messageMapper.selectById(message.getId())).thenReturn(message);
+
+        PrivateMessageService.PinVO pin = service.pin("alice", "bob", message.getId());
+        assertThat(pin.msgId()).isEqualTo(message.getId());
+        verify(pinMapper).deleteForConversation("alice", "bob");
+        verify(pinMapper).insert(any(ConversationPin.class));
+        verify(push).pushPin(eq("alice"), eq("bob"), eq(message.getId()), eq(true));
+
+        service.unpin("alice", "bob");
+        verify(pinMapper, org.mockito.Mockito.times(2)).deleteForConversation("alice", "bob");
+        verify(push).pushPin(eq("alice"), eq("bob"), org.mockito.ArgumentMatchers.isNull(), eq(false));
     }
 }

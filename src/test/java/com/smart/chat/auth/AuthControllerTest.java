@@ -15,6 +15,7 @@ import java.util.Optional;
 
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -35,6 +36,9 @@ class AuthControllerTest {
 
     @MockitoBean
     private SmsCodeService smsCodeService;
+
+    @MockitoBean
+    private RegistrationService registrationService;
 
     private AppUser alice() {
         return AppUser.of("13800000001", "alice", "hash", "alice", "c0");
@@ -97,16 +101,44 @@ class AuthControllerTest {
     }
 
     @Test
-    void registerStartsSession() throws Exception {
-        when(userService.register("13900001111", "zhangsan", "abc12345", "123456")).thenReturn(alice());
+    void registerSubmitsApprovalApplicationInsteadOfLogin() throws Exception {
+        // 77 注册不再直接建号登录：只提交待审批申请
+        when(registrationService.apply("13900001111", "zhangsan", "abc12345", "123456"))
+                .thenReturn(new RegistrationService.ApplicationVO("app-1", "zhangsan", "139****1111",
+                        RegistrationApplication.STATUS_PENDING, null, 1L, null, null));
 
         mockMvc.perform(post("/api/auth/register")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"phone\":\"13900001111\",\"username\":\"zhangsan\","
                                 + "\"password\":\"abc12345\",\"code\":\"123456\"}"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.username").value("alice"))
-                .andExpect(request().sessionAttribute("CurrentUser", "alice"));
+                .andExpect(jsonPath("$.data.username").value("zhangsan"))
+                .andExpect(jsonPath("$.data.status").value("PENDING"))
+                .andExpect(request().sessionAttributeDoesNotExist("CurrentUser"));
+    }
+
+    @Test
+    void registerStatusExposesApplicationState() throws Exception {
+        when(registrationService.statusByAccount("zhangsan"))
+                .thenReturn(java.util.Optional.of(new RegistrationService.ApplicationVO("app-1", "zhangsan",
+                        "139****1111", RegistrationApplication.STATUS_REJECTED, "资料不全", 1L, 2L, "admin")));
+
+        mockMvc.perform(get("/api/auth/register-status").param("account", "zhangsan"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("REJECTED"))
+                .andExpect(jsonPath("$.data.rejectReason").value("资料不全"));
+    }
+
+    @Test
+    void changePasswordDelegatesToService() throws Exception {
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                        .put("/api/auth/password")
+                        .sessionAttr("CurrentUser", "alice")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"oldPassword\":\"abc12345\",\"newPassword\":\"xw922ghk\"}"))
+                .andExpect(status().isOk());
+
+        verify(userService).changePassword("alice", "abc12345", "xw922ghk");
     }
 
     @Test
