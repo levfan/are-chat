@@ -50,13 +50,13 @@ public class RegistrationService {
         this.push = push;
     }
 
-    /** 提交注册申请：校验与原注册一致；申请入待审队列并通知管理员。昵称选填，不填审批后默认用用户名 */
+    /** 提交注册申请：校验与原注册一致；昵称必填；申请入待审队列并通知管理员 */
     @Transactional
     public ApplicationVO apply(String phone, String username, String password, String code, String nickname) {
         String validPhone = userService.requireValidPhone(phone);
         String name = userService.normalizeUsername(username);
         userService.validatePassword(password);
-        String validNickname = userService.validateNickname(nickname);
+        String validNickname = userService.requireValidNickname(nickname);
         smsCodeService.verifyAndConsume(validPhone, code);
 
         if (userService.exists(name)) {

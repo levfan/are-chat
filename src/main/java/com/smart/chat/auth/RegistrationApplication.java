@@ -22,7 +22,7 @@ public class RegistrationApplication {
     private String id;
     private String phone;
     private String username;
-    /** 注册时自愿填写的昵称（选填，审批通过后写入 app_user / user_profile） */
+    /** 注册时填写的昵称（必填，审批通过后写入 app_user / user_profile；历史申请可能为空） */
     private String nickname;
     private String passwordHash;
     private String status;

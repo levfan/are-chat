@@ -61,16 +61,13 @@ class RegistrationServiceTest {
         lenient().when(applicationMapper.findPendingByPhone(anyString())).thenReturn(Optional.empty());
         lenient().when(applicationMapper.countByStatus(anyString())).thenReturn(0L);
         lenient().when(passwordHasher.encode(anyString())).thenReturn("hash");
-        // 昵称校验逻辑在 AppUserService，这里按真实规则打桩
-        lenient().when(userService.validateNickname(any()))
+        // 昵称校验逻辑在 AppUserService，这里按真实规则打桩（注册必填）
+        lenient().when(userService.requireValidNickname(any()))
                 .thenAnswer(inv -> {
                     String nickname = inv.getArgument(0);
-                    if (nickname == null) {
-                        return null;
-                    }
-                    String trimmed = nickname.trim();
+                    String trimmed = nickname == null ? "" : nickname.trim();
                     if (trimmed.isEmpty()) {
-                        return null;
+                        throw new BusinessException(400, "请输入昵称（1~32 个字）");
                     }
                     if (trimmed.length() > 32) {
                         throw new BusinessException(400, "昵称需为 1~32 个字");
@@ -84,7 +81,7 @@ class RegistrationServiceTest {
     }
 
     @Test
-    void applyStoresOptionalNickname() {
+    void applyStoresRequiredNickname() {
         RegistrationService.ApplicationVO vo = apply("张三");
 
         ArgumentCaptor<RegistrationApplication> captor =
@@ -96,14 +93,14 @@ class RegistrationServiceTest {
     }
 
     @Test
-    void applyWithoutNicknameLeavesItNull() {
-        RegistrationService.ApplicationVO vo = apply(null);
-
-        ArgumentCaptor<RegistrationApplication> captor =
-                ArgumentCaptor.forClass(RegistrationApplication.class);
-        verify(applicationMapper).insert(captor.capture());
-        assertThat(captor.getValue().getNickname()).isNull();
-        assertThat(vo.nickname()).isNull();
+    void applyRejectsMissingNickname() {
+        assertThatThrownBy(() -> apply(null))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("请输入昵称");
+        assertThatThrownBy(() -> apply("   "))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("请输入昵称");
+        verify(applicationMapper, never()).insert(any(RegistrationApplication.class));
     }
 
     @Test

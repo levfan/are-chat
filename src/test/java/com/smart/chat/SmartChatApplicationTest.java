@@ -67,16 +67,17 @@ class SmartChatApplicationTest {
         assertThat(smsResponse.statusCode()).isEqualTo(200);
         String code = smsResponse.body().replaceAll(".*\"devCode\":\"(\\d+)\".*", "$1");
 
-        // 77 注册只产生待审批申请，不再直接建号登录
+        // 77 注册只产生待审批申请，不再直接建号登录（昵称必填）
         HttpRequest register = HttpRequest.newBuilder(URI.create("http://localhost:" + port + "/api/auth/register"))
                 .header("Content-Type", "application/json")
                 .POST(HttpRequest.BodyPublishers.ofString("{\"phone\":\"" + phone + "\",\"username\":\"newbie\","
-                        + "\"password\":\"abc12345\",\"code\":\"" + code + "\"}"))
+                        + "\"nickname\":\"小新\",\"password\":\"abc12345\",\"code\":\"" + code + "\"}"))
                 .build();
         HttpResponse<String> registered = client.send(register, HttpResponse.BodyHandlers.ofString());
 
         assertThat(registered.statusCode()).isEqualTo(200);
         assertThat(registered.body()).contains("newbie");
+        assertThat(registered.body()).contains("小新");
         assertThat(registered.body()).contains("PENDING");
 
         // 审批进度可查询

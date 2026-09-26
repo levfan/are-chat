@@ -83,7 +83,7 @@ public class AppUserService {
     }
 
     /**
-     * 昵称校验（注册申请与个人资料修改共用）：选填，填了就去空格，1~32 个字。
+     * 昵称校验（个人资料修改共用）：选填，填了就去空格，1~32 个字。
      * 返回规范化后的昵称，空白输入返回 null。
      */
     public String validateNickname(String nickname) {
@@ -98,6 +98,15 @@ public class AppUserService {
             throw new BusinessException(400, "昵称需为 1~32 个字");
         }
         return trimmed;
+    }
+
+    /** 昵称校验（注册共用）：必填，1~32 个字 */
+    public String requireValidNickname(String nickname) {
+        String valid = validateNickname(nickname);
+        if (valid == null) {
+            throw new BusinessException(400, "请输入昵称（1~32 个字）");
+        }
+        return valid;
     }
 
     /** 登录后修改昵称：同步 app_user（管理后台用户列表 / auth/me 使用），user_profile 由 ProfileController 维护 */

@@ -46,7 +46,7 @@ public class AuthController {
     }
 
     /** 77 注册申请提交结果：status=PENDING，审批通过后才能登录 */
-    public record RegisterResult(String applicationId, String username, String status, String hint) {
+    public record RegisterResult(String applicationId, String username, String nickname, String status, String hint) {
     }
 
     /** 77 审批进度查询结果 */
@@ -92,7 +92,8 @@ public class AuthController {
         }
         RegistrationService.ApplicationVO application =
                 registrationService.apply(req.phone(), req.username(), req.password(), req.code(), req.nickname());
-        return ApiResponse.ok(new RegisterResult(application.id(), application.username(), application.status(),
+        return ApiResponse.ok(new RegisterResult(application.id(), application.username(), application.nickname(),
+                application.status(),
                 "申请已提交，请等待管理员审批；审批通过后使用用户名/手机号 + 密码登录"));
     }
 

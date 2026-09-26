@@ -52,7 +52,7 @@ CREATE TABLE IF NOT EXISTS registration_application (
     ID           VARCHAR(36) PRIMARY KEY,
     phone        VARCHAR(20) NOT NULL,
     username     VARCHAR(64) NOT NULL,
-    nickname     VARCHAR(32) NULL,              -- 注册时选填的昵称，审批通过后写入 app_user/user_profile
+    nickname     VARCHAR(32) NULL,              -- 注册时必填的昵称，审批通过后写入 app_user/user_profile（历史数据可为空）
     password_hash VARCHAR(255) NOT NULL,
     status       VARCHAR(16) NOT NULL,          -- PENDING / APPROVED / REJECTED
     reject_reason VARCHAR(200),
