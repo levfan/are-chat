@@ -3,6 +3,7 @@ package com.smart.chat.auth;
 import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
+import lombok.Data;
 
 import java.util.UUID;
 
@@ -10,6 +11,7 @@ import java.util.UUID;
  * 系统合法用户：手机号注册产生，手机号与用户名均唯一。
  * 昵称/头像/签名/在线状态仍存 user_profile（注册时同步建一行），保持既有资料逻辑不变。
  */
+@Data
 @TableName("app_user")
 public class AppUser {
 
@@ -64,103 +66,7 @@ public class AppUser {
         return phone.substring(0, 3) + "****" + phone.substring(phone.length() - 4);
     }
 
-    public String getId() {
-        return id;
-    }
-
-    public void setId(String id) {
-        this.id = id;
-    }
-
-    public String getUsername() {
-        return username;
-    }
-
-    public void setUsername(String username) {
-        this.username = username;
-    }
-
-    public String getPhone() {
-        return phone;
-    }
-
-    public void setPhone(String phone) {
-        this.phone = phone;
-    }
-
-    public String getNickname() {
-        return nickname;
-    }
-
-    public void setNickname(String nickname) {
-        this.nickname = nickname;
-    }
-
-    public String getPasswordHash() {
-        return passwordHash;
-    }
-
-    public void setPasswordHash(String passwordHash) {
-        this.passwordHash = passwordHash;
-    }
-
-    public String getAvatar() {
-        return avatar;
-    }
-
-    public void setAvatar(String avatar) {
-        this.avatar = avatar;
-    }
-
-    public String getSignature() {
-        return signature;
-    }
-
-    public void setSignature(String signature) {
-        this.signature = signature;
-    }
-
-    public String getPresenceStatus() {
-        return presenceStatus;
-    }
-
-    public void setPresenceStatus(String presenceStatus) {
-        this.presenceStatus = presenceStatus;
-    }
-
-    public String getStatus() {
-        return status;
-    }
-
-    public void setStatus(String status) {
-        this.status = status;
-    }
-
-    public String getRole() {
-        return role;
-    }
-
-    public void setRole(String role) {
-        this.role = role;
-    }
-
     public boolean isAdmin() {
         return ROLE_ADMIN.equals(role);
-    }
-
-    public Long getCreated() {
-        return created;
-    }
-
-    public void setCreated(Long created) {
-        this.created = created;
-    }
-
-    public Long getLastLoginAt() {
-        return lastLoginAt;
-    }
-
-    public void setLastLoginAt(Long lastLoginAt) {
-        this.lastLoginAt = lastLoginAt;
     }
 }

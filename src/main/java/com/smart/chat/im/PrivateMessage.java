@@ -3,6 +3,7 @@ package com.smart.chat.im;
 import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
+import lombok.Data;
 
 import java.util.UUID;
 
@@ -10,6 +11,7 @@ import java.util.UUID;
  * 点对点私聊消息：text / image / poke / system，SENT / RECALLED。
  * image 的 content 存站内下载地址（/api/files/{id}/download）；replyToId 为引用的消息 id。
  */
+@Data
 @TableName("private_message")
 public class PrivateMessage {
 
@@ -43,9 +45,6 @@ public class PrivateMessage {
     private Integer edited;
     private Long created;
 
-    public PrivateMessage() {
-    }
-
     public static PrivateMessage of(String from, String to, String content, String msgType) {
         PrivateMessage row = new PrivateMessage();
         row.id = UUID.randomUUID().toString();
@@ -56,85 +55,5 @@ public class PrivateMessage {
         row.status = STATUS_SENT;
         row.created = System.currentTimeMillis();
         return row;
-    }
-
-    public String getId() {
-        return id;
-    }
-
-    public void setId(String id) {
-        this.id = id;
-    }
-
-    public String getFromUser() {
-        return fromUser;
-    }
-
-    public void setFromUser(String fromUser) {
-        this.fromUser = fromUser;
-    }
-
-    public String getToUser() {
-        return toUser;
-    }
-
-    public void setToUser(String toUser) {
-        this.toUser = toUser;
-    }
-
-    public String getContent() {
-        return content;
-    }
-
-    public void setContent(String content) {
-        this.content = content;
-    }
-
-    public String getMsgType() {
-        return msgType;
-    }
-
-    public void setMsgType(String msgType) {
-        this.msgType = msgType;
-    }
-
-    public String getStatus() {
-        return status;
-    }
-
-    public void setStatus(String status) {
-        this.status = status;
-    }
-
-    public String getReplyToId() {
-        return replyToId;
-    }
-
-    public void setReplyToId(String replyToId) {
-        this.replyToId = replyToId;
-    }
-
-    public Integer getReadFlag() {
-        return readFlag;
-    }
-
-    public void setReadFlag(Integer readFlag) {
-        this.readFlag = readFlag;
-    }
-
-    public Integer getEdited() {
-        return edited;
-    }
-
-    public void setEdited(Integer edited) {
-        this.edited = edited;
-    }
-
-    public Long getCreated() {
-        return created;
-    }
-
-    public void setCreated(Long created) {
-        this.created = created;
     }
 }
