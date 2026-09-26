@@ -18,4 +18,4 @@
 - 数据库脚本独立成 commit，不与业务代码混提
 - 提交信息：`type(scope): 中文描述`（type：feat/fix/db/refactor/perf/test/docs/chore/build/ci）
 - 完整规范：`.agents/skills/git-commit/SKILL.md`
-- 提交前 `mvn -q compile`（涉及测试改动跑 `mvn test`）通过；commit 完成后立即 push 到远端（push 失败保留本地 commit 并报告）
+- 提交前 `mvn -q compile`（涉及测试改动跑 `mvn test`）通过；commit 后先 `git pull --no-rebase` 再 push 到远端（pull/push 失败保留本地 commit 并报告）
