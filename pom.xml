@@ -21,6 +21,8 @@
         <java.version>25</java.version>
         <fastjson2.version>2.0.65</fastjson2.version>
         <mybatis-plus.version>3.5.17</mybatis-plus.version>
+        <!-- JDK 23+ 默认关闭隐式注解处理（JDK-8306819），Lombok 需要显式开启 -->
+        <maven.compiler.proc>full</maven.compiler.proc>
     </properties>
 
     <dependencies>
