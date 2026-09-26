@@ -41,6 +41,18 @@ public class ImPushService {
     public record ReadPayload(String type, String reader, String peer) {
     }
 
+    /** 84 会话内置顶消息：推给会话双方（pinned=false 为取消置顶）。 */
+    public record PinPayload(String type, String peerA, String peerB, String msgId, boolean pinned) {
+    }
+
+    /** 88 全站公告：推给所有在线用户。 */
+    public record AnnouncementPayload(String type, String announcementId, String content) {
+    }
+
+    /** 78 管理员待办：新注册申请提醒（只推给在线管理员）。 */
+    public record AdminEventPayload(String type, long pendingCount) {
+    }
+
     private final ChatSessionRegistry registry;
 
     public ImPushService(ChatSessionRegistry registry) {
@@ -53,6 +65,30 @@ public class ImPushService {
 
     public void push(String username, Object payload) {
         registry.sendToUser(username, JSON.toJSONString(payload));
+    }
+
+    /** 推给全部在线用户（88 公告广播） */
+    public void pushAll(Object payload) {
+        String json = JSON.toJSONString(payload);
+        for (String user : registry.onlineUsers()) {
+            registry.sendToUser(user, json);
+        }
+    }
+
+    /** 推给一组用户（78 在线管理员） */
+    public void pushToUsers(Iterable<String> usernames, Object payload) {
+        String json = JSON.toJSONString(payload);
+        for (String user : usernames) {
+            registry.sendToUser(user, json);
+        }
+    }
+
+    /** 78 在线管理员收到新注册申请待办 */
+    public void pushAdminEvent(Iterable<String> adminUsernames, long pendingCount) {
+        AdminEventPayload payload = new AdminEventPayload("admin-pending", pendingCount);
+        for (String admin : adminUsernames) {
+            push(admin, payload);
+        }
     }
 
     public void pushDm(PrivateMessage message) {
@@ -92,6 +128,15 @@ public class ImPushService {
     public void pushRead(String reader, String peer) {
         if (isOnline(peer)) {
             push(peer, new ReadPayload("read", reader, peer));
+        }
+    }
+
+    /** 84 置顶/取消置顶：推给会话双方。 */
+    public void pushPin(String peerA, String peerB, String msgId, boolean pinned) {
+        PinPayload payload = new PinPayload("pin", peerA, peerB, msgId, pinned);
+        push(peerA, payload);
+        if (!peerA.equals(peerB)) {
+            push(peerB, payload);
         }
     }
 }
