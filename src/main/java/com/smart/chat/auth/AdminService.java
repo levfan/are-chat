@@ -4,6 +4,7 @@ import com.smart.chat.common.BusinessException;
 import com.smart.chat.im.ImPushService;
 import com.smart.chat.im.PrivateMessage;
 import com.smart.chat.im.PrivateMessageMapper;
+import com.smart.chat.notify.AdminNotifyService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -51,16 +52,19 @@ public class AdminService {
     private final AdminAuditMapper auditMapper;
     private final PrivateMessageMapper messageMapper;
     private final ImPushService push;
+    private final AdminNotifyService notifyService;
 
     public AdminService(RegistrationApplicationMapper applicationMapper, AppUserMapper userMapper,
                         AppUserService userService, AdminAuditMapper auditMapper,
-                        PrivateMessageMapper messageMapper, ImPushService push) {
+                        PrivateMessageMapper messageMapper, ImPushService push,
+                        AdminNotifyService notifyService) {
         this.applicationMapper = applicationMapper;
         this.userMapper = userMapper;
         this.userService = userService;
         this.auditMapper = auditMapper;
         this.messageMapper = messageMapper;
         this.push = push;
+        this.notifyService = notifyService;
     }
 
     public List<RegistrationApplication> applications(String status) {
@@ -88,6 +92,8 @@ public class AdminService {
 
         sendWelcome(user.getUsername(), reviewer);
         audit(reviewer, "APPROVE", user.getUsername(), "通过注册申请 " + application.getId());
+        // 78 审批结果免费渠道推送（失败不影响审批结果）
+        notifyService.notifyApplicationReviewed(user.getUsername(), true, reviewer);
         log.info("注册申请已通过：username={} reviewer={}", user.getUsername(), reviewer);
         return user;
     }
@@ -109,6 +115,8 @@ public class AdminService {
         applicationMapper.updateById(application);
         audit(reviewer, "REJECT", application.getUsername(),
                 cleanReason.isEmpty() ? "拒绝注册申请（未填原因）" : "拒绝注册申请：" + cleanReason);
+        // 78 审批结果免费渠道推送（失败不影响审批结果）
+        notifyService.notifyApplicationReviewed(application.getUsername(), false, reviewer);
     }
 
     public List<AdminUserVO> users(String keyword) {
