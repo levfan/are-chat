@@ -135,12 +135,16 @@ public class AdminService {
         audit(actor, active ? "ENABLE" : "DISABLE", username, active ? "启用账号" : "禁用账号");
     }
 
-    /** 79 重置密码：生成随机临时密码，返回给管理员一次性转交 */
+    /**
+     * 79 重置密码：password 指定时重置为该密码（需通过密码强度校验），为空则生成随机临时密码，
+     * 返回给管理员一次性转交。
+     */
     @Transactional
-    public String resetPassword(String actor, String username) {
-        String password = generatePassword();
+    public String resetPassword(String actor, String username, String specifiedPassword) {
+        boolean specified = specifiedPassword != null && !specifiedPassword.isEmpty();
+        String password = specified ? specifiedPassword : generatePassword();
         userService.resetPassword(username, password);
-        audit(actor, "RESET_PASSWORD", username, "重置用户密码");
+        audit(actor, "RESET_PASSWORD", username, specified ? "重置用户密码（指定密码）" : "重置用户密码");
         return password;
     }
 

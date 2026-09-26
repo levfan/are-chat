@@ -34,6 +34,10 @@ public class AdminController {
     public record AnnouncementRequest(String content) {
     }
 
+    /** 79 重置密码请求：password 选填，填了则重置为指定密码，留空则生成随机临时密码 */
+    public record ResetPasswordRequest(String password) {
+    }
+
     /** 77 注册申请视图（不含密码哈希；nickname 为注册时填写的昵称） */
     public record ApplicationVO(String id, String username, String nickname, String phone, String status,
                                 String rejectReason, Long created, Long reviewedAt, String reviewedBy) {
@@ -115,9 +119,11 @@ public class AdminController {
     }
 
     @PostMapping("/users/{username}/reset-password")
-    public ApiResponse<ResetPasswordVO> resetPassword(@PathVariable String username, HttpSession session) {
+    public ApiResponse<ResetPasswordVO> resetPassword(@PathVariable String username,
+                                                      @RequestBody(required = false) ResetPasswordRequest req,
+                                                      HttpSession session) {
         String actor = requireAdmin(session);
-        String password = adminService.resetPassword(actor, username);
+        String password = adminService.resetPassword(actor, username, req == null ? null : req.password());
         return ApiResponse.ok(new ResetPasswordVO(username, password));
     }
 
