@@ -53,7 +53,7 @@ public class CoupleService {
                             String status, Long doneAt, boolean overdue, Long created) {
     }
 
-    public record QuestionVO(String day, String question, String myAnswer, String partnerAnswer) {
+    public record QuestionVO(String day, String topic, String question, String myAnswer, String partnerAnswer) {
     }
 
     public record ItemVO(String id, String kind, String title, String note, String dueDate, boolean done,
@@ -337,11 +337,11 @@ public class CoupleService {
     public QuestionVO todayQuestion(String me) {
         CoupleSpace space = requireSpace(me);
         String day = today();
-        String question = CoupleQuestions.pick(day);
+        CoupleQuestions.BankQuestion picked = CoupleQuestions.pick(day);
         String my = answerMapper.find(space.getId(), day, me).map(CoupleAnswer::getAnswer).orElse(null);
         String partnerAnswer = answerMapper.find(space.getId(), day, space.partnerOf(me))
                 .map(CoupleAnswer::getAnswer).orElse(null);
-        return new QuestionVO(day, question, my, partnerAnswer);
+        return new QuestionVO(day, picked.topic(), picked.text(), my, partnerAnswer);
     }
 
     /** 回答今日一问：双方回答后拼在一起看；重复提交视为修改。 */
