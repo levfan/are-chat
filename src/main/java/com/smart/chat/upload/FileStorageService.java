@@ -17,6 +17,7 @@ import java.util.Optional;
 
 /**
  * 文件存储服务：SHA-256 内容去重 + 路径清洗 + 目录防穿越。
+ * 96 上传安全加固：危险扩展名黑名单（可执行/脚本/网页服务端文件）一律拒绝，防止借下载链接分发或落盘执行。
  */
 @Service
 public class FileStorageService {
@@ -26,6 +27,11 @@ public class FileStorageService {
 
     public record DownloadableFile(String originalName, String contentType, Path path, long size) {
     }
+
+    /** 96 危险扩展名黑名单（全小写）：可执行/脚本/服务端页面/脚本宿主文件 */
+    private static final java.util.Set<String> BLOCKED_EXTENSIONS = java.util.Set.of(
+            ".exe", ".msi", ".bat", ".cmd", ".com", ".scr", ".ps1", ".vbs", ".vbe", ".js", ".jse",
+            ".wsf", ".wsh", ".hta", ".cpl", ".jar", ".sh", ".apk", ".html", ".htm", ".svg", ".dll");
 
     private final UploadedFileMapper mapper;
     private final FileStorageProperties properties;
@@ -42,6 +48,11 @@ public class FileStorageService {
             throw new BusinessException("不能上传空文件");
         }
         String originalName = sanitizeName(upload.getOriginalFilename());
+        // 96 扩展名黑名单：下载时保留原始 Content-Disposition，可执行文件不允许上传
+        String extension = extensionOf(originalName).toLowerCase();
+        if (BLOCKED_EXTENSIONS.contains(extension)) {
+            throw new BusinessException(400, "不允许上传 " + extension + " 类型的文件");
+        }
         byte[] bytes;
         try {
             bytes = upload.getBytes();
@@ -54,7 +65,6 @@ public class FileStorageService {
             return new StoreResult(existing.get(), true);
         }
 
-        String extension = extensionOf(originalName);
         String storedPath = sha256.substring(0, 2) + "/" + sha256 + extension;
         Path target = resolveStored(storedPath);
         try {
