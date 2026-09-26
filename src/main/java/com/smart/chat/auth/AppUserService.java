@@ -1,7 +1,11 @@
 package com.smart.chat.auth;
 
 import com.smart.chat.common.BusinessException;
+import com.smart.chat.couple.CoupleInviteMapper;
+import com.smart.chat.couple.CoupleSpace;
+import com.smart.chat.couple.CoupleSpaceMapper;
 import com.smart.chat.im.FriendMapper;
+import com.smart.chat.im.ImPushService;
 import com.smart.chat.im.UserProfile;
 import com.smart.chat.im.UserProfileMapper;
 import org.springframework.stereotype.Service;
@@ -28,14 +32,23 @@ public class AppUserService {
     private final FriendMapper friendMapper;
     private final PasswordHasher passwordHasher;
     private final SmsCodeService smsCodeService;
+    /** 情侣空间清理（84 注销时解散所在空间并通知对方）；直接注入 Mapper/Push 避免与 CoupleService 循环依赖 */
+    private final CoupleSpaceMapper coupleSpaceMapper;
+    private final CoupleInviteMapper coupleInviteMapper;
+    private final ImPushService push;
 
     public AppUserService(AppUserMapper userMapper, UserProfileMapper profileMapper, FriendMapper friendMapper,
-                          PasswordHasher passwordHasher, SmsCodeService smsCodeService) {
+                          PasswordHasher passwordHasher, SmsCodeService smsCodeService,
+                          CoupleSpaceMapper coupleSpaceMapper, CoupleInviteMapper coupleInviteMapper,
+                          ImPushService push) {
         this.userMapper = userMapper;
         this.profileMapper = profileMapper;
         this.friendMapper = friendMapper;
         this.passwordHasher = passwordHasher;
         this.smsCodeService = smsCodeService;
+        this.coupleSpaceMapper = coupleSpaceMapper;
+        this.coupleInviteMapper = coupleInviteMapper;
+        this.push = push;
     }
 
     /** 手机号格式校验（注册与发验证码共用） */
@@ -147,6 +160,15 @@ public class AppUserService {
         userMapper.updateById(user);
         friendMapper.deleteAllByOwner(username);
         friendMapper.deleteAllByFriend(username);
+        // 情侣空间清理：解散所在空间（对方收到推送）并删除相关邀请
+        coupleSpaceMapper.findActiveByUser(username).ifPresent(space -> {
+            space.setStatus(CoupleSpace.STATUS_DISSOLVED);
+            space.setDissolvedAt(System.currentTimeMillis());
+            coupleSpaceMapper.updateById(space);
+            push.pushCoupleEvent("dissolved", username, space.partnerOf(username),
+                    "对方账号已注销，情侣空间自动解除 😢");
+        });
+        coupleInviteMapper.deleteAllInvolving(username);
     }
 
     /** 79 管理员启用/禁用用户账号 */

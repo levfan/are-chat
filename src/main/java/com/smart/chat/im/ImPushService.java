@@ -53,6 +53,10 @@ public class ImPushService {
     public record AdminEventPayload(String type, long pendingCount) {
     }
 
+    /** 情侣空间事件：邀请/同意/约定打卡/早晚安/今日一问/共享清单等（username 为动作发起方，接收方视角即「TA」）。 */
+    public record CoupleEventPayload(String type, String event, String username, String detail) {
+    }
+
     private final ChatSessionRegistry registry;
 
     public ImPushService(ChatSessionRegistry registry) {
@@ -137,6 +141,20 @@ public class ImPushService {
         push(peerA, payload);
         if (!peerA.equals(peerB)) {
             push(peerB, payload);
+        }
+    }
+
+    /** 情侣空间事件：推给除发起方之外的接收人（username 记录发起方）。 */
+    public void pushCoupleEvent(String event, String actor, String toUser, String detail) {
+        push(toUser, new CoupleEventPayload("couple", event, actor, detail));
+    }
+
+    /** 情侣空间事件：推给双方（如今日仪式解锁），actor 为触发者。 */
+    public void pushCoupleEventBoth(String event, String actor, String userA, String userB, String detail) {
+        CoupleEventPayload payload = new CoupleEventPayload("couple", event, actor, detail);
+        push(userA, payload);
+        if (!userA.equals(userB)) {
+            push(userB, payload);
         }
     }
 }
