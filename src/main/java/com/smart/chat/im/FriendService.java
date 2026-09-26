@@ -18,8 +18,8 @@ import java.util.stream.Collectors;
 @Service
 public class FriendService {
 
-    public record FriendVO(String id, String username, String remark, String tag, boolean pinned, boolean muted,
-                           boolean blocked, boolean online, String status, Long lastSeenAt, long unread,
+    public record FriendVO(String id, String username, String nickname, String remark, String tag, boolean pinned,
+                           boolean muted, boolean blocked, boolean online, String status, Long lastSeenAt, long unread,
                            MessagePreview lastMessage) {
     }
 
@@ -55,12 +55,11 @@ public class FriendService {
 
     public List<FriendVO> listFriends(String me) {
         List<Friend> rows = friendMapper.findAllByOwner(me);
-        // 对方在线状态（online/busy/away）来自用户资料
+        // 对方资料（昵称 / 在线状态 online/busy/away）来自用户资料表
         List<String> peers = rows.stream().map(Friend::getFriendUsername).toList();
-        Map<String, String> statusMap = peers.isEmpty() ? Map.of()
+        Map<String, UserProfile> profileMap = peers.isEmpty() ? Map.of()
                 : profileMapper.selectBatchIds(peers).stream()
-                        .filter(p -> p.getPresenceStatus() != null)
-                        .collect(Collectors.toMap(UserProfile::getUsername, UserProfile::getPresenceStatus));
+                        .collect(Collectors.toMap(UserProfile::getUsername, p -> p));
         List<FriendVO> result = new ArrayList<>();
         for (Friend row : rows) {
             String peer = row.getFriendUsername();
@@ -70,13 +69,15 @@ public class FriendService {
                     .map(m -> new MessagePreview(m.getContent(), m.getMsgType(), m.getCreated(),
                             m.getFromUser().equals(me)))
                     .orElse(null);
+            UserProfile profile = profileMap.get(peer);
             result.add(new FriendVO(row.getId(), peer,
+                    profile == null ? "" : profile.getNickname(),
                     row.getRemark() == null ? "" : row.getRemark(),
                     row.getTag() == null ? "" : row.getTag(),
                     Boolean.TRUE.equals(row.getPinned()), Boolean.TRUE.equals(row.getMuted()),
                     Integer.valueOf(1).equals(row.getBlocked()),
                     push.isOnline(peer),
-                    statusMap.getOrDefault(peer, "online"),
+                    profile == null || profile.getPresenceStatus() == null ? "online" : profile.getPresenceStatus(),
                     row.getLastSeenAt(), unread, preview));
         }
         // 置顶优先 → 最后一条消息时间倒序 → 用户名

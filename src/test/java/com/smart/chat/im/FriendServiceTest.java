@@ -270,6 +270,27 @@ class FriendServiceTest {
     }
 
     @Test
+    void listFriendsCarriesPeerNicknameFromProfile() {
+        Friend row = Friend.of("alice", "bob");
+        when(friendMapper.findAllByOwner("alice")).thenReturn(List.of(row));
+        UserProfile bobProfile = new UserProfile();
+        bobProfile.setUsername("bob");
+        bobProfile.setNickname("波波");
+        bobProfile.setPresenceStatus("busy");
+        when(profileMapper.selectBatchIds(any())).thenReturn(List.of(bobProfile));
+        lenient().when(messageMapper.findLatestBetween("alice", "bob")).thenReturn(Optional.empty());
+        lenient().when(messageMapper.countUnread(anyString(), anyString(), org.mockito.ArgumentMatchers.any()))
+                .thenReturn(0L);
+        lenient().when(push.isOnline("bob")).thenReturn(false);
+
+        List<FriendService.FriendVO> friends = service.listFriends("alice");
+
+        assertThat(friends).hasSize(1);
+        assertThat(friends.get(0).nickname()).isEqualTo("波波");
+        assertThat(friends.get(0).status()).isEqualTo("busy");
+    }
+
+    @Test
     void rejectMarksRequestRejected() {
         FriendRequest request = FriendRequest.of("bob", "alice");
         when(requestMapper.selectById(request.getId())).thenReturn(request);
