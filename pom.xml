@@ -55,7 +55,12 @@
       <version>${fastjson2.version}</version>
     </dependency>
 
-    <!-- 数据库：默认 H2 开箱即用，mysql profile 使用 MySQL -->
+    <!-- 数据库：默认 MariaDB（外部库），H2 仅测试与临时回退使用，mysql profile 使用 MySQL -->
+    <dependency>
+      <groupId>org.mariadb.jdbc</groupId>
+      <artifactId>mariadb-java-client</artifactId>
+      <scope>runtime</scope>
+    </dependency>
     <dependency>
       <groupId>com.h2database</groupId>
       <artifactId>h2</artifactId>

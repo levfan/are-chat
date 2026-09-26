@@ -1,0 +1,42 @@
+# 测试专用配置：覆盖主配置的 datasource（test classpath 优先），单测固定走 H2 内存库，
+# 避免跑测试时误连外部 MariaDB。其余业务配置与主配置保持一致。
+server:
+  port: 8080
+
+spring:
+  application:
+    name: are-chat
+  datasource:
+    url: jdbc:h2:mem:arechat;MODE=MySQL;DATABASE_TO_LOWER=TRUE;CASE_INSENSITIVE_IDENTIFIERS=TRUE;DB_CLOSE_DELAY=-1
+    driver-class-name: org.h2.Driver
+    username: sa
+    password: ""
+  servlet:
+    multipart:
+      max-file-size: 20MB
+      max-request-size: 25MB
+  # MP starter 的自动配置面向 Boot 3，Boot 4 下改由 MybatisPlusConfig 手工装配
+  autoconfigure:
+    exclude: com.baomidou.mybatisplus.autoconfigure.MybatisPlusAutoConfiguration
+
+arechat:
+  storage:
+    base-dir: ./target/test-uploads
+  admin:
+    username: admin
+    password: admin123456
+  notify:
+    wecom-webhook: ""
+    wxpusher-app-token: ""
+    wxpusher-uids: ""
+    serverchan-sendkey: ""
+  moderation:
+    enabled: true
+    mode: censor
+    sensitive-words: []
+  im:
+    send-limit-per-minute: 30
+
+logging:
+  level:
+    com.smart.chat: INFO

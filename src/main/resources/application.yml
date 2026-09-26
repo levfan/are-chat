@@ -4,12 +4,19 @@ server:
 spring:
   application:
     name: are-chat
-  # 默认使用 H2 内存库：开箱即用，无需安装数据库（建表脚本见 schema.sql，仅嵌入式库自动执行）
+  # 数据源：默认连接外部 MariaDB（建表脚本 schema.sql 不会自动执行，外部库需手工初始化）
+  # 环境变量 DB_CONNECT_URL / DB_CONNECT_USER / DB_CONNECT_PASSWORD / DB_CONNECT_DRIVER 可整体覆盖
   datasource:
-    url: jdbc:h2:mem:arechat;MODE=MySQL;DATABASE_TO_LOWER=TRUE;CASE_INSENSITIVE_IDENTIFIERS=TRUE;DB_CLOSE_DELAY=-1
-    driver-class-name: org.h2.Driver
-    username: sa
-    password: ""
+    url: ${DB_CONNECT_URL:jdbc:mariadb://117.72.73.149:3307/smart_collections?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai&characterEncoding=utf8&rewriteBatchedStatements=true}
+    username: ${DB_CONNECT_USER:smart_collections}
+    password: ${DB_CONNECT_PASSWORD:Ht@706706706}
+    driver-class-name: ${DB_CONNECT_DRIVER:org.mariadb.jdbc.Driver}
+  # —— H2 内存库（备用方案，后期可随时切回：注释掉上面 mariadb 段、放开下面注释即可）——
+  # datasource:
+  #   url: jdbc:h2:mem:arechat;MODE=MySQL;DATABASE_TO_LOWER=TRUE;CASE_INSENSITIVE_IDENTIFIERS=TRUE;DB_CLOSE_DELAY=-1
+  #   driver-class-name: org.h2.Driver
+  #   username: sa
+  #   password: ""
   servlet:
     multipart:
       max-file-size: 20MB
