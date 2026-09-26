@@ -1,16 +1,17 @@
 ---
 name: git-commit
-description: 提交规范：每完成一个功能必须产生一个或多个 commit，按改动性质决定拆分还是合并，使用 Conventional Commits 中文描述，数据库脚本必须独立成 commit
-whenToUse: 完成一个功能/修复需要提交代码，或用户要求生成 commit 时使用
+description: 提交规范：每完成一个功能必须按改动性质拆分产生一个或多个 commit 并 push 到远端，使用 Conventional Commits 中文描述，数据库脚本必须独立成 commit
+whenToUse: 完成一个功能/修复需要提交代码，或用户要求生成 commit / 推送远端时使用
 ---
 
 # Git 提交规范（git-commit）
 
 ## 基本要求
 
-- 每完成一个功能（可独立验收的完整改动），必须产生 commit，不允许把完成的功能长期留在工作区不提交
+- 每完成一个功能（可独立验收的完整改动），只要产生了文件修改：必须形成 commit 并 push 到远端，不允许把完成的功能长期留在工作区不提交
 - 一个功能 = 一个或多个 commit；多个功能禁止共用一个 commit
 - 提交前必须确认可构建：后端 `mvn -q compile`（涉及测试改动跑 `mvn test`）；前端 `pnpm build`（涉及逻辑改动跑 `pnpm test`）
+- push 目标为当前分支的 upstream；没有 upstream 时用 `git push -u origin <分支名>`
 
 ## 拆分原则：先分组，再决定合并
 
@@ -46,6 +47,7 @@ feat(chat): 聊天窗口展示撤回提示
 ## 操作纪律
 
 - 分组后逐组 `git add <具体路径>` + `git commit`；仅当全部改动确属同一逻辑变更时才允许 `git add -A`
-- 功能完成立即提交，不积压多个功能再补提交
-- 未经用户要求不 push、不 rebase 已有历史、不使用 --no-verify
-- 用户对拆分/合并方式有明确要求时，以用户要求优先
+- 功能完成立即提交并 push，不积压多个功能再补提交
+- push 失败（网络、凭据、非快进冲突）时：保留本地 commit，向用户报告原因等待处理；禁止用 force push、自动 rebase/merge 解决冲突
+- 不 rebase 已有历史、不使用 --no-verify、不 force push
+- 用户对拆分/合并或 push 时机有明确要求时，以用户要求优先
