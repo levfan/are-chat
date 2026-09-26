@@ -31,7 +31,7 @@ public class PrivateMessage {
     public static final String IMAGE_URL_PREFIX = "/api/files/";
     public static final long RECALL_WINDOW_MS = 2 * 60 * 1000L;
 
-    @TableId(value = "ID", type = IdType.INPUT)
+    @TableId(value = "id", type = IdType.INPUT)
     private String id;
     private String fromUser;
     private String toUser;

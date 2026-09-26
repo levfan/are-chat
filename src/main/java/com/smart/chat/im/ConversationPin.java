@@ -13,7 +13,7 @@ import java.util.UUID;
 @TableName("conversation_pin")
 public class ConversationPin {
 
-    @TableId(value = "ID", type = IdType.INPUT)
+    @TableId(value = "id", type = IdType.INPUT)
     private String id;
     private String userA;
     private String userB;

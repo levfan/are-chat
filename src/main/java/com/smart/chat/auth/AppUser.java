@@ -21,7 +21,7 @@ public class AppUser {
     public static final String ROLE_USER = "USER";
     public static final String ROLE_ADMIN = "ADMIN";
 
-    @TableId(value = "ID", type = IdType.INPUT)
+    @TableId(value = "id", type = IdType.INPUT)
     private String id;
     private String username;
     private String phone;

@@ -16,7 +16,7 @@ public class FriendRequest {
     public static final String STATUS_ACCEPTED = "ACCEPTED";
     public static final String STATUS_REJECTED = "REJECTED";
 
-    @TableId(value = "ID", type = IdType.INPUT)
+    @TableId(value = "id", type = IdType.INPUT)
     private String id;
     private String fromUser;
     private String toUser;

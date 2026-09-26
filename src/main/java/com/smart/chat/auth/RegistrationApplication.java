@@ -18,7 +18,7 @@ public class RegistrationApplication {
     public static final String STATUS_APPROVED = "APPROVED";
     public static final String STATUS_REJECTED = "REJECTED";
 
-    @TableId(value = "ID", type = IdType.INPUT)
+    @TableId(value = "id", type = IdType.INPUT)
     private String id;
     private String phone;
     private String username;

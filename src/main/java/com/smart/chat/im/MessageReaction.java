@@ -12,7 +12,7 @@ import java.util.UUID;
 @TableName("message_reaction")
 public class MessageReaction {
 
-    @TableId(value = "ID", type = IdType.INPUT)
+    @TableId(value = "id", type = IdType.INPUT)
     private String id;
     private String msgId;
     private String username;

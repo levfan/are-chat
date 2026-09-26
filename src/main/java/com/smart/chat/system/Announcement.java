@@ -12,7 +12,7 @@ import java.util.UUID;
 @TableName("announcement")
 public class Announcement {
 
-    @TableId(value = "ID", type = IdType.INPUT)
+    @TableId(value = "id", type = IdType.INPUT)
     private String id;
     private String content;
     private String createdBy;
