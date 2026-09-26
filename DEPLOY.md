@@ -54,8 +54,9 @@ docker compose logs -f app                 # 实时日志（nginx + Spring Boot 
 | `ARECHAT_NOTIFY_WXPUSHER_TOKEN` | — | WxPusher appToken（免费推送备选） |
 | `ARECHAT_NOTIFY_WXPUSHER_UIDS` | — | WxPusher 接收者 UID，多个用英文逗号分隔 |
 | `ARECHAT_NOTIFY_SERVERCHAN_KEY` | — | Server酱 SendKey（免费版每天 5 条） |
+| `ARECHAT_NOTIFY_XTUIS_KEY` | — | 虾推啥 token（https://www.xtuis.cn，免费版每天 300 条 / 每分钟 30 条） |
 
-> **注册审批推送（78）**：以上三个渠道任配其一，新注册申请就会实时推送给管理员；全部不配则只靠「管理后台」红点提醒（站内兜底）。国内短信没有免费渠道，未实现短信通知。
+> **注册审批推送（78）**：以上四个渠道任配其一，新注册申请就会实时推送给管理员；全部不配则只靠「管理后台」红点提醒（站内兜底）。国内短信没有免费渠道，未实现短信通知。
 > **敏感词 / 限流**：`arechat.moderation.enabled/mode/sensitive-words`（默认关闭）与 `arechat.im.send-limit-per-minute`（默认 30 条/分钟）在 `application.yml` 调整，一般保持默认即可。
 
 ### 3.2 内置限制（需要更大值时改两处）

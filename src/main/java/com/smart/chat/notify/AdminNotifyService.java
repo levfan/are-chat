@@ -25,6 +25,7 @@ import java.util.concurrent.Executors;
  * - 企业微信群机器人 Webhook：免费、无条数限制，推荐首选
  * - WxPusher：免费微信公众号消息推送
  * - Server酱 Turbo：免费额度（每天 5 条）
+ * - 虾推啥：免费微信公众号通知（https://www.xtuis.cn，每天 300 条 / 每分钟 30 条）
  */
 @Service
 public class AdminNotifyService {
@@ -63,7 +64,7 @@ public class AdminNotifyService {
 
     /** 全部渠道都未配置时返回 true：调用方可据此走纯站内提醒 */
     public boolean noChannelConfigured() {
-        return !configuredWecom() && !configuredWxpusher() && !configuredServerchan();
+        return !configuredWecom() && !configuredWxpusher() && !configuredServerchan() && !configuredXtuis();
     }
 
     public boolean configuredWecom() {
@@ -76,6 +77,10 @@ public class AdminNotifyService {
 
     public boolean configuredServerchan() {
         return notBlank(properties.serverchanSendkey());
+    }
+
+    public boolean configuredXtuis() {
+        return notBlank(properties.xtuisSendkey());
     }
 
     /** 异步推送：注册请求路径上只入队，绝不阻塞 */
@@ -105,6 +110,9 @@ public class AdminNotifyService {
         }
         if (configuredServerchan()) {
             results.add(sendQuiet("serverchan", () -> sendServerchan(title, content)));
+        }
+        if (configuredXtuis()) {
+            results.add(sendQuiet("xtuis", () -> sendXtuis(title, content)));
         }
         return results;
     }
@@ -153,7 +161,18 @@ public class AdminNotifyService {
     /** Server酱 Turbo：form-urlencoded，desp 支持 markdown */
     private void sendServerchan(String title, String content) throws Exception {
         String url = "https://sctapi.ftqq.com/" + properties.serverchanSendkey() + ".send";
-        String form = "title=" + urlEncode(title) + "&desp=" + urlEncode(content);
+        postForm(url, "title=" + urlEncode(title) + "&desp=" + urlEncode(content));
+    }
+
+    /** 虾推啥（https://www.xtuis.cn 微信通道）：form-urlencoded，text=标题（通知卡片约 13 字）+ desp=正文；
+     *  desp 为纯文本展示，先把 markdown 加粗标记剥掉再发。限流时服务端返回 429 + Retry-After */
+    private void sendXtuis(String title, String content) throws Exception {
+        String url = "https://wx.xtuis.cn/" + properties.xtuisSendkey() + ".send";
+        postForm(url, "text=" + urlEncode(title) + "&desp=" + urlEncode(content.replace("**", "")));
+    }
+
+    /** form 表单 POST：非 200 一律视为失败（异常由 sendQuiet 统一转成渠道结果） */
+    private void postForm(String url, String form) throws Exception {
         HttpRequest request = HttpRequest.newBuilder(URI.create(url))
                 .timeout(Duration.ofSeconds(8))
                 .header("Content-Type", "application/x-www-form-urlencoded;charset=UTF-8")

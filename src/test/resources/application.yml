@@ -30,6 +30,7 @@ arechat:
     wxpusher-app-token: ""
     wxpusher-uids: ""
     serverchan-sendkey: ""
+    xtuis-sendkey: ""
   moderation:
     enabled: true
     mode: censor

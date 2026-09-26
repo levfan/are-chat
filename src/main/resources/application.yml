@@ -37,10 +37,12 @@ arechat:
   notify:
     wecom-webhook: ${ARECHAT_NOTIFY_WECOM_WEBHOOK:}
     # WxPusher（https://wxpusher.zjiecode.com 免费）：appToken + 关注后拿到的 uid（逗号分隔）
-    wxpusher-app-token: ${ARECHAT_NOTIFY_WXPUSHER_TOKEN:}
-    wxpusher-uids: ${ARECHAT_NOTIFY_WXPUSHER_UIDS:}
+    wxpusher-app-token: ${ARECHAT_NOTIFY_WXPUSHER_TOKEN:AT_BfYpPGmf1U76mpBKRMK3fySW2zAfVUhg}
+    wxpusher-uids: ${ARECHAT_NOTIFY_WXPUSHER_UIDS:UID_LnVx7pP8dFyLxjIhCuQLJwPsgm4X}
     # Server酱（https://sct.ftqq.com 免费额度每天 5 条）：SendKey
-    serverchan-sendkey: ${ARECHAT_NOTIFY_SERVERCHAN_KEY:}
+    serverchan-sendkey: ${ARECHAT_NOTIFY_SERVERCHAN_KEY:SCT114151TEUuZIiLFxUkZBmayO3KlCAmg}
+    # 虾推啥（https://www.xtuis.cn 免费，每天 300 条 / 每分钟 30 条）：微信关注公众号后自动收到的 token
+    xtuis-sendkey: ${ARECHAT_NOTIFY_XTUIS_KEY:xGE73L7mrrScjpcUgX7PXhFjX}
   # 86 敏感词过滤：mode=censor 替换为 ＊ / block 直接拦截；词库可继续追加
   moderation:
     enabled: true
