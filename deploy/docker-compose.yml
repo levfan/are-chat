@@ -1,0 +1,34 @@
+# are-chat 前后端一体化部署（只使用已构建好的镜像，compose 里不再执行构建）
+#
+# 镜像产出：deploy/build.sh 一键构建（或分步：build-base.sh + build-business.sh）
+# 启动：    cd are-chat && docker compose -f deploy/docker-compose.yml up -d
+# 访问：    http://localhost:58080/（宿主机 58080 → 容器内 nginx 80 统一入口，
+#           /api 与 /ws 反代到容器内 8080 后端）
+#
+# 可用变量（deploy/.env 或环境变量）：VERSION（镜像 tag）、APP_PORT（宿主机端口）
+
+name: are-chat
+
+services:
+  app:
+    image: are-chat:${VERSION:-1.0.0}
+    container_name: are-chat
+    ports:
+      - "${APP_PORT:-58080}:80"                 # 宿主机 58080 → 容器内 nginx 80；可用 .env / 环境变量覆盖
+    environment:
+      TZ: Asia/Shanghai
+      ARECHAT_STORAGE_BASE_DIR: /data/uploads   # 上传文件目录（已挂卷持久化）
+      # JAVA_OPTS: -Xmx1g
+      # —— 需要连接老项目 MySQL 时，取消下面注释并填入真实信息 ——
+      # SPRING_PROFILES_ACTIVE: mysql
+      # MYSQL_HOST: 192.168.1.100
+      # MYSQL_PORT: "3306"
+      # MYSQL_DB: arechat
+      # MYSQL_USERNAME: root
+      # MYSQL_PASSWORD: change-me
+    volumes:
+      - uploads:/data/uploads
+    restart: unless-stopped
+
+volumes:
+  uploads:

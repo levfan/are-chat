@@ -1,0 +1,33 @@
+# ============================================================================
+# are-chat 业务镜像：基于 are-chat-base（nginx + JRE 25）打最终的一体包
+# 注意：故意不写 `# syntax=docker/dockerfile:1` 指令——那会让 BuildKit 联网
+#       拉取 frontend 镜像，离线/无代理环境会卡死。本文件只用标准语法，
+#       内置 frontend 即可构建。
+#
+# 构建上下文 = deploy/ 目录。前置产物（手动放入本目录，见 deploy/README.md）：
+#   - app.jar ：Windows 上 mvn package 出的后端 jar
+#   - dist/   ：前端 pnpm build 的产物目录
+#
+# 构建（deploy/build-business.sh 或 build.sh 会自动执行）：
+#   docker build --build-arg BASE_IMAGE=are-chat-base:1.0.0 \
+#     -t are-chat:1.0.0 -f deploy/Dockerfile.business deploy/
+# ============================================================================
+
+ARG BASE_IMAGE=are-chat-base:1.0.0
+FROM ${BASE_IMAGE}
+
+# 拷贝准备好的后端 jar 与前端静态文件（容器内不执行任何构建）
+COPY app.jar /app/app.jar
+COPY dist /usr/share/nginx/html
+COPY nginx.conf /etc/nginx/nginx.conf
+COPY start.sh /usr/local/bin/start.sh
+RUN chmod +x /usr/local/bin/start.sh && mkdir -p /data/uploads
+
+# 上传目录持久化到卷；后端只监听 127.0.0.1，外部统一走 nginx 80（宿主机 58080 → 容器 80）
+ENV ARECHAT_STORAGE_BASE_DIR=/data/uploads \
+    TZ=Asia/Shanghai
+VOLUME ["/data/uploads"]
+EXPOSE 80
+HEALTHCHECK --interval=30s --timeout=5s --start-period=40s --retries=5 \
+  CMD bash -c 'exec 3<>/dev/tcp/127.0.0.1/8080' 2>/dev/null || exit 1
+CMD ["/usr/local/bin/start.sh"]

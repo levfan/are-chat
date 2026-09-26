@@ -1,0 +1,7 @@
+# 构建上下文 = deploy/（build-business.sh / build.sh 使用）
+# 白名单：业务镜像只需要以下 4 项，脚本、README、.env 等不进入构建上下文
+*
+!app.jar
+!dist
+!nginx.conf
+!start.sh

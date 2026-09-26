@@ -1,4 +1,9 @@
-﻿# syntax=docker/dockerfile:1
+# syntax=docker/dockerfile:1
+# ⚠️ 已弃用：旧的一体化多阶段构建（Maven/Node 构建都在容器内执行）。
+#    新流程：在 Windows 上构建好 jar 与前端 dist，放入 deploy/ 后用
+#            deploy/build.sh（或 build-business.sh）打两层镜像，
+#            文档见 deploy/README.md。本文件保留仅作参考，可安全删除。
+#
 # ============================================================================
 # are-chat 前后端一体化镜像（构建文件都在后端项目内）
 #
@@ -13,7 +18,7 @@
 FROM maven:3.9-eclipse-temurin-25 AS app-build
 WORKDIR /build
 # 阿里云镜像（构建加速）
-COPY docker/maven-settings.xml /root/.m2/settings.xml
+COPY deploy/maven-settings.xml /root/.m2/settings.xml
 # 先只拷 pom 预热依赖层：源码改动时无需重新下载依赖
 COPY pom.xml ./pom.xml
 RUN mvn -B -q dependency:go-offline
@@ -43,8 +48,8 @@ RUN apt-get update \
 
 COPY --from=app-build /app.jar /app/app.jar
 COPY --from=web-build /web/dist /usr/share/nginx/html
-COPY docker/nginx.conf /etc/nginx/nginx.conf
-COPY docker/start.sh /usr/local/bin/start.sh
+COPY deploy/nginx.conf /etc/nginx/nginx.conf
+COPY deploy/start.sh /usr/local/bin/start.sh
 RUN chmod +x /usr/local/bin/start.sh && mkdir -p /data/uploads
 
 # 上传目录持久化到卷；后端只监听 127.0.0.1，外部统一走 nginx 80 端口

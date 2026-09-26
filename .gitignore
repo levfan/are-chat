@@ -5,3 +5,12 @@ uploads/
 *.log
 hs_err_pid*.log
 .mvn/wrapper/maven-wrapper.jar
+/web-dist
+/dist
+# 部署构建产物（手动放入 deploy/，不进 git）
+/deploy/dist
+# 构建产物一律不入库（jar、镜像导出包等）
+*.jar
+*.tar
+*.tar.gz
+*.tgz
