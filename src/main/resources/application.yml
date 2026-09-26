@@ -46,3 +46,11 @@ arechat:
 logging:
   level:
     com.smart.chat: INFO
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,h2dump
+  endpoint:
+    h2dump:
+      enabled: true
