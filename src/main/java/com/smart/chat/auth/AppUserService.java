@@ -59,10 +59,11 @@ public class AppUserService {
 
     /**
      * 77 创建账号（注册申请审批通过 / 管理员引导时调用；密码必须先经 PasswordHasher 编码）。
+     * nickname 为注册时填写的昵称，空则回退用户名。
      * 原直接注册入口已由 RegistrationService 的审批流取代。
      */
     @Transactional
-    public AppUser createAccount(String phone, String username, String passwordHash, String role) {
+    public AppUser createAccount(String phone, String username, String nickname, String passwordHash, String role) {
         String validPhone = requireValidPhone(phone);
         String name = normalizeUsername(username);
         if (!USERNAME.matcher(name).matches()) {
@@ -74,10 +75,41 @@ public class AppUserService {
         if (userMapper.findByUsername(name).isPresent()) {
             throw new BusinessException(409, "用户名已被占用，换一个试试");
         }
-        AppUser user = AppUser.of(validPhone, name, passwordHash, name, "c0", role);
+        AppUser user = AppUser.of(validPhone, name, passwordHash,
+                nickname == null || nickname.isBlank() ? name : nickname.trim(), "c0", role);
         userMapper.insert(user);
         ensureProfile(user);
         return user;
+    }
+
+    /**
+     * 昵称校验（注册申请与个人资料修改共用）：选填，填了就去空格，1~32 个字。
+     * 返回规范化后的昵称，空白输入返回 null。
+     */
+    public String validateNickname(String nickname) {
+        if (nickname == null) {
+            return null;
+        }
+        String trimmed = nickname.trim();
+        if (trimmed.isEmpty()) {
+            return null;
+        }
+        if (trimmed.length() > 32) {
+            throw new BusinessException(400, "昵称需为 1~32 个字");
+        }
+        return trimmed;
+    }
+
+    /** 登录后修改昵称：同步 app_user（管理后台用户列表 / auth/me 使用），user_profile 由 ProfileController 维护 */
+    @Transactional
+    public void updateNickname(String username, String nickname) {
+        AppUser user = find(username).orElseThrow(() -> new BusinessException(404, "账号不存在"));
+        String valid = validateNickname(nickname);
+        if (valid == null) {
+            throw new BusinessException(400, "昵称需为 1~32 个字");
+        }
+        user.setNickname(valid);
+        userMapper.updateById(user);
     }
 
     /** 80 修改密码：校验旧密码 + 新密码强度 */

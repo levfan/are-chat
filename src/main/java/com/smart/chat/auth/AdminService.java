@@ -79,7 +79,7 @@ public class AdminService {
             throw new BusinessException(409, "该申请已处理过（" + application.getStatus() + "）");
         }
         AppUser user = userService.createAccount(application.getPhone(), application.getUsername(),
-                application.getPasswordHash(), AppUser.ROLE_USER);
+                application.getNickname(), application.getPasswordHash(), AppUser.ROLE_USER);
 
         application.setStatus(RegistrationApplication.STATUS_APPROVED);
         application.setReviewedAt(System.currentTimeMillis());

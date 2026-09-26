@@ -34,14 +34,14 @@ public class AdminController {
     public record AnnouncementRequest(String content) {
     }
 
-    /** 77 注册申请视图（不含密码哈希） */
-    public record ApplicationVO(String id, String username, String phone, String status, String rejectReason,
-                                Long created, Long reviewedAt, String reviewedBy) {
+    /** 77 注册申请视图（不含密码哈希；nickname 为注册时填写的昵称） */
+    public record ApplicationVO(String id, String username, String nickname, String phone, String status,
+                                String rejectReason, Long created, Long reviewedAt, String reviewedBy) {
         static ApplicationVO of(RegistrationApplication app) {
             String phone = app.getPhone();
             String masked = phone == null || phone.length() < 7 ? phone
                     : phone.substring(0, 3) + "****" + phone.substring(phone.length() - 4);
-            return new ApplicationVO(app.getId(), app.getUsername(), masked, app.getStatus(),
+            return new ApplicationVO(app.getId(), app.getUsername(), app.getNickname(), masked, app.getStatus(),
                     app.getRejectReason(), app.getCreated(), app.getReviewedAt(), app.getReviewedBy());
         }
     }

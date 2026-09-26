@@ -28,7 +28,8 @@ public class AuthController {
     public record SmsResult(String phone, long expiresInSeconds, String devCode, String hint) {
     }
 
-    public record RegisterRequest(String phone, String username, String password, String code) {
+    /** nickname 为注册昵称（选填）：审批通过后作为账号昵称生效 */
+    public record RegisterRequest(String phone, String username, String nickname, String password, String code) {
     }
 
     /** account 支持手机号或用户名；username 字段为兼容旧前端保留 */
@@ -90,7 +91,7 @@ public class AuthController {
             throw new BusinessException(400, "注册信息不能为空");
         }
         RegistrationService.ApplicationVO application =
-                registrationService.apply(req.phone(), req.username(), req.password(), req.code());
+                registrationService.apply(req.phone(), req.username(), req.password(), req.code(), req.nickname());
         return ApiResponse.ok(new RegisterResult(application.id(), application.username(), application.status(),
                 "申请已提交，请等待管理员审批；审批通过后使用用户名/手机号 + 密码登录"));
     }

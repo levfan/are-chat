@@ -102,14 +102,14 @@ class AuthControllerTest {
 
     @Test
     void registerSubmitsApprovalApplicationInsteadOfLogin() throws Exception {
-        // 77 注册不再直接建号登录：只提交待审批申请
-        when(registrationService.apply("13900001111", "zhangsan", "abc12345", "123456"))
-                .thenReturn(new RegistrationService.ApplicationVO("app-1", "zhangsan", "139****1111",
+        // 77 注册不再直接建号登录：只提交待审批申请（昵称选填，随申请一起传给服务层）
+        when(registrationService.apply("13900001111", "zhangsan", "abc12345", "123456", "张三"))
+                .thenReturn(new RegistrationService.ApplicationVO("app-1", "zhangsan", "张三", "139****1111",
                         RegistrationApplication.STATUS_PENDING, null, 1L, null, null));
 
         mockMvc.perform(post("/api/auth/register")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"phone\":\"13900001111\",\"username\":\"zhangsan\","
+                        .content("{\"phone\":\"13900001111\",\"username\":\"zhangsan\",\"nickname\":\"张三\","
                                 + "\"password\":\"abc12345\",\"code\":\"123456\"}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.username").value("zhangsan"))
@@ -120,7 +120,7 @@ class AuthControllerTest {
     @Test
     void registerStatusExposesApplicationState() throws Exception {
         when(registrationService.statusByAccount("zhangsan"))
-                .thenReturn(java.util.Optional.of(new RegistrationService.ApplicationVO("app-1", "zhangsan",
+                .thenReturn(java.util.Optional.of(new RegistrationService.ApplicationVO("app-1", "zhangsan", "张三",
                         "139****1111", RegistrationApplication.STATUS_REJECTED, "资料不全", 1L, 2L, "admin")));
 
         mockMvc.perform(get("/api/auth/register-status").param("account", "zhangsan"))

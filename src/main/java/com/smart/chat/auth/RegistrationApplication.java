@@ -22,6 +22,8 @@ public class RegistrationApplication {
     private String id;
     private String phone;
     private String username;
+    /** 注册时自愿填写的昵称（选填，审批通过后写入 app_user / user_profile） */
+    private String nickname;
     private String passwordHash;
     private String status;
     private String rejectReason;
@@ -30,10 +32,15 @@ public class RegistrationApplication {
     private String reviewedBy;
 
     public static RegistrationApplication of(String phone, String username, String passwordHash) {
+        return of(phone, username, null, passwordHash);
+    }
+
+    public static RegistrationApplication of(String phone, String username, String nickname, String passwordHash) {
         RegistrationApplication application = new RegistrationApplication();
         application.id = UUID.randomUUID().toString();
         application.phone = phone;
         application.username = username;
+        application.nickname = nickname;
         application.passwordHash = passwordHash;
         application.status = STATUS_PENDING;
         application.created = System.currentTimeMillis();
@@ -62,6 +69,14 @@ public class RegistrationApplication {
 
     public void setUsername(String username) {
         this.username = username;
+    }
+
+    public String getNickname() {
+        return nickname;
+    }
+
+    public void setNickname(String nickname) {
+        this.nickname = nickname;
     }
 
     public String getPasswordHash() {

@@ -21,13 +21,13 @@ public class RegistrationService {
     private static final Logger log = LoggerFactory.getLogger(RegistrationService.class);
 
     /** 77 注册申请提交结果 */
-    public record ApplicationVO(String id, String username, String phone, String status,
+    public record ApplicationVO(String id, String username, String nickname, String phone, String status,
                                 String rejectReason, Long created, Long reviewedAt, String reviewedBy) {
         static ApplicationVO of(RegistrationApplication app) {
             String phone = app.getPhone();
             String masked = phone == null || phone.length() < 7 ? phone
                     : phone.substring(0, 3) + "****" + phone.substring(phone.length() - 4);
-            return new ApplicationVO(app.getId(), app.getUsername(), masked, app.getStatus(),
+            return new ApplicationVO(app.getId(), app.getUsername(), app.getNickname(), masked, app.getStatus(),
                     app.getRejectReason(), app.getCreated(), app.getReviewedAt(), app.getReviewedBy());
         }
     }
@@ -50,12 +50,13 @@ public class RegistrationService {
         this.push = push;
     }
 
-    /** 提交注册申请：校验与原注册一致；申请入待审队列并通知管理员 */
+    /** 提交注册申请：校验与原注册一致；申请入待审队列并通知管理员。昵称选填，不填审批后默认用用户名 */
     @Transactional
-    public ApplicationVO apply(String phone, String username, String password, String code) {
+    public ApplicationVO apply(String phone, String username, String password, String code, String nickname) {
         String validPhone = userService.requireValidPhone(phone);
         String name = userService.normalizeUsername(username);
         userService.validatePassword(password);
+        String validNickname = userService.validateNickname(nickname);
         smsCodeService.verifyAndConsume(validPhone, code);
 
         if (userService.exists(name)) {
@@ -72,9 +73,9 @@ public class RegistrationService {
         }
 
         RegistrationApplication application =
-                RegistrationApplication.of(validPhone, name, passwordHasher.encode(password));
+                RegistrationApplication.of(validPhone, name, validNickname, passwordHasher.encode(password));
         applicationMapper.insert(application);
-        log.info("新注册申请：username={} phone={}", name, validPhone);
+        log.info("新注册申请：username={} nickname={} phone={}", name, validNickname, validPhone);
 
         // 78 免费渠道推送 + 站内待办（推送失败不影响申请）
         notifyService.pushTextAsync("are-chat 新用户注册申请",

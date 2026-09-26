@@ -47,10 +47,12 @@ CREATE TABLE IF NOT EXISTS app_user (
 );
 
 -- 77 注册申请：审批通过才建 app_user；密码哈希在申请行里暂存
+-- 老库升级：ALTER TABLE registration_application ADD COLUMN nickname VARCHAR(32) NULL;
 CREATE TABLE IF NOT EXISTS registration_application (
     ID           VARCHAR(36) PRIMARY KEY,
     phone        VARCHAR(20) NOT NULL,
     username     VARCHAR(64) NOT NULL,
+    nickname     VARCHAR(32) NULL,              -- 注册时选填的昵称，审批通过后写入 app_user/user_profile
     password_hash VARCHAR(255) NOT NULL,
     status       VARCHAR(16) NOT NULL,          -- PENDING / APPROVED / REJECTED
     reject_reason VARCHAR(200),
