@@ -4,7 +4,8 @@ set -u
 
 mkdir -p /data/uploads
 
-JAVA_OPTS="${JAVA_OPTS:--XX:MaxRAMPercentage=75.0}"
+# sun-misc-unsafe-memory-access=allow：压制 fastjson2 在 JDK 25 上的 sun.misc.Unsafe 弃用告警（JEP 498，未来 JDK 移除该方法前由 fastjson2 上游跟进）
+JAVA_OPTS="${JAVA_OPTS:--XX:MaxRAMPercentage=75.0 --sun-misc-unsafe-memory-access=allow}"
 java $JAVA_OPTS -jar /app/app.jar --server.address=127.0.0.1 &
 APP_PID=$!
 
