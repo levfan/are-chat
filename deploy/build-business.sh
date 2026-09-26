@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # 打最终业务镜像（日常构建入口，在 WSL2 中运行）
+# 构建成功后自动导出镜像 tar 包到脚本同目录: are-chat-${VERSION:-1.0.0}.tar
 #
 # 前置（产物放在 deploy/ 下，见 deploy/README.md）：
 #   - app.jar  Windows 上 mvn package 出的后端 jar
@@ -27,3 +28,10 @@ docker build --progress=plain \
   --build-arg "BASE_IMAGE=are-chat-base:${VERSION}" \
   -t "are-chat:${VERSION}" \
   -f "$SCRIPT_DIR/Dockerfile.business" "$SCRIPT_DIR"
+
+# ---- 导出镜像 tar 包到脚本同目录（docker save -o 直接落盘，不 gzip、不走临时文件，/mnt/d 上最稳） ----
+TAR_FILE="$SCRIPT_DIR/are-chat-${VERSION}.tar"
+echo ">> 导出镜像 are-chat:${VERSION} → $TAR_FILE"
+docker save -o "$TAR_FILE" "are-chat:${VERSION}"
+ls -lh "$TAR_FILE"
+echo "✅ 导出完成: $TAR_FILE"
