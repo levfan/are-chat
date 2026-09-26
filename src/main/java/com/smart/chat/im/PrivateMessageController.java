@@ -3,6 +3,7 @@ package com.smart.chat.im;
 import com.smart.chat.common.ApiResponse;
 import com.smart.chat.common.Sessions;
 import jakarta.servlet.http.HttpSession;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -94,5 +95,57 @@ public class PrivateMessageController {
     public ApiResponse<Void> star(@PathVariable String id, HttpSession session) {
         messageService.toggleStar(Sessions.requireUser(session), id);
         return ApiResponse.ok();
+    }
+
+    // ---------- 新增：81 全局搜索 / 84 置顶 / 85 清空 / 95 附件 ----------
+
+    /** 81 全局消息搜索：我参与的全部会话（未撤回文本，最近 50 条） */
+    @GetMapping("/search/global")
+    public ApiResponse<List<PrivateMessageService.GlobalSearchHitVO>> searchGlobal(@RequestParam String q,
+                                                                                   HttpSession session) {
+        return ApiResponse.ok(messageService.searchGlobal(Sessions.requireUser(session), q));
+    }
+
+    /** 84 置顶当前会话消息 */
+    @PostMapping("/{peer}/pin")
+    public ApiResponse<PrivateMessageService.PinVO> pin(@PathVariable String peer,
+                                                        @RequestBody PinRequest req,
+                                                        HttpSession session) {
+        return ApiResponse.ok(messageService.pin(Sessions.requireUser(session), peer, req.msgId()));
+    }
+
+    /** 84 取消置顶 */
+    @DeleteMapping("/{peer}/pin")
+    public ApiResponse<Void> unpin(@PathVariable String peer, HttpSession session) {
+        messageService.unpin(Sessions.requireUser(session), peer);
+        return ApiResponse.ok();
+    }
+
+    /** 84 当前会话置顶信息（无置顶时 data 为 null） */
+    @GetMapping("/{peer}/pin")
+    public ApiResponse<PrivateMessageService.PinVO> currentPin(@PathVariable String peer, HttpSession session) {
+        return ApiResponse.ok(messageService.currentPin(Sessions.requireUser(session), peer).orElse(null));
+    }
+
+    /** 85 清空当前会话全部聊天记录（双方视角，需前端二次确认） */
+    @DeleteMapping("/{peer}")
+    public ApiResponse<ClearedVO> clear(@PathVariable String peer, HttpSession session) {
+        long deleted = messageService.clearConversation(Sessions.requireUser(session), peer);
+        return ApiResponse.ok(new ClearedVO(deleted));
+    }
+
+    /** 95 会话附件：图片墙 / 文件列表（type=image|file，默认 image） */
+    @GetMapping("/{peer}/attachments")
+    public ApiResponse<List<PrivateMessageService.AttachmentVO>> attachments(
+            @PathVariable String peer,
+            @RequestParam(defaultValue = "image") String type,
+            HttpSession session) {
+        return ApiResponse.ok(messageService.attachments(Sessions.requireUser(session), peer, type));
+    }
+
+    public record PinRequest(String msgId) {
+    }
+
+    public record ClearedVO(long deleted) {
     }
 }

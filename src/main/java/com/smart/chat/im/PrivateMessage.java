@@ -21,6 +21,8 @@ public class PrivateMessage {
     public static final String TYPE_CARD = "card";
     /** 73 位置分享卡片：content 为 JSON（name/address） */
     public static final String TYPE_LOCATION = "location";
+    /** 82 文件消息：content 为 JSON（name/size/url），url 必须是站内下载地址 */
+    public static final String TYPE_FILE = "file";
     public static final String STATUS_SENT = "SENT";
     public static final String STATUS_RECALLED = "RECALLED";
     public static final String POKE_TEXT = "[拍一拍]";

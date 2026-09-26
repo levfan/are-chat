@@ -63,4 +63,29 @@ public interface PrivateMessageMapper extends BaseMapperCompat<PrivateMessage> {
                 .eq(PrivateMessage::getReadFlag, 0)
                 .set(PrivateMessage::getReadFlag, 1));
     }
+
+    /** 81 全局消息搜索：我参与的全部会话里按关键字搜未撤回文本，倒序取最近 50 条。 */
+    default List<PrivateMessage> searchGlobal(String me, String keyword) {
+        return selectList(new LambdaQueryWrapper<PrivateMessage>()
+                .and(w -> w.eq(PrivateMessage::getFromUser, me).or().eq(PrivateMessage::getToUser, me))
+                .eq(PrivateMessage::getStatus, PrivateMessage.STATUS_SENT)
+                .eq(PrivateMessage::getMsgType, PrivateMessage.TYPE_TEXT)
+                .like(PrivateMessage::getContent, keyword)
+                .orderByDesc(PrivateMessage::getCreated)
+                .last("LIMIT 50"));
+    }
+
+    /** 95 会话附件：双向会话中指定类型的消息（image/file），倒序取最近 100 条。 */
+    default List<PrivateMessage> findAttachments(String me, String peer, String msgType) {
+        return selectList(conversationWrapper(me, peer)
+                .eq(PrivateMessage::getStatus, PrivateMessage.STATUS_SENT)
+                .eq(PrivateMessage::getMsgType, msgType)
+                .orderByDesc(PrivateMessage::getCreated)
+                .last("LIMIT 100"));
+    }
+
+    /** 85 清空聊天记录：删除双向会话全部消息，返回删除条数。 */
+    default int deleteConversation(String me, String peer) {
+        return delete(conversationWrapper(me, peer));
+    }
 }
