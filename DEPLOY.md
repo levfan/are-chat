@@ -29,8 +29,9 @@ docker compose logs -f app                 # 实时日志（nginx + Spring Boot 
 
 浏览器访问 `http://localhost/`：
 
-- 演示账号：`alice` / `bob` / `carol`，密码统一 `arechat123`（库里没有用户时启动自动播种）；
-- 或点「注册」用手机号注册新账号（演示环境验证码直接回显，不接短信网关）。
+- **管理员账号**：`admin` / `admin123456`（库里没有 ADMIN 时启动自动创建；环境变量 `ARECHAT_ADMIN_USERNAME` / `ARECHAT_ADMIN_PASSWORD` 可覆盖）。登录后左侧栏出现「管理后台」入口。
+- **普通用户**：点「注册」用手机号提交注册申请（演示环境验证码直接回显，不接短信网关）。**注册不再直接登录**：管理员在「管理后台 → 注册审批」点「通过」后，用户才能登录。
+- 旧演示账号 `alice` / `bob` / `carol` 已废弃：启动时会被自动禁用。
 
 > 健康检查：`docker inspect --format '{{.State.Health.Status}}' are-chat` → `healthy`
 > （探测容器内 8080 端口 TCP，启动期 40 秒内显示 starting 属正常）
@@ -47,6 +48,15 @@ docker compose logs -f app                 # 实时日志（nginx + Spring Boot 
 | `JAVA_OPTS` | `-XX:MaxRAMPercentage=75.0` | JVM 参数，如 `-Xmx1g` |
 | `SPRING_PROFILES_ACTIVE` | （空 = H2 内存库） | 设为 `mysql` 连接老库 |
 | `MYSQL_HOST/PORT/DB/USERNAME/PASSWORD` | — | MySQL profile 生效时的连接参数 |
+| `ARECHAT_ADMIN_USERNAME` | `admin` | 初始管理员用户名（无 ADMIN 时启动自动创建） |
+| `ARECHAT_ADMIN_PASSWORD` | `admin123456` | 初始管理员密码（**部署后请立即在管理后台重置**） |
+| `ARECHAT_NOTIFY_WECOM_WEBHOOK` | — | 企业微信群机器人 Webhook 地址（78 免费推送推荐渠道，`https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=xxx`） |
+| `ARECHAT_NOTIFY_WXPUSHER_TOKEN` | — | WxPusher appToken（免费推送备选） |
+| `ARECHAT_NOTIFY_WXPUSHER_UIDS` | — | WxPusher 接收者 UID，多个用英文逗号分隔 |
+| `ARECHAT_NOTIFY_SERVERCHAN_KEY` | — | Server酱 SendKey（免费版每天 5 条） |
+
+> **注册审批推送（78）**：以上三个渠道任配其一，新注册申请就会实时推送给管理员；全部不配则只靠「管理后台」红点提醒（站内兜底）。国内短信没有免费渠道，未实现短信通知。
+> **敏感词 / 限流**：`arechat.moderation.enabled/mode/sensitive-words`（默认关闭）与 `arechat.im.send-limit-per-minute`（默认 30 条/分钟）在 `application.yml` 调整，一般保持默认即可。
 
 ### 3.2 内置限制（需要更大值时改两处）
 
@@ -90,8 +100,9 @@ docker compose logs -f app                 # 实时日志（nginx + Spring Boot 
    ```
 2. 确认 MySQL 账号允许从 Docker 网段（默认 172.17.0.0/16）或宿主机 IP 连入。
 3. **IM 是 2026 新增模块**：老库里没有 `friend` / `friend_request` / `private_message` / `user_profile` 四张表，需手工执行 `src/main/resources/schema.sql` 中 IM 段的 DDL（老项目原有的 `uploaded_file` 表不用动；`person` 表已随档案功能移除，可留可删）。若之前已按旧版建过 `friend` / `private_message`，再补执行 IM 段注释里的两条 ALTER（`muted` / `last_seen_at` / `reply_to_id`）。
-4. `docker compose up -d` 重建容器（镜像不变，秒级完成）。
-5. 看 `docker compose logs app` 出现 `Started SmartChatApplication` 即成功。
+4. **第五轮新增（77–96）**：老库还需补五张新表 + 一条列 —— `registration_application`（注册审批）、`conversation_pin`（会话内置顶）、`announcement` + `announcement_read`（全站公告）、`admin_audit`（审计日志），以及 `app_user` 加列 `role VARCHAR(20) DEFAULT 'USER'`（管理员角色；DDL 见 `schema.sql` 对应注释段）。
+5. `docker compose up -d` 重建容器（镜像不变，秒级完成）。
+6. 看 `docker compose logs app` 出现 `Started SmartChatApplication` 即成功。
 
 ## 6. 日常运维
 
@@ -144,6 +155,8 @@ docker buildx build --build-context web=../are-chat-web -t are-chat:1.0.0 .
 
 | 现象 | 排查 |
 |------|------|
+| 新用户注册后登录 403「等待审批」 | 正常行为（77 审批制）：管理员在「管理后台 → 注册审批」点「通过」后即可登录 |
+| 管理员收不到注册推送提醒 | 检查 `ARECHAT_NOTIFY_*` 环境变量是否注入并重建容器；全未配置时只有站内红点兜底 |
 | 页面 502 | 后端没起来：`docker compose logs app` 看 Java 堆栈 |
 | 80 端口被占 | `.env` 写 `APP_PORT=8080` 后 `docker compose up -d` |
 | 上传报 413 | 调大 `docker/nginx.conf` 的 `client_max_body_size` 与后端 multipart 限制（改后 `--build` 重建） |

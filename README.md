@@ -58,10 +58,24 @@ mvn spring-boot:run -Dspring-boot.run.profiles=mysql
 | 方法 | 路径 | 说明 |
 |------|------|------|
 | POST | `/api/auth/sms-code` | 获取注册验证码（演示环境无短信网关，`devCode` 直接回显） |
-| POST | `/api/auth/register` | 手机号注册 `{phone, username, password, code}`，成功即登录 |
-| POST | `/api/auth/login` | 登录 `{account, password}`，account 为手机号或用户名（HttpSession，`CurrentUser`） |
-| GET  | `/api/auth/me` | 当前用户（用户名 / 昵称 / 脱敏手机号 / 本次登录时间） |
-| POST | `/api/files` | 上传（SHA-256 去重，IM 图片消息用，命中返回 `deduplicated=true`） |
+| POST | `/api/auth/register` | 提交注册申请 `{phone, username, password, code}`，返回申请单（77 审批制，不建会话） |
+| GET  | `/api/auth/register-status?account=` | 查询注册申请审批进度（77） |
+| POST | `/api/auth/login` | 登录 `{account, password}`，account 为手机号或用户名（HttpSession，`CurrentUser`）；等待审批 403 提示 |
+| GET  | `/api/auth/me` | 当前用户（用户名 / 昵称 / 脱敏手机号 / 本次登录时间 / 角色） |
+| PUT  | `/api/auth/password` | 修改密码 `{oldPassword, newPassword}`（80） |
+| POST | `/api/auth/deactivate` | 注销账号 `{password}`（校验密码→禁用→删好友关系，89） |
+| GET  | `/api/admin/applications[?status]` | 注册申请列表（79，ADMIN） |
+| POST | `/api/admin/applications/{id}/approve` / `reject` | 通过（开通账号+欢迎消息）/ 拒绝（附原因）（77） |
+| GET  | `/api/admin/pending-count` | 待审批数量（WS 红点兜底轮询） |
+| GET  | `/api/admin/users[?q]` | 用户列表 / 搜索 |
+| POST | `/api/admin/users/{u}/status` | 启用/禁用账号 `{active}` |
+| POST | `/api/admin/users/{u}/reset-password` | 重置密码（返回一次性随机密码） |
+| GET  | `/api/admin/audit?limit=` | 审计日志 |
+| GET/POST | `/api/admin/announcements` | 公告列表 / 发布（POST 后 WS 全站推送） |
+| POST | `/api/admin/announcements/{id}/close` | 关闭公告 |
+| GET  | `/api/announcements/current` | 当前生效公告（登录用户，88） |
+| POST | `/api/announcements/{id}/read` | 公告标记已读 |
+| POST | `/api/files` | 上传（SHA-256 去重，IM 图片/文件消息用，命中返回 `deduplicated=true`；黑名单扩展名 400） |
 | GET  | `/api/files/{id}/download` | 下载（RFC 5987 中文文件名，图片消息展示用） |
 | GET  | `/api/friends` | 好友列表（未读数 + 最后一条消息 + 在线状态） |
 | GET  | `/api/friends/suggest?q=` | 加好友输入联想：候选用户名 + 与我的关系（75） |
@@ -71,13 +85,16 @@ mvn spring-boot:run -Dspring-boot.run.profiles=mysql
 | PUT  | `/api/friends/{id}` | 好友备注 / 置顶 / 免打扰 |
 | DELETE | `/api/friends/{id}` | 删除好友（双向移除） |
 | GET  | `/api/messages/{peer}?before=&limit=` | 私聊历史（游标倒序分页，返回正序） |
-| POST | `/api/messages/{peer}` | 发私信 `{content, type: text/image/poke/card/location, replyToId?}`（在线实时推送） |
+| POST | `/api/messages/{peer}` | 发私信 `{content, type: text/image/file/poke/card/location, replyToId?}`（在线实时推送；file 为 `{name,size,url}` JSON 卡片；发前限流 87 + 敏感词 86） |
 | GET  | `/api/messages/{peer}/search?q=` | 会话内关键字搜索（未撤回，最近 50 条，正序） |
+| GET  | `/api/messages/search/global?q=` | 全局消息搜索（81，跨会话文本，最近 50 条） |
+| POST/GET/DELETE | `/api/messages/{peer}/pin` | 会话内置顶：设置 / 查看 / 取消（84，双方实时同步） |
+| DELETE | `/api/messages/{peer}` | 清空当前会话双方聊天记录（85，返回删除条数） |
+| GET  | `/api/messages/{peer}/attachments?type=image\|file` | 会话附件面板（95，各限 100 条） |
 | POST | `/api/messages/{peer}/read` | 标记会话已读（清零未读） |
-| POST | `/api/messages/{id}/recall` | 撤回（2 分钟内，双向同步；text/image 可撤回） |
+| POST | `/api/messages/{id}/recall` | 撤回（2 分钟内，双向同步） |
 | GET/PUT | `/api/profile` | 个人资料（emoji 头像 + 昵称 + 个性签名） |
 | GET  | `/api/profile/{username}` | 好友资料卡（仅好友可看，403 拒绝非好友） |
-| GET  | `/api/stats/me` | 会话统计（好友/收发/收藏/最活跃好友） |
 | GET  | `/api/messages/{peer}/export` | 导出当前会话全部消息（JSON） |
 | GET  | `/api/presence/online` | 全站在线用户列表与人数 |
 | GET  | `/api/health` | 健康检查（免登录：运行时长/在线人数/版本） |
@@ -85,9 +102,10 @@ mvn spring-boot:run -Dspring-boot.run.profiles=mysql
 
 WS 协议（fastjson2 JSON）：
 - `heart`/`heart-ack` 心跳（兼容裸字符串 `heartBeat`）、`system` 系统提示
-- IM 推送：`dm{msgId,from,to,content,msgType,replyToId,created}` 私聊（含图片与引用）、`typing{from,to,typing}` 正在输入、`recall{msgId}` 撤回、`presence{username,online}` 上下线、`friend-request` / `friend-accepted` / `friend-deleted` 好友事件（服务端类型禁止客户端伪造）
+- IM 推送：`dm{msgId,from,to,content,msgType,replyToId,created}` 私聊（含图片/文件与引用）、`typing{from,to,typing}` 正在输入、`recall{msgId}` 撤回、`presence{username,online}` 上下线、`friend-request` / `friend-accepted` / `friend-deleted` 好友事件、`pin{peerA,peerB,pinned,msgId}` 置顶同步（84）、`announcement{announcementId,content}` 全站公告（88）、`admin-pending{pendingCount}` 管理员待办（78）
+- 服务端类型禁止客户端伪造
 
-## IM 功能一览（核心 2 + 四轮共 56 个功能点）
+## IM 功能一览（核心 2 + 五轮共 76 个功能点）
 
 核心：
 1. **加好友**：申请 → 对方同意/拒绝 → 建立双向好友关系（防重复、防加自己、名单校验）
@@ -131,7 +149,7 @@ WS 协议（fastjson2 JSON）：
 52. **发送快捷键策略**：Enter 发送 / Ctrl+Enter 发送可切换（设置内持久化）
 53. **登录会话信息**：/api/auth/me 返回本次登录时间，个人中心可见
 54. **登录防爆破限流**：同一用户名 5 次失败锁 5 分钟（429 提示）
-55. **会话统计**：好友数/收发消息/收藏/最活跃好友（左侧栏「我的统计」）
+55. ~~会话统计~~：**已按需求移除**（原「我的统计」弹窗与 /api/stats 接口已删除）
 56. **聊天记录 JSON 导出**：服务端全量导出当前会话（含回应/编辑/撤回状态）
 57. **全站在线人数**：/api/presence/online + 左侧栏实时显示在线人数
 58. **多标签页登录同步**：一个标签页退出登录，其它标签页自动跳回登录页
@@ -161,6 +179,36 @@ WS 协议（fastjson2 JSON）：
 
 > 本轮的取舍：只做「看得见、点得动」的实用花活，不加性能/运维类特性；名片与位置复用既有 `private_message` 表（`msg_type` 扩展为 `card` / `location`），拍一拍复用 `poke` 类型并允许自定义内容。
 
+### 第五轮 20 项（77–96：注册审批 + 管理后台 + 实用增强，本次新增）
+
+77. **注册审批流**：新用户提交注册申请后**不再直接登录**，管理员在「管理后台 → 注册审批」通过后才能登录；支持查询审批进度、拒绝附原因；重复申请/重复账号会被拦截
+78. **管理员免费推送提醒**：新申请实时推送给管理员 —— 企业微信群机器人 Webhook（免费无限制，推荐）/ WxPusher（免费）/ Server酱（免费每天 5 条）三选一或多选，`arechat.notify.*` 配置即启用；未配置任何渠道时仅走站内待办红点兜底（国内短信无免费渠道，故未做）
+79. **管理员控制台**：左侧栏入口（仅 ADMIN 可见），四个 tab：注册审批 / 用户管理（搜索、启用禁用、重置密码）/ 全站公告 / 审计日志；WS 实时待办红点 + 轮询兜底
+80. **修改密码**：个人中心校验旧密码后修改（PBKDF2 复核），改完提示重新登录使用新密码
+81. **全局消息搜索**：跨会话搜索全部文本消息（Ctrl+K 打开），点击命中直达对应会话并高亮
+82. **文件消息**：任意类型文件发送，气泡渲染文件卡片（图标 + 文件名 + 大小 + 下载）；后端黑名单拦截 24 类可执行/脚本扩展名（96）
+83. **拖拽 / 粘贴发文件**：文件直接拖进聊天窗（带遮罩提示）或 Ctrl+V 粘贴即发；图片仍走图片消息，单文件 ≤50MB
+84. **会话内置顶消息**：任意消息可置顶为「本会话公告」，顶部横幅展示 + 一键定位 + 取消；撤回置顶消息自动取消置顶；双方实时同步（WS `pin` 事件）
+85. **清空聊天记录**：会话菜单一键清空双方全部消息（二次确认 + 告知删除条数），同时清除置顶
+86. **敏感词过滤**：`arechat.moderation.*` 可配词库与模式 —— `censor`（替换为 ＊）或 `block`（409 拒发），默认关闭
+87. **发送限流**：每用户每分钟 30 条（`arechat.im.send-limit-per-minute` 可调），超限 429 提示「休息 N 秒」
+88. **全站公告**：管理员发布/关闭公告，全部在线用户 WS 实时弹出顶部横幅，登录后可见并可标记已读
+89. **账号注销**：个人中心「危险操作」，输密码 + 用户名双重确认，注销即禁用登录并删除双方好友关系
+90. **大图压缩**：超过 1.5MB 的图片发送前 canvas 等比压缩（最长边 1920、JPEG q0.82），压缩后反而变大则放弃
+91. **免打扰时段**：个人中心设置安静时段（支持跨零点如 22→8），时段内静音提示音并跳过桌面通知
+92. **空闲自动离开**：5 分钟无操作自动切「离开」，恢复操作自动回到「在线」（手动设置的状态不被覆盖）
+93. **欢迎消息**：管理员通过注册申请后，系统自动以管理员身份给新用户发一条欢迎私信
+94. ~~消息趋势统计~~：**已随 55 一并移除**（统计弹窗整体下线）
+95. **附件面板**：会话菜单查看本会话全部图片/文件附件（各限 100 条），图片点开灯箱、文件直达下载
+96. **上传安全加固**：上传扩展名黑名单（.exe/.msi/.bat/.cmd/.js/.html/.svg/.jar/.sh 等 24 类）早期 400 拒绝；撤回的文本消息原文回填输入框方便修改重发
+
+> 第五轮取舍：注册安全（审批流 + 管理员审计）优先，其余为聊天体验的实用补齐；免费推送渠道以「零成本、可自建、国内可达」为标准选型。
+
+### 后续追加
+
+97. **通讯录（原「好友」页与「纯净通讯录」合并）**：`/contacts` 页承接全部好友功能——联系人目录（A–Z 分组、`#` 兜底恒最后、组内中文拼音排序、备注/用户名搜索）、添加好友（输入联想 + 附言）、收到的申请（同意/拒绝）、等待对方同意、资料卡，以及备注/分组/免打扰/置顶/删除好友；侧栏「好友」菜单已下线，旧链接 `/friends` 自动重定向到 `/contacts`，申请红点角标移到通讯录图标上。复用 `/api/friends`，后端零改动。
+98. **备注名全站同步**：修改好友备注后，会话列表、会话标题、聊天气泡（含已加载的历史消息）、引用块、拍一拍/撤回提示、输入中提示、会话内搜索、全局搜索、收藏夹、导出 txt 与通知浮窗全部立即换成最新名称。前端统一走 store 的 `displayNameOf()` 在渲染层解析（备注优先、回退用户名），历史消息只存用户名，点进对话框即按当前备注渲染，无需改写历史数据。
+
 ### 测试
 
 ```bash
@@ -171,8 +219,8 @@ $env:JAVA_HOME='<jdk25 路径>'; mvn test    # 或 mvn test
 真实 H2 库测试（schema.sql 建表 + 事务回滚）、
 `@WebMvcTest` 控制器切片（含 401 拦截）、
 文件去重（并发落盘竞态/遍历路径拒绝/SHA-256 已知向量）、WS 注册表与协议桥（含 typing/防伪造/presence）、
-图片与引用/搜索/免打扰服务测试、
-真实容器 WebSocket 心跳与 typing 集成测试、应用冒烟测试，共 64 个用例。
+图片与引用/搜索/免打扰服务测试、注册审批流/敏感词/限流/置顶/公告/管理员服务测试、
+真实容器 WebSocket 心跳与 typing 集成测试、应用冒烟测试，共 80 个用例。
 注意：surefire 已配置 `-XX:+EnableDynamicAgentLoading`（JDK 25 默认禁用动态 agent，Mockito 需要）。
 
 ## 前端（../are-chat-web）
@@ -185,13 +233,15 @@ pnpm build        # vite build + vue-tsc 类型检查
 pnpm test:e2e     # Playwright（chromium；首次需 pnpm exec playwright install chromium）
 ```
 
-登录与注册（第 76 项）：
+登录与注册（第 76 项 + 第五轮审批制改造）：
 
-- **手机号注册**：填手机号 → 「获取验证码」→ 用户名 + 密码 → 注册即登录。演示环境没有短信网关，验证码由后端生成后在响应里回显（`devCode`），前端直接展示并回填，同时写入后端日志。
-- **规则**：手机号 11 位（`1[3-9]xxxxxxxxx`，全局唯一）；用户名 3~20 位小写字母/数字/下划线（全局唯一，输入自动转小写）；密码 6~64 位且必须同时含字母和数字；验证码 6 位、5 分钟有效、同号 60 秒内不可重发、最多试错 5 次。
-- **登录**：账号可以是**手机号或用户名**，配合密码登录；同一账号连续失败 5 次锁定 5 分钟（429）。
-- **只有 `app_user` 里注册过的账号才是合法用户**：加好友、发消息、输入联想都以它为准（固定白名单已移除）。
-- **演示账号**：库里没有任何用户时，启动会自动播种 `alice` / `bob` / `carol`（手机号 `13800000001~3`，密码统一 `arechat123`），方便直接体验；之后所有账号都必须走手机号注册。
+- **注册 = 提交申请（77）**：填手机号 → 「获取验证码」→ 用户名 + 密码 → 提交后进入「等待审批」面板。注册**不再直接登录**，管理员通过后才能用手机号/用户名 + 密码登录；可随时在登录页「查询审批进度」（被拒绝会展示原因）。
+- **规则**：手机号 11 位（`1[3-9]xxxxxxxxx`，全局唯一）；用户名 3~20 位小写字母/数字/下划线（全局唯一，输入自动转小写）；密码 6~64 位且必须同时含字母和数字；验证码 6 位、5 分钟有效、同号 60 秒内不可重发、最多试错 5 次；同手机号/用户名存在未处理申请时不可重复提交。
+- **登录**：账号可以是**手机号或用户名**，配合密码登录；同一账号连续失败 5 次锁定 5 分钟（429）；等待审批的账号登录返回 403「注册申请正在等待管理员审批」。
+- **管理员**：无 ADMIN 账号时启动自动创建（默认 `admin` / `admin123456`，env `ARECHAT_ADMIN_USERNAME` / `ARECHAT_ADMIN_PASSWORD` 覆盖）；登录后左侧栏出现管理后台入口。
+- **免费推送提醒（78）**：`arechat.notify.*` 配置任一渠道即启用 —— 企业微信群机器人 Webhook（免费无限制，推荐首选）、WxPusher、Server酱；全部未配置则只有站内红点。国内短信没有免费渠道，故未实现短信通知。
+- **旧演示账号**：`alice`/`bob`/`carol`（13800000001~3）启动时会被自动禁用（DemoUserSeeder 已移除，改为 AdminBootstrapper）；新库不再播种任何演示账号。
+- **只有 `app_user` 里注册过的账号才是合法用户**：加好友、发消息、输入联想都以它为准。
 
 ## 新旧对照
 
@@ -203,7 +253,7 @@ pnpm test:e2e     # Playwright（chromium；首次需 pnpm exec playwright insta
 - UserFilter 登录拦截（源码失踪）→ LoginInterceptor + /api/auth 会话登录（手机号注册 + 密码）
 - WebSocket 三版本并存 → 统一 `/ws/chat/{昵称}` JSON 协议（IM 推送通道）
 - 同名即跳过的上传 → SHA-256 内容寻址去重（IM 图片消息存储）
-- 无测试 → JUnit 5（64 个用例）+ Vitest + Playwright
+- 无测试 → JUnit 5（80 个用例）+ Vitest（38 个用例）+ Playwright
 
 ## Docker 一键部署（前后端单镜像）
 
