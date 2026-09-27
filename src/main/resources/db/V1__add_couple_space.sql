@@ -3,12 +3,15 @@
 -- 涉及表：couple_space, couple_invite, couple_promise, couple_checkin, couple_answer, couple_item, couple_anniversary
 -- 日期：2026-02-06
 -- 说明：外部 MariaDB 库手工执行本脚本完成升级；H2 内存库由 schema.sql 基线自动建表，两条路径最终结构一致。
---       带 CHARACTER SET/COLLATE 的列，DEFAULT 必须写在字符集声明之前（H2 语法要求）。
+--       区分大小写的列（用户名/手机号）用列级 CHARACTER SET utf8mb4 COLLATE utf8mb4_bin 声明，不写 DEFAULT（可空为默认，语法对 H2/MySQL/MariaDB 通用）。
+-- 执行：docker exec -i <容器名> mariadb --default-character-set=utf8mb4 -uroot -p<密码> <库名> < V1__add_couple_space.sql
+--       PowerShell 下 `<` 重定向不可用，请用：cmd /c "docker exec -i <容器名> mariadb --default-character-set=utf8mb4 -uroot -p<密码> <库名> < V1__add_couple_space.sql"
+--       或先 docker cp 进容器再 source。务必带 --default-character-set=utf8mb4，否则中文注释可能报 Incorrect string value。
 
 CREATE TABLE IF NOT EXISTS `couple_space` (
     `id` varchar(36) NOT NULL COMMENT '主键UUID',
-    `user_a` varchar(50) DEFAULT NULL CHARACTER SET utf8mb4 COLLATE utf8mb4_bin COMMENT '情侣双方用户名之一（字典序较小者）',
-    `user_b` varchar(50) DEFAULT NULL CHARACTER SET utf8mb4 COLLATE utf8mb4_bin COMMENT '情侣双方用户名之一（字典序较大者）',
+    `user_a` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin COMMENT '情侣双方用户名之一（字典序较小者）',
+    `user_b` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin COMMENT '情侣双方用户名之一（字典序较大者）',
     `status` varchar(16) NOT NULL DEFAULT 'ACTIVE' COMMENT '空间状态：ACTIVE 开启 / DISSOLVED 已解除',
     `anniversary` varchar(10) DEFAULT NULL COMMENT '在一起纪念日（yyyy-MM-dd，用于计算在一起天数，可空默认取建立时间）',
     `created` bigint(20) NOT NULL COMMENT '建立时间（毫秒时间戳）',
@@ -20,8 +23,8 @@ CREATE TABLE IF NOT EXISTS `couple_space` (
 
 CREATE TABLE IF NOT EXISTS `couple_invite` (
     `id` varchar(36) NOT NULL COMMENT '主键UUID',
-    `from_user` varchar(50) DEFAULT NULL CHARACTER SET utf8mb4 COLLATE utf8mb4_bin COMMENT '发起方用户名（区分大小写）',
-    `to_user` varchar(50) DEFAULT NULL CHARACTER SET utf8mb4 COLLATE utf8mb4_bin COMMENT '接收方用户名（区分大小写）',
+    `from_user` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin COMMENT '发起方用户名（区分大小写）',
+    `to_user` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin COMMENT '接收方用户名（区分大小写）',
     `message` varchar(100) DEFAULT NULL COMMENT '邀请留言',
     `status` varchar(16) NOT NULL COMMENT '邀请状态：PENDING 待处理 / ACCEPTED 已同意 / REJECTED 已拒绝 / CANCELED 已取消',
     `created` bigint(20) NOT NULL COMMENT '邀请时间（毫秒时间戳）',
@@ -33,8 +36,8 @@ CREATE TABLE IF NOT EXISTS `couple_invite` (
 CREATE TABLE IF NOT EXISTS `couple_promise` (
     `id` varchar(36) NOT NULL COMMENT '主键UUID',
     `space_id` varchar(36) NOT NULL COMMENT '所属情侣空间ID，关联 couple_space.id',
-    `promiser` varchar(50) DEFAULT NULL CHARACTER SET utf8mb4 COLLATE utf8mb4_bin COMMENT '承诺人用户名（答应做事的一方）',
-    `creditor` varchar(50) DEFAULT NULL CHARACTER SET utf8mb4 COLLATE utf8mb4_bin COMMENT '受益人用户名（被承诺的一方）',
+    `promiser` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin COMMENT '承诺人用户名（答应做事的一方）',
+    `creditor` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin COMMENT '受益人用户名（被承诺的一方）',
     `content` varchar(200) NOT NULL COMMENT '承诺内容，如「明天给你带奶茶」',
     `due_at` bigint(20) DEFAULT NULL COMMENT '承诺截止时间（毫秒时间戳，空表示不设期限）',
     `status` varchar(16) NOT NULL DEFAULT 'PENDING' COMMENT '承诺状态：PENDING 待兑现 / DONE 已兑现',
@@ -48,7 +51,7 @@ CREATE TABLE IF NOT EXISTS `couple_promise` (
 CREATE TABLE IF NOT EXISTS `couple_checkin` (
     `id` varchar(36) NOT NULL COMMENT '主键UUID',
     `space_id` varchar(36) NOT NULL COMMENT '所属情侣空间ID，关联 couple_space.id',
-    `username` varchar(50) DEFAULT NULL CHARACTER SET utf8mb4 COLLATE utf8mb4_bin COMMENT '打卡人用户名（区分大小写）',
+    `username` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin COMMENT '打卡人用户名（区分大小写）',
     `kind` varchar(8) NOT NULL COMMENT '打卡类型：MORNING 早安 / NIGHT 晚安',
     `checkin_day` varchar(10) NOT NULL COMMENT '打卡日期（yyyy-MM-dd，按自然日去重）',
     `created` bigint(20) NOT NULL COMMENT '打卡时间（毫秒时间戳）',
@@ -60,7 +63,7 @@ CREATE TABLE IF NOT EXISTS `couple_answer` (
     `id` varchar(36) NOT NULL COMMENT '主键UUID',
     `space_id` varchar(36) NOT NULL COMMENT '所属情侣空间ID，关联 couple_space.id',
     `answer_day` varchar(10) NOT NULL COMMENT '问题日期（yyyy-MM-dd，每天一问）',
-    `username` varchar(50) DEFAULT NULL CHARACTER SET utf8mb4 COLLATE utf8mb4_bin COMMENT '回答人用户名（区分大小写）',
+    `username` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin COMMENT '回答人用户名（区分大小写）',
     `answer` varchar(300) NOT NULL COMMENT '回答内容',
     `created` bigint(20) NOT NULL COMMENT '回答时间（毫秒时间戳）',
     PRIMARY KEY (`id`),
@@ -75,9 +78,9 @@ CREATE TABLE IF NOT EXISTS `couple_item` (
     `note` varchar(300) DEFAULT NULL COMMENT '补充说明',
     `due_date` varchar(10) DEFAULT NULL COMMENT '计划日期（yyyy-MM-dd，可空，显示在共同日历上）',
     `done` tinyint(4) DEFAULT 0 COMMENT '是否完成：1 完成 / 0 未完成',
-    `done_by` varchar(50) DEFAULT NULL CHARACTER SET utf8mb4 COLLATE utf8mb4_bin COMMENT '完成操作人用户名',
+    `done_by` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin COMMENT '完成操作人用户名',
     `done_at` bigint(20) DEFAULT NULL COMMENT '完成时间（毫秒时间戳）',
-    `created_by` varchar(50) DEFAULT NULL CHARACTER SET utf8mb4 COLLATE utf8mb4_bin COMMENT '创建人用户名',
+    `created_by` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin COMMENT '创建人用户名',
     `created` bigint(20) NOT NULL COMMENT '创建时间（毫秒时间戳）',
     PRIMARY KEY (`id`),
     KEY `idx_couple_item_space` (`space_id`)
@@ -89,7 +92,7 @@ CREATE TABLE IF NOT EXISTS `couple_anniversary` (
     `title` varchar(60) NOT NULL COMMENT '纪念日名称，如「领证纪念日」/「TA 的生日」',
     `event_date` varchar(10) NOT NULL COMMENT '纪念日日期（yyyy-MM-dd）',
     `yearly` tinyint(4) DEFAULT 1 COMMENT '是否每年重复：1 每年 / 0 仅当年',
-    `created_by` varchar(50) DEFAULT NULL CHARACTER SET utf8mb4 COLLATE utf8mb4_bin COMMENT '创建人用户名',
+    `created_by` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin COMMENT '创建人用户名',
     `created` bigint(20) NOT NULL COMMENT '创建时间（毫秒时间戳）',
     PRIMARY KEY (`id`),
     KEY `idx_couple_anniv_space` (`space_id`)

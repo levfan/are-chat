@@ -1,7 +1,7 @@
 -- are-chat 建表脚本（MySQL / H2 MODE=MySQL 双兼容，所有表与字段均带 COMMENT 注释）
 -- 嵌入式 H2 数据源启动时自动执行；外部 MySQL/MariaDB 老库已有同结构表，无需执行，可手工用于初始化
 -- 表结构字段名与老项目保持一致，兼容旧 MySQL 数据
--- 注意：带 CHARACTER SET/COLLATE 的列，DEFAULT 必须写在字符集声明之前（H2 语法要求；MySQL 对属性顺序不敏感）
+-- 注意：区分大小写的列（用户名/手机号）用列级 CHARACTER SET utf8mb4 COLLATE utf8mb4_bin 声明，不写 DEFAULT（可空为默认，语法对 H2/MySQL/MariaDB 通用）
 
 -- smart_collections.admin_audit definition
 
@@ -32,7 +32,7 @@ CREATE TABLE `announcement` (
 
 CREATE TABLE `announcement_read` (
     `id` varchar(36) NOT NULL COMMENT '主键UUID',
-    `username` varchar(50) DEFAULT NULL CHARACTER SET utf8mb4 COLLATE utf8mb4_bin COMMENT '已读用户名（区分大小写）',
+    `username` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin COMMENT '已读用户名（区分大小写）',
     `announcement_id` varchar(36) NOT NULL COMMENT '公告ID，关联 announcement.id',
     `read_at` bigint(20) NOT NULL COMMENT '确认已读时间（毫秒时间戳）',
     PRIMARY KEY (`id`),
@@ -44,10 +44,10 @@ CREATE TABLE `announcement_read` (
 
 CREATE TABLE `app_user` (
     `id` varchar(36) NOT NULL COMMENT '主键UUID',
-    `username` varchar(50) DEFAULT NULL CHARACTER SET utf8mb4 COLLATE utf8mb4_bin COMMENT '用户名，全局唯一且区分大小写',
-    `phone` varchar(20) DEFAULT NULL CHARACTER SET utf8mb4 COLLATE utf8mb4_bin COMMENT '手机号，全局唯一，注册与登录标识',
+    `username` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin COMMENT '用户名，全局唯一且区分大小写',
+    `phone` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin COMMENT '手机号，全局唯一，注册与登录标识',
     `nickname` varchar(32) DEFAULT NULL COMMENT '昵称（注册时默认取用户名）',
-    `password_hash` varchar(255) DEFAULT NULL CHARACTER SET utf8mb4 COLLATE utf8mb4_bin COMMENT '登录密码哈希（PBKDF2）',
+    `password_hash` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin COMMENT '登录密码哈希（PBKDF2）',
     `avatar` varchar(16) DEFAULT NULL COMMENT '头像标识（内置头像色档编号，如 c0）',
     `signature` varchar(100) DEFAULT NULL COMMENT '个性签名',
     `presence_status` varchar(16) DEFAULT 'online' COMMENT '在线状态：online/busy/away，注册时初始化，实时状态以 user_profile 为准',
@@ -65,8 +65,8 @@ CREATE TABLE `app_user` (
 
 CREATE TABLE `conversation_pin` (
     `id` varchar(36) NOT NULL COMMENT '主键UUID',
-    `user_a` varchar(50) DEFAULT NULL CHARACTER SET utf8mb4 COLLATE utf8mb4_bin COMMENT '会话双方用户名之一（字典序较小者）',
-    `user_b` varchar(50) DEFAULT NULL CHARACTER SET utf8mb4 COLLATE utf8mb4_bin COMMENT '会话双方用户名之一（字典序较大者）',
+    `user_a` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin COMMENT '会话双方用户名之一（字典序较小者）',
+    `user_b` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin COMMENT '会话双方用户名之一（字典序较大者）',
     `msg_id` varchar(36) NOT NULL COMMENT '被置顶的消息ID',
     `created_by` varchar(64) NOT NULL COMMENT '置顶操作人用户名',
     `created` bigint(20) NOT NULL COMMENT '置顶时间（毫秒时间戳）',
@@ -79,8 +79,8 @@ CREATE TABLE `conversation_pin` (
 
 CREATE TABLE `friend` (
     `id` varchar(36) NOT NULL COMMENT '主键UUID',
-    `owner_username` varchar(50) DEFAULT NULL CHARACTER SET utf8mb4 COLLATE utf8mb4_bin COMMENT '拥有者用户名（关系归属方）',
-    `friend_username` varchar(50) DEFAULT NULL CHARACTER SET utf8mb4 COLLATE utf8mb4_bin COMMENT '好友用户名',
+    `owner_username` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin COMMENT '拥有者用户名（关系归属方）',
+    `friend_username` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin COMMENT '好友用户名',
     `remark` varchar(64) DEFAULT NULL COMMENT '好友备注名',
     `tag` varchar(32) DEFAULT '' COMMENT '好友分组标签',
     `pinned` tinyint(4) DEFAULT 0 COMMENT '是否置顶联系人：1 置顶 / 0 否',
@@ -98,8 +98,8 @@ CREATE TABLE `friend` (
 
 CREATE TABLE `friend_request` (
     `id` varchar(36) NOT NULL COMMENT '主键UUID',
-    `from_user` varchar(50) DEFAULT NULL CHARACTER SET utf8mb4 COLLATE utf8mb4_bin COMMENT '发起方用户名（区分大小写）',
-    `to_user` varchar(50) DEFAULT NULL CHARACTER SET utf8mb4 COLLATE utf8mb4_bin COMMENT '接收方用户名（区分大小写）',
+    `from_user` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin COMMENT '发起方用户名（区分大小写）',
+    `to_user` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin COMMENT '接收方用户名（区分大小写）',
     `message` varchar(100) DEFAULT NULL COMMENT '申请留言',
     `status` varchar(16) NOT NULL COMMENT '申请状态：PENDING 待处理 / ACCEPTED 已接受 / REJECTED 已拒绝',
     `created` bigint(20) NOT NULL COMMENT '申请时间（毫秒时间戳）',
@@ -113,7 +113,7 @@ CREATE TABLE `friend_request` (
 CREATE TABLE `message_reaction` (
     `id` varchar(36) NOT NULL COMMENT '主键UUID',
     `msg_id` varchar(36) NOT NULL COMMENT '被回应的消息ID',
-    `username` varchar(50) DEFAULT NULL CHARACTER SET utf8mb4 COLLATE utf8mb4_bin COMMENT '回应人用户名（区分大小写）',
+    `username` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin COMMENT '回应人用户名（区分大小写）',
     `emoji` varchar(8) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '表情符号',
     `created` bigint(20) NOT NULL COMMENT '回应时间（毫秒时间戳）',
     PRIMARY KEY (`id`),
@@ -125,7 +125,7 @@ CREATE TABLE `message_reaction` (
 
 CREATE TABLE `message_star` (
     `id` varchar(36) NOT NULL COMMENT '主键UUID',
-    `username` varchar(50) DEFAULT NULL CHARACTER SET utf8mb4 COLLATE utf8mb4_bin COMMENT '收藏人用户名（区分大小写）',
+    `username` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin COMMENT '收藏人用户名（区分大小写）',
     `msg_id` varchar(36) NOT NULL COMMENT '收藏的消息ID',
     `created` bigint(20) NOT NULL COMMENT '收藏时间（毫秒时间戳）',
     PRIMARY KEY (`id`),
@@ -137,8 +137,8 @@ CREATE TABLE `message_star` (
 
 CREATE TABLE `private_message` (
     `id` varchar(36) NOT NULL COMMENT '主键UUID（图片/文件消息的下载地址为 /api/files/{id}/download）',
-    `from_user` varchar(50) DEFAULT NULL CHARACTER SET utf8mb4 COLLATE utf8mb4_bin COMMENT '发送方用户名（区分大小写）',
-    `to_user` varchar(50) DEFAULT NULL CHARACTER SET utf8mb4 COLLATE utf8mb4_bin COMMENT '接收方用户名（区分大小写）',
+    `from_user` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin COMMENT '发送方用户名（区分大小写）',
+    `to_user` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin COMMENT '接收方用户名（区分大小写）',
     `content` varchar(2000) NOT NULL COMMENT '消息内容：text 为文本；image 为站内下载地址；card/location/file 为 JSON',
     `msg_type` varchar(16) NOT NULL COMMENT '消息类型：text 文本 / image 图片 / poke 拍一拍 / system 系统 / card 名片 / location 位置 / file 文件',
     `status` varchar(16) NOT NULL COMMENT '消息状态：SENT 已发送 / RECALLED 已撤回（发送2分钟内可撤回）',
@@ -154,10 +154,10 @@ CREATE TABLE `private_message` (
 
 CREATE TABLE `registration_application` (
     `id` varchar(36) NOT NULL COMMENT '主键UUID',
-    `phone` varchar(20) DEFAULT NULL CHARACTER SET utf8mb4 COLLATE utf8mb4_bin COMMENT '申请手机号（区分大小写）',
-    `username` varchar(50) DEFAULT NULL CHARACTER SET utf8mb4 COLLATE utf8mb4_bin COMMENT '申请用户名（区分大小写）',
+    `phone` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin COMMENT '申请手机号（区分大小写）',
+    `username` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin COMMENT '申请用户名（区分大小写）',
     `nickname` varchar(32) DEFAULT NULL COMMENT '注册时填写的昵称（审批通过后写入 app_user/user_profile，历史申请可能为空）',
-    `password_hash` varchar(255) DEFAULT NULL CHARACTER SET utf8mb4 COLLATE utf8mb4_bin COMMENT '登录密码哈希（PBKDF2，审批通过时原样搬入 app_user）',
+    `password_hash` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin COMMENT '登录密码哈希（PBKDF2，审批通过时原样搬入 app_user）',
     `status` varchar(16) NOT NULL COMMENT '审批状态：PENDING 待审批 / APPROVED 已通过 / REJECTED 已拒绝',
     `reject_reason` varchar(200) DEFAULT NULL COMMENT '拒绝原因',
     `created` bigint(20) NOT NULL COMMENT '申请时间（毫秒时间戳）',
@@ -187,8 +187,8 @@ CREATE TABLE `uploaded_file` (
 
 CREATE TABLE `couple_space` (
     `id` varchar(36) NOT NULL COMMENT '主键UUID',
-    `user_a` varchar(50) DEFAULT NULL CHARACTER SET utf8mb4 COLLATE utf8mb4_bin COMMENT '情侣双方用户名之一（字典序较小者）',
-    `user_b` varchar(50) DEFAULT NULL CHARACTER SET utf8mb4 COLLATE utf8mb4_bin COMMENT '情侣双方用户名之一（字典序较大者）',
+    `user_a` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin COMMENT '情侣双方用户名之一（字典序较小者）',
+    `user_b` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin COMMENT '情侣双方用户名之一（字典序较大者）',
     `status` varchar(16) NOT NULL DEFAULT 'ACTIVE' COMMENT '空间状态：ACTIVE 开启 / DISSOLVED 已解除',
     `anniversary` varchar(10) DEFAULT NULL COMMENT '在一起纪念日（yyyy-MM-dd，用于计算在一起天数，可空默认取建立时间）',
     `created` bigint(20) NOT NULL COMMENT '建立时间（毫秒时间戳）',
@@ -203,8 +203,8 @@ CREATE TABLE `couple_space` (
 
 CREATE TABLE `couple_invite` (
     `id` varchar(36) NOT NULL COMMENT '主键UUID',
-    `from_user` varchar(50) DEFAULT NULL CHARACTER SET utf8mb4 COLLATE utf8mb4_bin COMMENT '发起方用户名（区分大小写）',
-    `to_user` varchar(50) DEFAULT NULL CHARACTER SET utf8mb4 COLLATE utf8mb4_bin COMMENT '接收方用户名（区分大小写）',
+    `from_user` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin COMMENT '发起方用户名（区分大小写）',
+    `to_user` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin COMMENT '接收方用户名（区分大小写）',
     `message` varchar(100) DEFAULT NULL COMMENT '邀请留言',
     `status` varchar(16) NOT NULL COMMENT '邀请状态：PENDING 待处理 / ACCEPTED 已同意 / REJECTED 已拒绝 / CANCELED 已取消',
     `created` bigint(20) NOT NULL COMMENT '邀请时间（毫秒时间戳）',
@@ -219,8 +219,8 @@ CREATE TABLE `couple_invite` (
 CREATE TABLE `couple_promise` (
     `id` varchar(36) NOT NULL COMMENT '主键UUID',
     `space_id` varchar(36) NOT NULL COMMENT '所属情侣空间ID，关联 couple_space.id',
-    `promiser` varchar(50) DEFAULT NULL CHARACTER SET utf8mb4 COLLATE utf8mb4_bin COMMENT '承诺人用户名（答应做事的一方）',
-    `creditor` varchar(50) DEFAULT NULL CHARACTER SET utf8mb4 COLLATE utf8mb4_bin COMMENT '受益人用户名（被承诺的一方）',
+    `promiser` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin COMMENT '承诺人用户名（答应做事的一方）',
+    `creditor` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin COMMENT '受益人用户名（被承诺的一方）',
     `content` varchar(200) NOT NULL COMMENT '承诺内容，如「明天给你带奶茶」',
     `due_at` bigint(20) DEFAULT NULL COMMENT '承诺截止时间（毫秒时间戳，空表示不设期限）',
     `status` varchar(16) NOT NULL DEFAULT 'PENDING' COMMENT '承诺状态：PENDING 待兑现 / DONE 已兑现',
@@ -237,7 +237,7 @@ CREATE TABLE `couple_promise` (
 CREATE TABLE `couple_checkin` (
     `id` varchar(36) NOT NULL COMMENT '主键UUID',
     `space_id` varchar(36) NOT NULL COMMENT '所属情侣空间ID，关联 couple_space.id',
-    `username` varchar(50) DEFAULT NULL CHARACTER SET utf8mb4 COLLATE utf8mb4_bin COMMENT '打卡人用户名（区分大小写）',
+    `username` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin COMMENT '打卡人用户名（区分大小写）',
     `kind` varchar(8) NOT NULL COMMENT '打卡类型：MORNING 早安 / NIGHT 晚安',
     `checkin_day` varchar(10) NOT NULL COMMENT '打卡日期（yyyy-MM-dd，按自然日去重）',
     `created` bigint(20) NOT NULL COMMENT '打卡时间（毫秒时间戳）',
@@ -252,7 +252,7 @@ CREATE TABLE `couple_answer` (
     `id` varchar(36) NOT NULL COMMENT '主键UUID',
     `space_id` varchar(36) NOT NULL COMMENT '所属情侣空间ID，关联 couple_space.id',
     `answer_day` varchar(10) NOT NULL COMMENT '问题日期（yyyy-MM-dd，每天一问）',
-    `username` varchar(50) DEFAULT NULL CHARACTER SET utf8mb4 COLLATE utf8mb4_bin COMMENT '回答人用户名（区分大小写）',
+    `username` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin COMMENT '回答人用户名（区分大小写）',
     `answer` varchar(300) NOT NULL COMMENT '回答内容',
     `created` bigint(20) NOT NULL COMMENT '回答时间（毫秒时间戳）',
     PRIMARY KEY (`id`),
@@ -270,9 +270,9 @@ CREATE TABLE `couple_item` (
     `note` varchar(300) DEFAULT NULL COMMENT '补充说明',
     `due_date` varchar(10) DEFAULT NULL COMMENT '计划日期（yyyy-MM-dd，可空，显示在共同日历上）',
     `done` tinyint(4) DEFAULT 0 COMMENT '是否完成：1 完成 / 0 未完成',
-    `done_by` varchar(50) DEFAULT NULL CHARACTER SET utf8mb4 COLLATE utf8mb4_bin COMMENT '完成操作人用户名',
+    `done_by` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin COMMENT '完成操作人用户名',
     `done_at` bigint(20) DEFAULT NULL COMMENT '完成时间（毫秒时间戳）',
-    `created_by` varchar(50) DEFAULT NULL CHARACTER SET utf8mb4 COLLATE utf8mb4_bin COMMENT '创建人用户名',
+    `created_by` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin COMMENT '创建人用户名',
     `created` bigint(20) NOT NULL COMMENT '创建时间（毫秒时间戳）',
     PRIMARY KEY (`id`),
     KEY `idx_couple_item_space` (`space_id`)
@@ -287,7 +287,7 @@ CREATE TABLE `couple_anniversary` (
     `title` varchar(60) NOT NULL COMMENT '纪念日名称，如「领证纪念日」/「TA 的生日」',
     `event_date` varchar(10) NOT NULL COMMENT '纪念日日期（yyyy-MM-dd）',
     `yearly` tinyint(4) DEFAULT 1 COMMENT '是否每年重复：1 每年 / 0 仅当年',
-    `created_by` varchar(50) DEFAULT NULL CHARACTER SET utf8mb4 COLLATE utf8mb4_bin COMMENT '创建人用户名',
+    `created_by` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin COMMENT '创建人用户名',
     `created` bigint(20) NOT NULL COMMENT '创建时间（毫秒时间戳）',
     PRIMARY KEY (`id`),
     KEY `idx_couple_anniv_space` (`space_id`)
