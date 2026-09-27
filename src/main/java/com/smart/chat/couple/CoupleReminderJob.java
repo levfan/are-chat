@@ -112,9 +112,11 @@ public class CoupleReminderJob {
         long days = java.time.temporal.ChronoUnit.DAYS.between(today, occurrence);
         String detail;
         if (days == 0) {
-            detail = "今天是「" + title + "」🎉 记得好好庆祝呀";
-        } else if (days == 1 || days == 7) {
-            detail = "距离「" + title + "」还有 " + days + " 天 🎉 开始准备小惊喜吧";
+            detail = "今天是「" + title + "」🎊 大日子，好好庆祝呀！";
+        } else if (days == 1) {
+            detail = "明天就是「" + title + "」啦 🎉 记得准备小惊喜哦";
+        } else if (days == 7) {
+            detail = "一周后就是「" + title + "」🎉 可以开始悄悄准备小惊喜了";
         } else {
             return 0;
         }
