@@ -38,7 +38,7 @@ public class SmsCodeService {
         }
         String code = String.format("%06d", random.nextInt(1_000_000));
         codes.put(phone, new CodeEntry(code, now + TTL_MS, now + RESEND_INTERVAL_MS, 0));
-        log.info("【are-chat 演示】手机号 {} 的注册验证码：{}", phone, code);
+        log.info("【小帆船 演示】手机号 {} 的注册验证码：{}", phone, code);
         return code;
     }
 

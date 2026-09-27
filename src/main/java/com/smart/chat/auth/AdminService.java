@@ -172,9 +172,9 @@ public class AdminService {
 
     /** 93 新用户欢迎消息：以审批人身份发一条系统消息，登录即可见未读 */
     private void sendWelcome(String username, String reviewer) {
-        String content = "欢迎加入 are-chat！你的注册申请已由管理员 " + reviewer + " 审批通过。"
+        String content = "欢迎加入小帆船！你的注册申请已由管理员 " + reviewer + " 审批通过。"
                 + "入门指引：① 到「好友」页添加好友；② Enter 发送、Shift+Enter 换行，可直接粘贴图片；"
-                + "③ 左侧栏可切换皮肤/背景与在线状态。祝你聊得开心！";
+                + "③ 「我的」菜单可快切在线状态，个人中心里有皮肤/背景等外观设置。祝你聊得开心！";
         PrivateMessage welcome = PrivateMessage.of(reviewer, username, content, PrivateMessage.TYPE_SYSTEM);
         messageMapper.insert(welcome);
         if (push.isOnline(username)) {

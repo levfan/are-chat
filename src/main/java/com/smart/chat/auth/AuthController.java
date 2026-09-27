@@ -40,7 +40,7 @@ public class AuthController {
                               String role) {
         static LoginResult of(AppUser user) {
             return new LoginResult(user.getUsername(), user.getNickname(), user.maskedPhone(),
-                    "success:欢迎进入 are-chat！", user.getLastLoginAt(),
+                    "success:欢迎进入小帆船！", user.getLastLoginAt(),
                     user.getRole() == null ? AppUser.ROLE_USER : user.getRole());
         }
     }

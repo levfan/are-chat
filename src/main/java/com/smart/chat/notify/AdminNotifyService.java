@@ -48,14 +48,14 @@ public class AdminNotifyService {
 
     /** 新注册申请：推送给所有已配置渠道（异步，失败只记日志） */
     public void notifyNewRegistration(String username, String maskedPhone) {
-        pushTextAsync("are-chat 新用户注册申请",
-                "**" + username + "**（手机号 " + maskedPhone + "）申请加入 are-chat，请到管理后台审批。");
+        pushTextAsync("小帆船 新用户注册申请",
+                "**" + username + "**（手机号 " + maskedPhone + "）申请加入小帆船，请到管理后台审批。");
     }
 
     /** 申请被处理后的提醒（可选渠道推送，如审批通过的欢迎通知） */
     public void notifyApplicationReviewed(String username, boolean approved, String reviewer) {
         String action = approved ? "已通过" : "已拒绝";
-        pushTextAsync("are-chat 注册审批" + action,
+        pushTextAsync("小帆船 注册审批" + action,
                 "申请 **" + username + "** " + action + "（审批人 " + reviewer + "）。");
     }
 

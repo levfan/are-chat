@@ -41,7 +41,7 @@ public class ChatWebSocketBridge {
         broadcastPresence(name, true);
         presenceService.touch(name);
         ChatSessionRegistry.sendToSession(session,
-                ChatMessage.system(name, "欢迎来到 are-chat，" + name + "！").toJson());
+                ChatMessage.system(name, "欢迎来到小帆船，" + name + "！").toJson());
         log.info("有新连接加入！昵称：{}，当前连接数：{}", name, registry.connectionCount());
         return connection;
     }

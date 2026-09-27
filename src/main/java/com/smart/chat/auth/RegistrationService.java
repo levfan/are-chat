@@ -78,8 +78,8 @@ public class RegistrationService {
         log.info("新注册申请：username={} nickname={} phone={}", name, validNickname, validPhone);
 
         // 78 免费渠道推送 + 站内待办（推送失败不影响申请）
-        notifyService.pushTextAsync("are-chat 新用户注册申请",
-                "**" + name + "**（手机号 " + mask(validPhone) + "）申请加入 are-chat，请到管理后台审批。");
+        notifyService.pushTextAsync("小帆船 新用户注册申请",
+                "**" + name + "**（手机号 " + mask(validPhone) + "）申请加入小帆船，请到管理后台审批。");
         // 78 在线管理员实时收到待办角标
         push.pushAdminEvent(userService.admins().stream().map(AppUser::getUsername).toList(),
                 applicationMapper.countByStatus(RegistrationApplication.STATUS_PENDING));

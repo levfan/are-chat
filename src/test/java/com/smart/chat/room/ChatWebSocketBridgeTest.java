@@ -89,7 +89,7 @@ class ChatWebSocketBridgeTest {
         bridge.onOpen(session, "dave");
 
         verify(registry).register(eq("dave"), any(ChatSessionRegistry.Connection.class));
-        verify(basic).sendText(contains("欢迎来到 are-chat，dave！"));
+        verify(basic).sendText(contains("欢迎来到小帆船，dave！"));
         verify(presenceService).touch("dave");
     }
 
