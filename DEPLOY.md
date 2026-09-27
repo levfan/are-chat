@@ -199,7 +199,7 @@ PWA 的「安装到桌面/手机」按钮、Service Worker、消息通知等能�
 |------|------|------|------|
 | **Let's Encrypt**（推荐） | 有公网域名并解析到服务器 | 正式证书，全平台无警告 | 免费 90 天，certbot 自动续期，见下方命令 |
 | 云厂商免费证书 | 有域名（在云厂商 DNS） | 正式证书，有效期 3-12 个月 | 控制台申请后下载 nginx 格式（.pem + .key） |
-| 自签名证书 | 无域名（纯 IP / 内网） | 首次访问需手动信任，移动端体验差 | 只建议内网/过渡用，见 11.4 |
+| 自签名证书 | 无域名（纯 IP / 内网） | 需给每台设备导入一次 ca.crt，导入后 PWA 可装 | 内网/过渡可用，一键脚本见 11.4 |
 
 Let's Encrypt 申请（服务器 80 端口可访问时用 webroot 模式，nginx 已放行该路径）：
 
@@ -226,23 +226,28 @@ curl -vk https://127.0.0.1:5443/            # 自签时 -k 跳过校验；返回
 端口规划（`.env` 可改）：`HTTPS_PORT=5443` 正式入口；`APP_PORT=58080` HTTP→HTTPS 跳转。
 公网服务器建议 `.env` 写 `HTTPS_PORT=443`，访问 `https://your.domain.com/` 即可。
 
-### 11.4 自签名证书（纯 IP / 内网过渡方案）
+### 11.4 自签证书（无域名 / 纯 IP，一键脚本）
+
+仓库自带一键脚本（本地根 CA + 由 CA 签发的带 SAN 服务器证书），产物与用法见 [`deploy/certs/README.md`](deploy/certs/README.md)：
 
 ```bash
-# 生成 10 年期自签证书（CN 与 SAN 都写服务器 IP，浏览器校验 SAN）
-openssl req -x509 -newkey rsa:2048 -nodes -days 3650 \
-  -keyout deploy/certs/privkey.pem -out deploy/certs/fullchain.pem \
-  -subj "/CN=your.server.ip" -addext "subjectAltName=IP:your.server.ip"
+cd deploy/certs
+SERVER_IP="<服务器IP>" bash gen-self-signed.sh   # 生成本目录 fullchain.pem / privkey.pem / ca.crt
 ```
 
-代价：桌面 Chrome/Edge 首次访问点「高级 → 继续前往」后可以正常注册 Service Worker 并出现安装入口，
-但**移动端 PWA 安装基本不可用**、部分浏览器每次清 Cookie 后要重新信任。要好的安装体验，请上域名 + 正式证书。
+生成后 `docker compose up -d` 即可（compose 已挂载本目录）。**关键一步：把 `ca.crt` 发给每个用户导入设备受信任的根证书**（各平台操作见 certs/README.md）：
+
+- 导入 ca.crt 后 → 浏览器无警告、Service Worker 正常、**PWA「一键安装到桌面」可用**；
+- 不导入、只点「高级 → 继续前往」→ 页面不是安全上下文，**装不了 PWA**（Service Worker 与安装入口都不出现）。
+
+代价：每台设备要做一次导入（一次性动作）；更换访问 IP 需用 `SERVER_IP=<新IP> FORCE=1 bash gen-self-signed.sh` 重签。长期方案仍是域名 + 正式证书（11.2 方案一/二）。
 
 ### 11.5 部署后自检清单（PWA 可安装）
 
 | 检查项 | 方法 |
 |--------|------|
 | HTTPS 生效 | 地址栏出现锁标志；`curl -vI https://<host>:5443/ 2>&1 \| grep -i "SSL\|200"` |
+| 自签证书已受信任 | ca.crt 已导入设备受信任的根证书（见 11.4）；锁标志无「不安全」告警，否则 PWA 装不上 |
 | HTTP 自动跳转 | `curl -sI http://<host>:58080/` 返回 `301` + `Location: https://...` |
 | WebSocket 走 wss | 浏览器 DevTools → Network → WS，聊天连接协议是 `wss`（前端自动，无需配置） |
 | manifest 可达 | `https://<host>:5443/manifest.webmanifest` 返回 JSON |
