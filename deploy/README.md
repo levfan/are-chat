@@ -10,15 +10,16 @@
 are-chat/deploy/
 ├── app.jar             ← 【你准备】后端 jar（Windows 上 mvn package 后复制改名，见第 1 步）
 ├── dist/               ← 【你准备】前端构建产物（are-chat-web/dist 整个目录复制过来，见第 2 步）
-├── certs/              ← 【你准备】TLS 证书 fullchain.pem + privkey.pem（HTTPS/PWA 必需，见 DEPLOY.md 第 11 节）
+├── certs/              ← 【HTTPS 方案用】TLS 证书 fullchain.pem + privkey.pem（当前 HTTP 部署不需要）
 ├── Dockerfile.base     基础镜像：JRE 25 + nginx（一般不用动）
 ├── Dockerfile.business 业务镜像：基于基础镜像 COPY 上面两个产物 + nginx/start 配置
 ├── build.sh            一键：基础镜像 + 业务镜像（支持 --skip-base / --up）
 ├── build-business.sh   日常：只打业务镜像（base 已存在时）
 ├── build-base.sh       仅打基础镜像
 ├── docker-compose.yml  部署：纯镜像启动，不在 compose 里构建
-├── .env                compose 变量：VERSION / APP_PORT（HTTP 跳转，默认 58080）/ HTTPS_PORT（TLS 入口，默认 5443）
-├── nginx.conf          nginx 主配置（443 TLS 终止 + 静态资源 + /api、/ws 反代；80 仅跳转与 ACME 挑战）
+├── .env                compose 变量：VERSION / APP_PORT（HTTP 入口，默认 58080）
+├── nginx.conf          【当前生效】nginx 主配置（HTTP 80：静态资源 + /api、/ws 反代）
+├── nginx-https.conf    【归档备份】HTTPS 方案 nginx 配置（443 TLS 终止 + 80 跳转 ACME；切回说明见文件头）
 ├── start.sh            容器入口：Spring Boot(127.0.0.1:8080) + nginx(80/443)
 ├── maven-settings.xml  可选：Windows 上 mvn 构建走阿里云加速
 └── set-docker-proxy.sh 可选：WSL2 Docker 代理一键配置
@@ -40,7 +41,7 @@ WSL2（打镜像）
   ② build-business.sh → are-chat:$VERSION（一体包，秒级）
                           ↓
   docker compose -f deploy/docker-compose.yml up -d
-  访问 https://localhost:5443/（PWA 安装需要 HTTPS；证书见 DEPLOY.md 第 11 节）
+  访问 http://localhost:58080/（当前为 HTTP 方案；HTTPS 备份见 nginx-https.conf）
 ```
 
 ### 第 1 步：准备后端 jar（Windows，CMD/PowerShell）
@@ -81,9 +82,10 @@ cd /mnt/d/00.personal/4.code/are-chat
 docker compose -f deploy/docker-compose.yml up -d
 ```
 
-- 访问入口：`https://localhost:5443/`（宿主机 5443 → 容器内 nginx 443 TLS 终止；`/api`、`/ws` 反代到容器内 8080 后端，后端仅监听 127.0.0.1）；`http://localhost:58080/` 仅 301 跳转
-- 宿主机端口：`deploy/.env` 的 `HTTPS_PORT`（入口）与 `APP_PORT`（跳转）；镜像版本：`VERSION`（shell 环境变量优先于 .env）
-- **PWA「安装到桌面」必须有有效 HTTPS**：把 `fullchain.pem` / `privkey.pem` 放入 `deploy/certs/`（获取方式见 DEPLOY.md 第 11 节），无证书 nginx 无法启动
+- 访问入口：`http://localhost:58080/`（宿主机 58080 → 容器内 nginx 80 唯一入口；`/api`、`/ws` 反代到容器内 8080 后端，后端仅监听 127.0.0.1）
+- 宿主机端口：`deploy/.env` 的 `APP_PORT`；镜像版本：`VERSION`（shell 环境变量优先于 .env）
+- **当前部署为 HTTP 方案**：打包与访问都走 http。HTTP 属非安全上下文，浏览器不注册 Service Worker，PWA「安装到桌面」在非 localhost 地址下不可用（应用内会提示可手动添加）；本机 `http://localhost:58080/` 不受限
+- **切回 HTTPS**：配置已完整备份在 `deploy/nginx-https.conf`，按该文件头部 5 步操作（换回 nginx.conf + 恢复 compose 的 443 端口与 certs 挂载 + 重打业务镜像），证书获取见 DEPLOY.md 第 11 节
 - 上传文件持久化在 named volume `uploads`（容器内 `/data/uploads`）
 - 连接 MySQL：在 `deploy/docker-compose.yml` 里取消 `SPRING_PROFILES_ACTIVE: mysql` 等注释并填入真实信息
 
@@ -99,6 +101,6 @@ docker compose -f deploy/docker-compose.yml up -d
 - **拉取基础镜像慢/失败**：先在 WSL2 里跑一次 `deploy/set-docker-proxy.sh` 配置代理。
 - **提示缺 app.jar / dist**：按第 1、2 步把产物放入 `deploy/` 再跑。
 - **改了 nginx.conf / start.sh**：重跑 `build-business.sh`（业务镜像层）即可，无需重建 base。
-- **启动即退出 / nginx 报 cannot load certificate**：`deploy/certs/` 缺 `fullchain.pem` / `privkey.pem`，先放证书（DEPLOY.md 第 11 节）。
+- **启动即退出 / nginx 报 cannot load certificate**：这是切回 HTTPS 方案（`nginx-https.conf`）后才会出现的报错——`deploy/certs/` 缺 `fullchain.pem` / `privkey.pem`，先放证书（DEPLOY.md 第 11 节）；当前 HTTP 方案不需要证书。
 - **改了 JRE/nginx 基线**：修改 `Dockerfile.base` 后跑 `build-base.sh`（或 `build.sh` 全量）。
 - **容器健康检查失败**：探测的是容器内 127.0.0.1:8080，确认 jar 与后端端口未被改动。

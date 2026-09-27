@@ -1,5 +1,9 @@
 # are-chat 部署指南
 
+> ⚠️ **当前部署方案已切回 HTTP**（2026-09 起）：打包与访问都走 http，实际入口为 `http://<服务器IP>:58080/`，
+> 详见 [`deploy/README.md`](deploy/README.md)。HTTPS 方案（443 TLS 终止 + 80 跳转）已完整备份为
+> `deploy/nginx-https.conf`，本文档第 4~11 节的 HTTPS 内容对应那份备份，切回时按该文件头部说明操作即可。
+
 > 一体化镜像：nginx（前端静态资源 + `/api`、`/ws` 反向代理 + TLS 终止）+ JRE 25（Spring Boot，仅监听容器内 127.0.0.1）
 > 请求链路：浏览器 → **nginx:443（HTTPS）** → 静态文件 / 反代 → Java:8080（容器内部）；
 > nginx:80 仅做 301 跳转 HTTPS 与 ACME 证书续期挑战
