@@ -23,11 +23,12 @@ COPY nginx.conf /etc/nginx/nginx.conf
 COPY start.sh /usr/local/bin/start.sh
 RUN chmod +x /usr/local/bin/start.sh && mkdir -p /data/uploads
 
-# 上传目录持久化到卷；后端只监听 127.0.0.1，外部统一走 nginx 80（宿主机 58080 → 容器 80）
+# 上传目录持久化到卷；后端只监听 127.0.0.1，外部统一走 nginx（443 TLS 终止，80 跳转）
+# TLS 证书不进镜像：由 compose 把宿主机 deploy/certs/ 只读挂载到 /etc/nginx/certs
 ENV ARECHAT_STORAGE_BASE_DIR=/data/uploads \
     TZ=Asia/Shanghai
 VOLUME ["/data/uploads"]
-EXPOSE 80
+EXPOSE 80 443
 HEALTHCHECK --interval=30s --timeout=5s --start-period=40s --retries=5 \
   CMD bash -c 'exec 3<>/dev/tcp/127.0.0.1/8080' 2>/dev/null || exit 1
 CMD ["/usr/local/bin/start.sh"]

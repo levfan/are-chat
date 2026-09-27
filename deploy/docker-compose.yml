@@ -2,10 +2,12 @@
 #
 # 镜像产出：deploy/build.sh 一键构建（或分步：build-base.sh + build-business.sh）
 # 启动：    cd are-chat && docker compose -f deploy/docker-compose.yml up -d
-# 访问：    http://localhost:58080/（宿主机 58080 → 容器内 nginx 80 统一入口，
-#           /api 与 /ws 反代到容器内 8080 后端）
+# 访问：    https://<域名或IP>:5443/（宿主机 5443 → 容器内 nginx 443 统一入口，
+#           /api 与 /ws 反代到容器内 8080 后端；PWA「安装到桌面」要求 HTTPS）
+#           http://<IP>:58080/ 仅做 301 跳转与 ACME 证书续期挑战
 #
-# 可用变量（deploy/.env 或环境变量）：VERSION（镜像 tag）、APP_PORT（宿主机端口）
+# HTTPS 证书：把 fullchain.pem 与 privkey.pem 放入 deploy/certs/（只读挂载进容器）
+# 可用变量（deploy/.env 或环境变量）：VERSION（镜像 tag）、APP_PORT（HTTP 跳转端口）、HTTPS_PORT（TLS 入口端口）
 
 name: are-chat
 
@@ -14,7 +16,8 @@ services:
     image: are-chat:${VERSION:-1.0.0}
     container_name: are-chat
     ports:
-      - "${APP_PORT:-58080}:80"                 # 宿主机 58080 → 容器内 nginx 80；可用 .env / 环境变量覆盖
+      - "${APP_PORT:-58080}:80"                 # HTTP：301 跳转 HTTPS + ACME 续期挑战
+      - "${HTTPS_PORT:-5443}:443"               # HTTPS：正式入口（可改 443，见 .env）
     environment:
       TZ: Asia/Shanghai
       ARECHAT_STORAGE_BASE_DIR: /data/uploads   # 上传文件目录（已挂卷持久化）
@@ -28,6 +31,7 @@ services:
       # MYSQL_PASSWORD: change-me
     volumes:
       - uploads:/data/uploads
+      - ./certs:/etc/nginx/certs:ro             # TLS 证书（fullchain.pem + privkey.pem），见 DEPLOY.md 第 11 节
     restart: unless-stopped
 
 volumes:
