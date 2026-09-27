@@ -11,6 +11,17 @@ spring:
     driver-class-name: org.h2.Driver
     username: sa
     password: ""
+  # 与主配置相同的 Flyway 设置：H2 测试库与外部库统一由 Flyway 执行 db/ 下 V 脚本建表（V1 couple 表 + V2 存量表基线）
+  flyway:
+    enabled: true
+    locations: classpath:db
+    baseline-on-migrate: true
+    baseline-version: 0
+    clean-disabled: true
+  # Boot 4 中 Flyway 先于脚本初始化执行，schema.sql 已退役为结构文档，必须关闭 sql.init 防止重复建表冲突
+  sql:
+    init:
+      mode: never
   servlet:
     multipart:
       max-file-size: 20MB

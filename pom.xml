@@ -74,6 +74,21 @@
             <scope>runtime</scope>
         </dependency>
 
+        <!-- Flyway 数据库版本管理：core 自带 H2 支持，mysql 模块覆盖 MySQL/MariaDB（版本由 Boot 父 POM 管理） -->
+        <!-- Boot 4 将 Flyway 自动装配拆分到独立模块 spring-boot-flyway，必须显式引入，否则加依赖也不会执行迁移 -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-flyway</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.flywaydb</groupId>
+            <artifactId>flyway-core</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.flywaydb</groupId>
+            <artifactId>flyway-mysql</artifactId>
+        </dependency>
+
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-test</artifactId>
