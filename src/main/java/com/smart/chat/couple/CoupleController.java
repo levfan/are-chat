@@ -46,6 +46,9 @@ public class CoupleController {
     public record MoodSaveRequest(String mood, String note) {
     }
 
+    public record LetterCreateRequest(String content, Long deliverAt) {
+    }
+
     private final CoupleService coupleService;
 
     public CoupleController(CoupleService coupleService) {
@@ -215,5 +218,43 @@ public class CoupleController {
     @GetMapping("/intimacy")
     public ApiResponse<CoupleService.IntimacyVO> intimacy(HttpSession session) {
         return ApiResponse.ok(coupleService.intimacy(Sessions.requireUser(session)));
+    }
+
+    // ---------- 7. 悄悄话信箱 ----------
+
+    /** 写一封悄悄话：deliverAt 空 = 立即可拆，非空 = 慢递（未来 7 天内）。 */
+    @PostMapping("/letters")
+    public ApiResponse<CoupleService.LetterVO> createLetter(@RequestBody LetterCreateRequest req,
+                                                            HttpSession session) {
+        return ApiResponse.ok(coupleService.saveLetter(Sessions.requireUser(session),
+                req.content(), req.deliverAt()));
+    }
+
+    /** 信箱列表（发件+收件，新→旧；未到期慢递对收件人隐藏内容）。 */
+    @GetMapping("/letters")
+    public ApiResponse<List<CoupleService.LetterVO>> letters(HttpSession session) {
+        return ApiResponse.ok(coupleService.listLetters(Sessions.requireUser(session)));
+    }
+
+    /** 拆信（只有收件人，且到了可拆时间）。 */
+    @PostMapping("/letters/{id}/open")
+    public ApiResponse<CoupleService.LetterVO> openLetter(@PathVariable String id, HttpSession session) {
+        return ApiResponse.ok(coupleService.openLetter(Sessions.requireUser(session), id));
+    }
+
+    /** 撤回（只有发件人，且未被拆开）。 */
+    @DeleteMapping("/letters/{id}")
+    public ApiResponse<Void> deleteLetter(@PathVariable String id, HttpSession session) {
+        coupleService.deleteLetter(Sessions.requireUser(session), id);
+        return ApiResponse.ok();
+    }
+
+    // ---------- 8. 今日一问历史回顾 ----------
+
+    /** 双方都回答过的一问存档（最近 N 天，1-90 默认 30，新→旧）。 */
+    @GetMapping("/questions/history")
+    public ApiResponse<List<CoupleService.QuestionHistoryVO>> questionHistory(
+            @RequestParam(defaultValue = "30") int days, HttpSession session) {
+        return ApiResponse.ok(coupleService.questionHistory(Sessions.requireUser(session), days));
     }
 }

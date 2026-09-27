@@ -51,7 +51,7 @@ public class CoupleService {
     }
 
     public record OverviewVO(SpaceVO space, List<InviteVO> incoming, List<InviteVO> outgoing,
-                             CheckinStateVO checkins, long overdueCount) {
+                             CheckinStateVO checkins, long overdueCount, long letterUnread) {
     }
 
     public record PromiseVO(String id, String promiser, String creditor, String content, Long dueAt,
@@ -96,6 +96,18 @@ public class CoupleService {
                              IntimacyBreakdown breakdown) {
     }
 
+    /**
+     * 悄悄话信件：locked=true 表示未到点的慢递——收件人视角 content 置空（前端显示 🔒），
+     * 发件人始终可见自己写的内容。
+     */
+    public record LetterVO(String id, String sender, String content, Long deliverAt, String status,
+                           Long openedAt, boolean locked, Long created) {
+    }
+
+    /** 今日一问历史：按天拼好的双方回答。 */
+    public record QuestionHistoryVO(String day, String topic, String question, String myAnswer, String partnerAnswer) {
+    }
+
     // ========== 依赖 ==========
 
     private final CoupleSpaceMapper spaceMapper;
@@ -106,6 +118,7 @@ public class CoupleService {
     private final CoupleItemMapper itemMapper;
     private final CoupleAnniversaryMapper anniversaryMapper;
     private final CoupleMoodMapper moodMapper;
+    private final CoupleLetterMapper letterMapper;
     private final FriendMapper friendMapper;
     private final UserProfileMapper profileMapper;
     private final AppUserService userService;
@@ -115,8 +128,8 @@ public class CoupleService {
                          CouplePromiseMapper promiseMapper, CoupleCheckinMapper checkinMapper,
                          CoupleAnswerMapper answerMapper, CoupleItemMapper itemMapper,
                          CoupleAnniversaryMapper anniversaryMapper, CoupleMoodMapper moodMapper,
-                         FriendMapper friendMapper, UserProfileMapper profileMapper,
-                         AppUserService userService, ImPushService push) {
+                         CoupleLetterMapper letterMapper, FriendMapper friendMapper,
+                         UserProfileMapper profileMapper, AppUserService userService, ImPushService push) {
         this.spaceMapper = spaceMapper;
         this.inviteMapper = inviteMapper;
         this.promiseMapper = promiseMapper;
@@ -125,6 +138,7 @@ public class CoupleService {
         this.itemMapper = itemMapper;
         this.anniversaryMapper = anniversaryMapper;
         this.moodMapper = moodMapper;
+        this.letterMapper = letterMapper;
         this.friendMapper = friendMapper;
         this.profileMapper = profileMapper;
         this.userService = userService;
@@ -240,14 +254,16 @@ public class CoupleService {
         List<InviteVO> outgoing = inviteMapper.findPendingFrom(me).stream().map(InviteVO::of).toList();
         CoupleSpace space = spaceMapper.findActiveByUser(me).orElse(null);
         if (space == null) {
-            return new OverviewVO(null, incoming, outgoing, null, 0);
+            return new OverviewVO(null, incoming, outgoing, null, 0, 0);
         }
         long now = System.currentTimeMillis();
         // 我还没兑现的逾期承诺数（给「还有 N 件事你没做到哦~」提醒条用）
         long overdue = promiseMapper.findBySpace(space.getId()).stream()
                 .filter(p -> p.getPromiser().equals(me) && p.isOverdue(now))
                 .count();
-        return new OverviewVO(toSpaceVO(space, me), incoming, outgoing, checkinState(space, me), overdue);
+        // 我可以拆但还没拆的悄悄话数（信箱 tab 红点）
+        long letterUnread = letterMapper.countOpenable(space.getId(), me, now);
+        return new OverviewVO(toSpaceVO(space, me), incoming, outgoing, checkinState(space, me), overdue, letterUnread);
     }
 
     public SpaceVO setAnniversary(String me, String date) {
@@ -539,7 +555,6 @@ public class CoupleService {
     }
 
     // ========== 5. 恋爱时光轴 ==========
-
     /**
      * 最近 N 天（1-90，默认 30）的「我们的故事」：自动聚合空间建立、互道早晚安、
      * 今日一问完成、承诺兑现、清单打卡、纪念日，按天分组新→旧。
@@ -690,6 +705,104 @@ public class CoupleService {
         return new IntimacyVO(score, level, titles[level], icons[level], next, breakdown);
     }
 
+    // ========== 7. 悄悄话信箱 ==========
+
+    /**
+     * 写一封悄悄话给 TA：content 1-300 字；deliverAt 为空 = 立即可拆，
+     * 非空 = 慢递（必须是未来时间且不超过 7 天），到点前收件人拆不了。
+     */
+    public LetterVO saveLetter(String me, String content, Long deliverAt) {
+        CoupleSpace space = requireSpace(me);
+        String partner = space.partnerOf(me);
+        String text = requireText(content, "写下你想说的话（1-300 字）", CoupleLetter.CONTENT_MAX);
+        long now = System.currentTimeMillis();
+        if (deliverAt != null && deliverAt <= now) {
+            throw new BusinessException(400, "慢递时间要晚于现在哦");
+        }
+        if (deliverAt != null && deliverAt > now + CoupleLetter.DELIVER_MAX_MILLIS) {
+            throw new BusinessException(400, "慢递最长 7 天，再多就等不及啦");
+        }
+        CoupleLetter letter = CoupleLetter.of(space.getId(), me, partner, text, deliverAt);
+        letterMapper.insert(letter);
+        String detail = deliverAt == null
+                ? "TA 给你写了一封悄悄话 💌，快去拆开看看"
+                : "TA 给你写了一封慢递悄悄话 💌，到点才能拆开哦";
+        push.pushCoupleEvent("letter-created", me, partner, detail);
+        return toLetterVO(letter, me, now);
+    }
+
+    /** 信箱列表：发件 + 收件都在一个列表里（新→旧），未到期慢递对收件人隐藏内容。 */
+    public List<LetterVO> listLetters(String me) {
+        CoupleSpace space = requireSpace(me);
+        long now = System.currentTimeMillis();
+        return letterMapper.findBySpace(space.getId()).stream()
+                .map(letter -> toLetterVO(letter, me, now))
+                .toList();
+    }
+
+    /** 拆信：只有收件人能拆，且要到了可拆时间；拆开推送给发件人。 */
+    public LetterVO openLetter(String me, String letterId) {
+        CoupleSpace space = requireSpace(me);
+        CoupleLetter letter = requireLetter(letterId, space);
+        long now = System.currentTimeMillis();
+        if (!letter.getRecipient().equals(me)) {
+            throw new BusinessException(403, "只能由收件人拆开哦");
+        }
+        if (CoupleLetter.STATUS_OPENED.equals(letter.getStatus())) {
+            throw new BusinessException(409, "这封信已经拆过了");
+        }
+        if (letter.locked(now)) {
+            throw new BusinessException(400, "慢递还没到点，再等等哦 ⏳");
+        }
+        letter.setStatus(CoupleLetter.STATUS_OPENED);
+        letter.setOpenedAt(now);
+        letterMapper.updateById(letter);
+        push.pushCoupleEvent("letter-opened", me, letter.getSender(), "TA 拆开了你的悄悄话 💌");
+        return toLetterVO(letter, me, now);
+    }
+
+    /** 撤回：只有发件人、且还没被拆开时可以撤。 */
+    public void deleteLetter(String me, String letterId) {
+        CoupleSpace space = requireSpace(me);
+        CoupleLetter letter = requireLetter(letterId, space);
+        if (!letter.getSender().equals(me)) {
+            throw new BusinessException(403, "只能撤回自己写的悄悄话");
+        }
+        if (CoupleLetter.STATUS_OPENED.equals(letter.getStatus())) {
+            throw new BusinessException(409, "已经拆开的信不能再撤回了");
+        }
+        letterMapper.deleteById(letter.getId());
+    }
+
+    // ========== 8. 今日一问历史回顾 ==========
+
+    /** 双方都回答过的一问存档（最近 N 天，1-90 默认 30，新→旧），题目按日期复算。 */
+    public List<QuestionHistoryVO> questionHistory(String me, int days) {
+        CoupleSpace space = requireSpace(me);
+        int limit = clampDays(days, 30);
+        String startDay = LocalDate.now().minusDays(limit - 1L).toString();
+        Map<String, Map<String, CoupleAnswer>> byDay = new HashMap<>();
+        for (CoupleAnswer row : answerMapper.findBySpace(space.getId())) {
+            if (row.getAnswerDay().compareTo(startDay) < 0) {
+                continue;
+            }
+            byDay.computeIfAbsent(row.getAnswerDay(), k -> new HashMap<>()).put(row.getUsername(), row);
+        }
+        List<QuestionHistoryVO> result = new ArrayList<>();
+        for (String day : byDay.keySet().stream().sorted(Comparator.reverseOrder()).toList()) {
+            Map<String, CoupleAnswer> users = byDay.get(day);
+            CoupleAnswer mine = users.get(me);
+            CoupleAnswer partner = users.get(space.partnerOf(me));
+            if (mine == null || partner == null) {
+                continue;
+            }
+            CoupleQuestions.BankQuestion picked = CoupleQuestions.pick(day);
+            result.add(new QuestionHistoryVO(day, picked.topic(), picked.text(),
+                    mine.getAnswer(), partner.getAnswer()));
+        }
+        return result;
+    }
+
     // ========== 84 注销清理（AppUserService.deactivate 调用） ==========
 
     /** 注销：解散所在空间并清理相关邀请。 */
@@ -786,6 +899,22 @@ public class CoupleService {
             throw new BusinessException(404, "清单事项不存在");
         }
         return item;
+    }
+
+    private CoupleLetter requireLetter(String letterId, CoupleSpace space) {
+        CoupleLetter letter = letterMapper.selectById(letterId);
+        if (letter == null || !letter.getSpaceId().equals(space.getId())) {
+            throw new BusinessException(404, "这封信不存在");
+        }
+        return letter;
+    }
+
+    /** 悄悄话 VO：未到点的慢递对非发件人（即收件人）隐藏内容。 */
+    private LetterVO toLetterVO(CoupleLetter letter, String viewer, long now) {
+        boolean locked = letter.locked(now) && !letter.getSender().equals(viewer);
+        return new LetterVO(letter.getId(), letter.getSender(), locked ? null : letter.getContent(),
+                letter.getDeliverAt(), letter.getStatus(), letter.getOpenedAt(), letter.locked(now),
+                letter.getCreated());
     }
 
     private SpaceVO toSpaceVO(CoupleSpace space, String me) {
