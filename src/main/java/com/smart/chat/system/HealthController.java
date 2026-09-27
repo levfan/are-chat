@@ -29,7 +29,8 @@ public class HealthController {
     @GetMapping
     public ApiResponse<HealthVO> health() {
         long uptimeSeconds = (System.currentTimeMillis() - startedAt) / 1000;
-        return ApiResponse.ok(new HealthVO("UP", uptimeSeconds, registry.connectionCount(), VERSION,
+        // 在线人数按用户去重：多端/多标签登录同一账号只计 1 人（connectionCount 是连接数会虚高）
+        return ApiResponse.ok(new HealthVO("UP", uptimeSeconds, registry.onlineUsers().size(), VERSION,
                 System.currentTimeMillis()));
     }
 }
