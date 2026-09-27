@@ -1,6 +1,6 @@
 -- are-chat 全量结构文档（MySQL / H2 MODE=MySQL 双兼容写法，所有表与字段均带 COMMENT 注释）
 -- 表结构统一由 Flyway 自动执行 db/ 下 V 脚本创建与管理：V1__add_couple_space.sql（couple 系列表）
--- + V2__legacy_tables_baseline.sql（存量业务表基线），运行时不再执行本文件（spring.sql.init.mode=never）
+-- + V2__legacy_tables_baseline.sql（存量业务表基线）+ V3__add_couple_mood.sql（心情日记表），运行时不再执行本文件（spring.sql.init.mode=never）
 -- 修改表结构时：新增 V 脚本 + 同步更新本文件，保证文档与真实结构一致
 -- 注意：区分大小写的列（用户名/手机号）用列级 CHARACTER SET utf8mb4 COLLATE utf8mb4_bin 声明，不写 DEFAULT（可空为默认，语法对 H2/MySQL/MariaDB 通用）
 
@@ -293,6 +293,22 @@ CREATE TABLE `couple_anniversary` (
     PRIMARY KEY (`id`),
     KEY `idx_couple_anniv_space` (`space_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='共同日历纪念日表：纪念日/生日/约会日，双方都能看到和编辑';
+
+
+-- smart_collections.couple_mood definition
+
+CREATE TABLE `couple_mood` (
+    `id` varchar(36) NOT NULL COMMENT '主键UUID',
+    `space_id` varchar(36) NOT NULL COMMENT '所属情侣空间ID，关联 couple_space.id',
+    `username` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin COMMENT '记录人用户名（区分大小写）',
+    `mood_day` varchar(10) NOT NULL COMMENT '心情日期（yyyy-MM-dd，按自然日去重）',
+    `mood` varchar(16) NOT NULL COMMENT '心情键：LOVE 恋爱中 / HAPPY 开心 / CALM 平静 / BUSY 好忙 / TIRED 累了 / SICK 生病 / SAD 难过 / ANGRY 生气',
+    `note` varchar(200) DEFAULT NULL COMMENT '一句话心情',
+    `created` bigint(20) NOT NULL COMMENT '创建时间（毫秒时间戳）',
+    `updated_at` bigint(20) DEFAULT NULL COMMENT '最近修改时间（毫秒时间戳）',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uq_couple_mood` (`space_id`,`username`,`mood_day`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='情侣心情日记表：每天每人记录一条心情，双方互相可见，用于绘制双人心情曲线';
 
 
 -- smart_collections.user_profile definition
