@@ -331,6 +331,17 @@ class PrivateMessageServiceTest {
     }
 
     @Test
+    void reactionAcceptsExpandedEmojiSet() {
+        PrivateMessage message = PrivateMessage.of("bob", "alice", "早呀", PrivateMessage.TYPE_TEXT);
+        when(messageMapper.selectById(message.getId())).thenReturn(message);
+        when(reactionMapper.findUnique(message.getId(), "alice", "⛵")).thenReturn(null);
+
+        assertThat(service.toggleReaction("alice", message.getId(), "⛵")).isTrue();
+        verify(reactionMapper).insert(any(MessageReaction.class));
+        verify(push).pushReaction(message, "alice", "⛵", true);
+    }
+
+    @Test
     void reactionValidatesEmojiAndParticipant() {
         when(messageMapper.selectById("nope")).thenReturn(null);
         assertThatThrownBy(() -> service.toggleReaction("alice", "nope", "👍"))

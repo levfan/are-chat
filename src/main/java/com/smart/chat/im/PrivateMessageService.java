@@ -20,8 +20,14 @@ import java.util.stream.Collectors;
 @Service
 public class PrivateMessageService {
 
-    /** 回应支持的表情（保持克制的专业风格） */
-    public static final Set<String> REACTION_EMOJIS = Set.of("👍", "❤️", "😂", "😮", "😢", "🔥");
+    /** 回应支持的表情白名单（情侣风全集 36 个，与前端 REACTION_ALL 严格对齐） */
+    public static final Set<String> REACTION_EMOJIS = Set.of(
+            "❤️", "🥰", "😍", "😘", "🤗", "💕",
+            "😂", "🤣", "😆", "😉", "😊", "😌",
+            "😮", "😳", "😱", "🥺", "😢", "😭",
+            "😤", "😡", "🙁", "😴", "🤔", "😏",
+            "😎", "🥳", "👍", "👎", "🙌", "👏",
+            "✌️", "🙈", "🔥", "🎉", "🌹", "⛵");
 
     /** 82 文件消息：content 为 JSON（name/size/url），url 必须是站内下载地址 */
     public static final String TYPE_FILE = PrivateMessage.TYPE_FILE;
