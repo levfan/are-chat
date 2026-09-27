@@ -1,5 +1,8 @@
 server:
   port: 8080
+  # HTTPS 部署（nginx TLS 终止 → HTTP 反代）时信任 X-Forwarded-Proto：
+  # 后端感知到 https 后，会话 Cookie 自动带 Secure 属性，生成的绝对地址也是 https
+  forward-headers-strategy: framework
 
 spring:
   application:
