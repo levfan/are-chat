@@ -49,6 +49,18 @@ public class CoupleController {
     public record LetterCreateRequest(String content, Long deliverAt) {
     }
 
+    public record PactCreateRequest(String content) {
+    }
+
+    public record CitySetRequest(String city) {
+    }
+
+    public record FundCreateRequest(String title, Long targetAmount) {
+    }
+
+    public record FundDepositRequest(Long amount, String note) {
+    }
+
     private final CoupleService coupleService;
 
     public CoupleController(CoupleService coupleService) {
@@ -256,5 +268,73 @@ public class CoupleController {
     public ApiResponse<List<CoupleService.QuestionHistoryVO>> questionHistory(
             @RequestParam(defaultValue = "30") int days, HttpSession session) {
         return ApiResponse.ok(coupleService.questionHistory(Sessions.requireUser(session), days));
+    }
+
+    // ---------- 9. 恋爱条约 ----------
+
+    /** 提出一条条约（待对方盖章）。 */
+    @PostMapping("/pacts")
+    public ApiResponse<CoupleService.PactVO> createPact(@RequestBody PactCreateRequest req, HttpSession session) {
+        return ApiResponse.ok(coupleService.createPact(Sessions.requireUser(session), req.content()));
+    }
+
+    @GetMapping("/pacts")
+    public ApiResponse<List<CoupleService.PactVO>> pacts(HttpSession session) {
+        return ApiResponse.ok(coupleService.listPacts(Sessions.requireUser(session)));
+    }
+
+    /** 盖章生效（只有对方能盖）。 */
+    @PostMapping("/pacts/{id}/accept")
+    public ApiResponse<CoupleService.PactVO> acceptPact(@PathVariable String id, HttpSession session) {
+        return ApiResponse.ok(coupleService.acceptPact(Sessions.requireUser(session), id));
+    }
+
+    @DeleteMapping("/pacts/{id}")
+    public ApiResponse<Void> deletePact(@PathVariable String id, HttpSession session) {
+        coupleService.deletePact(Sessions.requireUser(session), id);
+        return ApiResponse.ok();
+    }
+
+    // ---------- 10. 异地恋助手 ----------
+
+    /** 设置/清空我的城市（清空传 null 或空串）。 */
+    @PutMapping("/cities")
+    public ApiResponse<CoupleService.CityCardVO> setCity(@RequestBody CitySetRequest req, HttpSession session) {
+        return ApiResponse.ok(coupleService.setCity(Sessions.requireUser(session), req.city()));
+    }
+
+    /** 异地恋卡片：双方城市 +（都在城市库时）时差与距离。 */
+    @GetMapping("/cities")
+    public ApiResponse<CoupleService.CityCardVO> cities(HttpSession session) {
+        return ApiResponse.ok(coupleService.cityCard(Sessions.requireUser(session)));
+    }
+
+    // ---------- 11. 心愿基金 ----------
+
+    /** 建一个共同存钱目标（targetAmount 单位：分）。 */
+    @PostMapping("/funds")
+    public ApiResponse<CoupleService.FundVO> createFund(@RequestBody FundCreateRequest req, HttpSession session) {
+        return ApiResponse.ok(coupleService.createFund(Sessions.requireUser(session),
+                req.title(), req.targetAmount()));
+    }
+
+    @GetMapping("/funds")
+    public ApiResponse<List<CoupleService.FundVO>> funds(HttpSession session) {
+        return ApiResponse.ok(coupleService.listFunds(Sessions.requireUser(session)));
+    }
+
+    /** 存一笔钱（amount 单位：分；攒够自动达成并推送庆祝）。 */
+    @PostMapping("/funds/{id}/deposits")
+    public ApiResponse<CoupleService.FundVO> depositFund(@PathVariable String id,
+                                                         @RequestBody FundDepositRequest req,
+                                                         HttpSession session) {
+        return ApiResponse.ok(coupleService.depositFund(Sessions.requireUser(session),
+                id, req.amount(), req.note()));
+    }
+
+    @DeleteMapping("/funds/{id}")
+    public ApiResponse<Void> deleteFund(@PathVariable String id, HttpSession session) {
+        coupleService.deleteFund(Sessions.requireUser(session), id);
+        return ApiResponse.ok();
     }
 }

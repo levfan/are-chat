@@ -1,5 +1,6 @@
 package com.smart.chat.couple;
 
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.smart.chat.auth.AppUserService;
 import com.smart.chat.common.BusinessException;
 import com.smart.chat.im.FriendMapper;
@@ -108,6 +109,25 @@ public class CoupleService {
     public record QuestionHistoryVO(String day, String topic, String question, String myAnswer, String partnerAnswer) {
     }
 
+    /** 恋爱条约：pending=true 表示等我盖章（对方提出的）。 */
+    public record PactVO(String id, String content, String proposedBy, String acceptedBy,
+                         Long acceptedAt, boolean pending, boolean mine, Long created) {
+    }
+
+    /** 异地恋助手卡片：任一方城市缺失或不在城市库时，hoursDiff/distanceKm 为 null（城市文本照常展示）。 */
+    public record CityCardVO(String myCity, String partnerCity, Integer hoursDiff, Long distanceKm) {
+    }
+
+    /** 心愿基金存入流水。 */
+    public record FundDepositVO(String id, String username, Long amount, String note, Long created) {
+    }
+
+    /** 心愿基金：amount 单位为分；progress 0-100（超过 100 按 100 封顶展示）。 */
+    public record FundVO(String id, String title, Long targetAmount, Long savedAmount, String status,
+                         boolean reached, int progress, String createdBy,
+                         List<FundDepositVO> deposits, Long created) {
+    }
+
     // ========== 依赖 ==========
 
     private final CoupleSpaceMapper spaceMapper;
@@ -119,6 +139,9 @@ public class CoupleService {
     private final CoupleAnniversaryMapper anniversaryMapper;
     private final CoupleMoodMapper moodMapper;
     private final CoupleLetterMapper letterMapper;
+    private final CouplePactMapper pactMapper;
+    private final CoupleFundMapper fundMapper;
+    private final CoupleFundDepositMapper fundDepositMapper;
     private final FriendMapper friendMapper;
     private final UserProfileMapper profileMapper;
     private final AppUserService userService;
@@ -128,8 +151,10 @@ public class CoupleService {
                          CouplePromiseMapper promiseMapper, CoupleCheckinMapper checkinMapper,
                          CoupleAnswerMapper answerMapper, CoupleItemMapper itemMapper,
                          CoupleAnniversaryMapper anniversaryMapper, CoupleMoodMapper moodMapper,
-                         CoupleLetterMapper letterMapper, FriendMapper friendMapper,
-                         UserProfileMapper profileMapper, AppUserService userService, ImPushService push) {
+                         CoupleLetterMapper letterMapper, CouplePactMapper pactMapper,
+                         CoupleFundMapper fundMapper, CoupleFundDepositMapper fundDepositMapper,
+                         FriendMapper friendMapper, UserProfileMapper profileMapper,
+                         AppUserService userService, ImPushService push) {
         this.spaceMapper = spaceMapper;
         this.inviteMapper = inviteMapper;
         this.promiseMapper = promiseMapper;
@@ -139,6 +164,9 @@ public class CoupleService {
         this.anniversaryMapper = anniversaryMapper;
         this.moodMapper = moodMapper;
         this.letterMapper = letterMapper;
+        this.pactMapper = pactMapper;
+        this.fundMapper = fundMapper;
+        this.fundDepositMapper = fundDepositMapper;
         this.friendMapper = friendMapper;
         this.profileMapper = profileMapper;
         this.userService = userService;
@@ -803,6 +831,138 @@ public class CoupleService {
         return result;
     }
 
+    // ========== 9. 恋爱条约 ==========
+
+    /** 提出一条恋爱条约（待对方盖章）。 */
+    public PactVO createPact(String me, String content) {
+        CoupleSpace space = requireSpace(me);
+        String text = requireText(content, "写下条约内容（1-100 字）", CouplePact.CONTENT_MAX);
+        CouplePact pact = CouplePact.of(space.getId(), me, text);
+        pactMapper.insert(pact);
+        push.pushCoupleEvent("pact-created", me, space.partnerOf(me),
+                "TA 提出了一条恋爱条约等你盖章：「" + text + "」🤝");
+        return toPactVO(pact, me);
+    }
+
+    public List<PactVO> listPacts(String me) {
+        CoupleSpace space = requireSpace(me);
+        return pactMapper.findBySpace(space.getId()).stream().map(p -> toPactVO(p, me)).toList();
+    }
+
+    /** 盖章生效：只有对方（非提出人）能盖。 */
+    public PactVO acceptPact(String me, String pactId) {
+        CoupleSpace space = requireSpace(me);
+        CouplePact pact = requirePact(pactId, space);
+        if (pact.getProposedBy().equals(me)) {
+            throw new BusinessException(400, "自己提的条约要等 TA 来盖章哦");
+        }
+        if (pact.isAccepted()) {
+            throw new BusinessException(409, "这条条约已经生效过了");
+        }
+        pact.setAcceptedBy(me);
+        pact.setAcceptedAt(System.currentTimeMillis());
+        pactMapper.updateById(pact);
+        push.pushCoupleEvent("pact-accepted", me, space.partnerOf(me),
+                "TA 盖章通过了恋爱条约：「" + pact.getContent() + "」💕 从今天起一起遵守");
+        return toPactVO(pact, me);
+    }
+
+    /** 废除条约：双方都可以删。 */
+    public void deletePact(String me, String pactId) {
+        CoupleSpace space = requireSpace(me);
+        CouplePact pact = requirePact(pactId, space);
+        pactMapper.deleteById(pact.getId());
+        push.pushCoupleEvent("pact-deleted", me, space.partnerOf(me),
+                "有一条恋爱条约被移除了：" + pact.getContent());
+    }
+
+    // ========== 10. 异地恋助手 ==========
+
+    /** 设置我的城市（手填，最长 20 字；匹配内置城市库才能算时差/距离）。 */
+    public CityCardVO setCity(String me, String city) {
+        CoupleSpace space = requireSpace(me);
+        String name = requireOptional(city, "城市名最长 20 个字", 20);
+        if (me.equals(space.getUserA())) {
+            space.setCityA(name);
+        } else {
+            space.setCityB(name);
+        }
+        spaceMapper.updateById(space);
+        push.pushCoupleEvent("city-changed", me, space.partnerOf(me),
+                "TA 更新了所在城市：" + (name == null ? "清空" : name) + " 📍");
+        return cityCard(space, me);
+    }
+
+    public CityCardVO cityCard(String me) {
+        CoupleSpace space = requireSpace(me);
+        return cityCard(space, me);
+    }
+
+    // ========== 11. 心愿基金 ==========
+
+    /** 建一个共同存钱目标（金额单位：分）。 */
+    public FundVO createFund(String me, String title, Long targetAmount) {
+        CoupleSpace space = requireSpace(me);
+        String name = requireText(title, "写下心愿名称（1-60 字）", CoupleFund.TITLE_MAX);
+        if (targetAmount == null || targetAmount <= 0) {
+            throw new BusinessException(400, "目标金额要大于 0 哦");
+        }
+        if (targetAmount > 9_999_999_999L) {
+            throw new BusinessException(400, "目标金额太大了，先立个小目标 💰");
+        }
+        CoupleFund fund = CoupleFund.of(space.getId(), me, name, targetAmount);
+        fundMapper.insert(fund);
+        push.pushCoupleEvent("fund-created", me, space.partnerOf(me),
+                "TA 发起了一个共同心愿：「" + name + "」，一起攒钱实现它 💰");
+        return toFundVO(fund, me);
+    }
+
+    public List<FundVO> listFunds(String me) {
+        CoupleSpace space = requireSpace(me);
+        return fundMapper.findBySpace(space.getId()).stream().map(f -> toFundVO(f, me)).toList();
+    }
+
+    /** 往目标里存一笔钱（金额单位：分，>0）；攒够自动标记达成并推送庆祝。 */
+    public FundVO depositFund(String me, String fundId, Long amount, String note) {
+        CoupleSpace space = requireSpace(me);
+        CoupleFund fund = requireFund(fundId, space);
+        if (amount == null || amount <= 0) {
+            throw new BusinessException(400, "存入金额要大于 0 哦");
+        }
+        if (fund.isReached()) {
+            throw new BusinessException(409, "这个心愿已经达成啦，换下一个目标吧 🎉");
+        }
+        String memo = requireOptional(note, "存钱留言最多 100 字", CoupleFundDeposit.NOTE_MAX);
+        long saved = fund.getSavedAmount() + amount;
+        fund.setSavedAmount(saved);
+        boolean justReached = saved >= fund.getTargetAmount();
+        if (justReached) {
+            fund.setStatus(CoupleFund.STATUS_REACHED);
+            fund.setDoneAt(System.currentTimeMillis());
+        }
+        fundMapper.updateById(fund);
+        fundDepositMapper.insert(CoupleFundDeposit.of(space.getId(), fund.getId(), me, amount, memo));
+        if (justReached) {
+            push.pushCoupleEventBoth("fund-reached", me, me, space.partnerOf(me),
+                    "共同心愿达成 🎉：「" + fund.getTitle() + "」攒够啦，准备实现它吧！");
+        } else {
+            push.pushCoupleEvent("fund-deposit", me, space.partnerOf(me),
+                    "TA 往共同心愿「" + fund.getTitle() + "」存了一笔钱，进度又近了一点 💰");
+        }
+        return toFundVO(fund, me);
+    }
+
+    /** 删除心愿（连流水一起删）：双方都可以操作。 */
+    public void deleteFund(String me, String fundId) {
+        CoupleSpace space = requireSpace(me);
+        CoupleFund fund = requireFund(fundId, space);
+        fundMapper.deleteById(fund.getId());
+        fundDepositMapper.delete(new LambdaQueryWrapper<CoupleFundDeposit>()
+                .eq(CoupleFundDeposit::getFundId, fund.getId()));
+        push.pushCoupleEvent("fund-deleted", me, space.partnerOf(me),
+                "共同心愿被移除了：" + fund.getTitle());
+    }
+
     // ========== 84 注销清理（AppUserService.deactivate 调用） ==========
 
     /** 注销：解散所在空间并清理相关邀请。 */
@@ -907,6 +1067,53 @@ public class CoupleService {
             throw new BusinessException(404, "这封信不存在");
         }
         return letter;
+    }
+
+    private CouplePact requirePact(String pactId, CoupleSpace space) {
+        CouplePact pact = pactMapper.selectById(pactId);
+        if (pact == null || !pact.getSpaceId().equals(space.getId())) {
+            throw new BusinessException(404, "这条条约不存在");
+        }
+        return pact;
+    }
+
+    private CoupleFund requireFund(String fundId, CoupleSpace space) {
+        CoupleFund fund = fundMapper.selectById(fundId);
+        if (fund == null || !fund.getSpaceId().equals(space.getId())) {
+            throw new BusinessException(404, "这个心愿不存在");
+        }
+        return fund;
+    }
+
+    private PactVO toPactVO(CouplePact pact, String me) {
+        return new PactVO(pact.getId(), pact.getContent(), pact.getProposedBy(), pact.getAcceptedBy(),
+                pact.getAcceptedAt(), !pact.isAccepted(), pact.getProposedBy().equals(me), pact.getCreated());
+    }
+
+    /** 异地恋卡片：双方城市文本 +（都在城市库时）时差与球面距离。 */
+    private CityCardVO cityCard(CoupleSpace space, String me) {
+        String myName = me.equals(space.getUserA()) ? space.getCityA() : space.getCityB();
+        String partnerName = me.equals(space.getUserA()) ? space.getCityB() : space.getCityA();
+        var my = CoupleCities.find(myName).orElse(null);
+        var partner = CoupleCities.find(partnerName).orElse(null);
+        Integer hoursDiff = null;
+        Long distanceKm = null;
+        if (my != null && partner != null) {
+            hoursDiff = Math.round((float) (CoupleCities.offsetSeconds(partner) - CoupleCities.offsetSeconds(my)) / 3600);
+            distanceKm = CoupleCities.distanceKm(my, partner);
+        }
+        return new CityCardVO(myName, partnerName, hoursDiff, distanceKm);
+    }
+
+    private FundVO toFundVO(CoupleFund fund, String me) {
+        List<FundDepositVO> deposits = fundDepositMapper.findByFund(fund.getId()).stream()
+                .map(d -> new FundDepositVO(d.getId(), d.getUsername(), d.getAmount(),
+                        d.getNote() == null ? "" : d.getNote(), d.getCreated()))
+                .toList();
+        int progress = fund.getTargetAmount() <= 0 ? 0
+                : (int) Math.min(100, Math.round(fund.getSavedAmount() * 100.0 / fund.getTargetAmount()));
+        return new FundVO(fund.getId(), fund.getTitle(), fund.getTargetAmount(), fund.getSavedAmount(),
+                fund.getStatus(), fund.isReached(), progress, fund.getCreatedBy(), deposits, fund.getCreated());
     }
 
     /** 悄悄话 VO：未到点的慢递对非发件人（即收件人）隐藏内容。 */

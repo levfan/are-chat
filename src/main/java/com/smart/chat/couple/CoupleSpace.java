@@ -25,6 +25,10 @@ public class CoupleSpace {
     private String status;
     /** 在一起纪念日（yyyy-MM-dd，空则按 created 计算在一起天数） */
     private String anniversary;
+    /** 用户 A 所在城市（手填，异地恋助手用于匹配内置城市库算时差/距离） */
+    private String cityA;
+    /** 用户 B 所在城市 */
+    private String cityB;
     private Long created;
     private Long dissolvedAt;
 
