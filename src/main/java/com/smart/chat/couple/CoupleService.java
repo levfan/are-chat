@@ -13,9 +13,14 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
+import java.util.TreeMap;
 
 /**
  * 情侣空间：好友邀请建立 → 双向约定（承诺卡/兑现打卡/逾期提醒）→ 每日小仪式
@@ -63,6 +68,34 @@ public class CoupleService {
     public record AnniversaryVO(String id, String title, String date, boolean yearly, String createdBy, Long created) {
     }
 
+    public record MoodVO(String id, String username, String moodDay, String mood, String note,
+                         Long createdAt, Long updatedAt) {
+        public static MoodVO of(CoupleMood row) {
+            return new MoodVO(row.getId(), row.getUsername(), row.getMoodDay(), row.getMood(),
+                    row.getNote() == null ? "" : row.getNote(), row.getCreated(), row.getUpdatedAt());
+        }
+    }
+
+    /** 一天里双方的心情（谁没记录就是 null）。 */
+    public record MoodDayVO(String day, MoodVO mine, MoodVO partner) {
+    }
+
+    /** 时光轴事件：type=space/ritual/question/promise/item/anniversary。 */
+    public record TimelineEvent(String type, String title, String detail, String byUser, Long at) {
+    }
+
+    public record TimelineDay(String day, List<TimelineEvent> events) {
+    }
+
+    /** 心动值明细：互道早安/晚安天数、一问完成天数、兑现承诺数、清单完成数、心情记录数。 */
+    public record IntimacyBreakdown(long morningDays, long nightDays, long questionDays,
+                                    long promiseDone, long itemDone, long moodDays) {
+    }
+
+    public record IntimacyVO(int score, int level, String title, String icon, Integer nextLevelAt,
+                             IntimacyBreakdown breakdown) {
+    }
+
     // ========== 依赖 ==========
 
     private final CoupleSpaceMapper spaceMapper;
@@ -72,6 +105,7 @@ public class CoupleService {
     private final CoupleAnswerMapper answerMapper;
     private final CoupleItemMapper itemMapper;
     private final CoupleAnniversaryMapper anniversaryMapper;
+    private final CoupleMoodMapper moodMapper;
     private final FriendMapper friendMapper;
     private final UserProfileMapper profileMapper;
     private final AppUserService userService;
@@ -80,8 +114,9 @@ public class CoupleService {
     public CoupleService(CoupleSpaceMapper spaceMapper, CoupleInviteMapper inviteMapper,
                          CouplePromiseMapper promiseMapper, CoupleCheckinMapper checkinMapper,
                          CoupleAnswerMapper answerMapper, CoupleItemMapper itemMapper,
-                         CoupleAnniversaryMapper anniversaryMapper, FriendMapper friendMapper,
-                         UserProfileMapper profileMapper, AppUserService userService, ImPushService push) {
+                         CoupleAnniversaryMapper anniversaryMapper, CoupleMoodMapper moodMapper,
+                         FriendMapper friendMapper, UserProfileMapper profileMapper,
+                         AppUserService userService, ImPushService push) {
         this.spaceMapper = spaceMapper;
         this.inviteMapper = inviteMapper;
         this.promiseMapper = promiseMapper;
@@ -89,6 +124,7 @@ public class CoupleService {
         this.answerMapper = answerMapper;
         this.itemMapper = itemMapper;
         this.anniversaryMapper = anniversaryMapper;
+        this.moodMapper = moodMapper;
         this.friendMapper = friendMapper;
         this.profileMapper = profileMapper;
         this.userService = userService;
@@ -444,6 +480,216 @@ public class CoupleService {
                 "共同日历删除了一项：" + row.getTitle());
     }
 
+    // ========== 4. 心情日记 ==========
+
+    /**
+     * 记录/修改今天的心情：每人每天一条，重复提交视为修改（key: 空间+人+自然日）。
+     * mood 为 8 个固定键之一，note 为一句话心情（可空）。
+     */
+    public MoodVO saveMood(String me, String mood, String note) {
+        CoupleSpace space = requireSpace(me);
+        if (mood == null || !CoupleMood.MOOD_KEYS.contains(mood)) {
+            throw new BusinessException(400, "心情不在可选范围内哦");
+        }
+        String text = requireOptional(note, "一句话心情最多 200 字", CoupleMood.NOTE_MAX);
+        String day = today();
+        CoupleMood row = moodMapper.find(space.getId(), me, day).orElse(null);
+        if (row != null) {
+            row.setMood(mood);
+            row.setNote(text);
+            row.setUpdatedAt(System.currentTimeMillis());
+            moodMapper.updateById(row);
+        } else {
+            row = CoupleMood.of(space.getId(), me, day, mood, text);
+            moodMapper.insert(row);
+        }
+        push.pushCoupleEvent("mood-changed", me, space.partnerOf(me),
+                "TA 记录了今天的心情 " + CoupleMood.emojiOf(mood) + "，快去看看吧");
+        return MoodVO.of(row);
+    }
+
+    /** 双方最近 N 天（1-90，默认 14）的心情，按日期新→旧，只返回至少有一方记录的日子。 */
+    public List<MoodDayVO> listMoods(String me, int days) {
+        CoupleSpace space = requireSpace(me);
+        String partner = space.partnerOf(me);
+        int limit = clampDays(days, 14);
+        String startDay = LocalDate.now().minusDays(limit - 1L).toString();
+        Map<String, CoupleMood> mine = new HashMap<>();
+        Map<String, CoupleMood> theirs = new HashMap<>();
+        for (CoupleMood row : moodMapper.findBySpace(space.getId())) {
+            if (row.getMoodDay().compareTo(startDay) < 0) {
+                continue;
+            }
+            if (row.getUsername().equals(me)) {
+                mine.put(row.getMoodDay(), row);
+            } else if (row.getUsername().equals(partner)) {
+                theirs.put(row.getMoodDay(), row);
+            }
+        }
+        List<MoodDayVO> result = new ArrayList<>();
+        for (int i = 0; i < limit; i++) {
+            String day = LocalDate.now().minusDays(i).toString();
+            MoodVO a = mine.containsKey(day) ? MoodVO.of(mine.get(day)) : null;
+            MoodVO b = theirs.containsKey(day) ? MoodVO.of(theirs.get(day)) : null;
+            if (a != null || b != null) {
+                result.add(new MoodDayVO(day, a, b));
+            }
+        }
+        return result;
+    }
+
+    // ========== 5. 恋爱时光轴 ==========
+
+    /**
+     * 最近 N 天（1-90，默认 30）的「我们的故事」：自动聚合空间建立、互道早晚安、
+     * 今日一问完成、承诺兑现、清单打卡、纪念日，按天分组新→旧。
+     */
+    public List<TimelineDay> timeline(String me, int days) {
+        CoupleSpace space = requireSpace(me);
+        String partner = space.partnerOf(me);
+        int limit = clampDays(days, 30);
+        LocalDate startDate = LocalDate.now().minusDays(limit - 1L);
+        String startDay = startDate.toString();
+        Map<String, List<TimelineEvent>> byDay = new TreeMap<>(Comparator.reverseOrder());
+
+        // 空间建立
+        LocalDate createdDay = Instant.ofEpochMilli(space.getCreated()).atZone(ZoneId.systemDefault()).toLocalDate();
+        if (!createdDay.isBefore(startDate)) {
+            byDay.computeIfAbsent(createdDay.toString(), k -> new ArrayList<>())
+                    .add(new TimelineEvent("space", "我们的情侣空间建立啦 💕", null, null, space.getCreated()));
+        }
+
+        // 双方互道早晚安的日期（有具体打卡时间取较晚的一条）
+        for (String kind : new String[]{CoupleCheckin.KIND_MORNING, CoupleCheckin.KIND_NIGHT}) {
+            Map<String, Long> mine = new HashMap<>();
+            Map<String, Long> theirs = new HashMap<>();
+            for (CoupleCheckin row : checkinMapper.findBySpaceAndKind(space.getId(), kind)) {
+                if (row.getCheckinDay().compareTo(startDay) < 0) {
+                    continue;
+                }
+                Map<String, Long> target = row.getUsername().equals(me) ? mine : theirs;
+                target.merge(row.getCheckinDay(), row.getCreated(), Math::max);
+            }
+            boolean morning = CoupleCheckin.KIND_MORNING.equals(kind);
+            for (String day : mine.keySet()) {
+                Long theirsAt = theirs.get(day);
+                if (theirsAt == null) {
+                    continue;
+                }
+                byDay.computeIfAbsent(day, k -> new ArrayList<>()).add(new TimelineEvent("ritual",
+                        morning ? "互道早安 ☀️" : "互道晚安 🌙", null, null, Math.max(mine.get(day), theirsAt)));
+            }
+        }
+
+        // 今日一问：双方都回答的日子（题目按日期复算）
+        Map<String, Map<String, CoupleAnswer>> answersByDay = new HashMap<>();
+        for (CoupleAnswer row : answerMapper.findBySpace(space.getId())) {
+            if (row.getAnswerDay().compareTo(startDay) < 0) {
+                continue;
+            }
+            answersByDay.computeIfAbsent(row.getAnswerDay(), k -> new HashMap<>()).put(row.getUsername(), row);
+        }
+        for (Map.Entry<String, Map<String, CoupleAnswer>> entry : answersByDay.entrySet()) {
+            Map<String, CoupleAnswer> users = entry.getValue();
+            CoupleAnswer mine = users.get(me);
+            CoupleAnswer theirs = users.get(partner);
+            if (mine == null || theirs == null) {
+                continue;
+            }
+            byDay.computeIfAbsent(entry.getKey(), k -> new ArrayList<>()).add(new TimelineEvent("question",
+                    "今日一问完成 💬", CoupleQuestions.pick(entry.getKey()).text(), null,
+                    Math.max(mine.getCreated(), theirs.getCreated())));
+        }
+
+        // 承诺兑现
+        for (CouplePromise p : promiseMapper.findBySpace(space.getId())) {
+            if (!CouplePromise.STATUS_DONE.equals(p.getStatus()) || p.getDoneAt() == null) {
+                continue;
+            }
+            String day = Instant.ofEpochMilli(p.getDoneAt()).atZone(ZoneId.systemDefault()).toLocalDate().toString();
+            if (day.compareTo(startDay) < 0) {
+                continue;
+            }
+            byDay.computeIfAbsent(day, k -> new ArrayList<>()).add(new TimelineEvent("promise",
+                    "兑现了承诺 🎉：" + p.getContent(), null, p.getPromiser(), p.getDoneAt()));
+        }
+
+        // 共享清单完成
+        for (CoupleItem item : itemMapper.findBySpace(space.getId())) {
+            if (!item.isDone() || item.getDoneAt() == null) {
+                continue;
+            }
+            String day = Instant.ofEpochMilli(item.getDoneAt()).atZone(ZoneId.systemDefault()).toLocalDate().toString();
+            if (day.compareTo(startDay) < 0) {
+                continue;
+            }
+            byDay.computeIfAbsent(day, k -> new ArrayList<>()).add(new TimelineEvent("item",
+                    "一起完成了 ✅：" + item.getTitle(), null, item.getDoneBy(), item.getDoneAt()));
+        }
+
+        // 纪念日（yearly 的按本年度落位）
+        for (CoupleAnniversary row : anniversaryMapper.findBySpace(space.getId())) {
+            LocalDate date = anniversaryOccurrence(row, startDate);
+            if (date == null) {
+                continue;
+            }
+            byDay.computeIfAbsent(date.toString(), k -> new ArrayList<>()).add(new TimelineEvent("anniversary",
+                    row.getTitle() + " 🎊", null, row.getCreatedBy(),
+                    date.atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli()));
+        }
+
+        // 天内事件按时间正序，天与天之间新→旧
+        List<TimelineDay> result = new ArrayList<>();
+        for (Map.Entry<String, List<TimelineEvent>> entry : byDay.entrySet()) {
+            entry.getValue().sort(Comparator.comparingLong(e -> e.at() == null ? 0L : e.at()));
+            result.add(new TimelineDay(entry.getKey(), entry.getValue()));
+        }
+        return result;
+    }
+
+    // ========== 6. 心动值 & 恋爱等级 ==========
+
+    /**
+     * 心动值：双方互道早安 +1/天、互道晚安 +2/天、一问双方都答 +2/天、
+     * 兑现承诺 +5/条、清单完成 +3/条、心情记录 +1/条；累计分数映射恋爱等级。
+     */
+    public IntimacyVO intimacy(String me) {
+        CoupleSpace space = requireSpace(me);
+        long morning = ritualBothDays(space, CoupleCheckin.KIND_MORNING);
+        long night = ritualBothDays(space, CoupleCheckin.KIND_NIGHT);
+        long questionDays = bothAnsweredDays(space);
+        long promiseDone = promiseMapper.findBySpace(space.getId()).stream()
+                .filter(p -> CouplePromise.STATUS_DONE.equals(p.getStatus())).count();
+        long itemDone = itemMapper.findBySpace(space.getId()).stream().filter(CoupleItem::isDone).count();
+        long moodDays = moodMapper.findBySpace(space.getId()).size();
+        int score = (int) (morning + night * 2 + questionDays * 2 + promiseDone * 5 + itemDone * 3 + moodDays);
+        IntimacyBreakdown breakdown = new IntimacyBreakdown(morning, night, questionDays, promiseDone, itemDone, moodDays);
+
+        // 等级阶梯：L1 怦然心动(0) → L2 心动初启(50) → L3 甜甜热恋(150) → L4 形影不离(300)
+        //          → L5 心有灵犀(500) → L6 相依相伴(800) → L7 相守一生(1300)
+        int level;
+        if (score >= 1300) {
+            level = 7;
+        } else if (score >= 800) {
+            level = 6;
+        } else if (score >= 500) {
+            level = 5;
+        } else if (score >= 300) {
+            level = 4;
+        } else if (score >= 150) {
+            level = 3;
+        } else if (score >= 50) {
+            level = 2;
+        } else {
+            level = 1;
+        }
+        int[] nextAt = {50, 150, 300, 500, 800, 1300, 0};
+        String[] titles = {"", "怦然心动", "心动初启", "甜甜热恋", "形影不离", "心有灵犀", "相依相伴", "相守一生"};
+        String[] icons = {"", "✨", "💫", "🍬", "🧡", "💞", "🌷", "💍"};
+        Integer next = level >= 7 ? null : nextAt[level - 1];
+        return new IntimacyVO(score, level, titles[level], icons[level], next, breakdown);
+    }
+
     // ========== 84 注销清理（AppUserService.deactivate 调用） ==========
 
     /** 注销：解散所在空间并清理相关邀请。 */
@@ -464,6 +710,58 @@ public class CoupleService {
     private CoupleSpace requireSpace(String me) {
         return spaceMapper.findActiveByUser(me)
                 .orElseThrow(() -> new BusinessException(404, "还没有建立情侣空间，先邀请一位好友吧"));
+    }
+
+    /** 日期范围钳制：1-90，给默认值。 */
+    private int clampDays(int days, int def) {
+        if (days <= 0) {
+            return def;
+        }
+        return Math.min(days, 90);
+    }
+
+    /** 双方都完成某类打卡的自然日数量（互道早安/晚安天数）。 */
+    private long ritualBothDays(CoupleSpace space, String kind) {
+        Set<String> mine = new HashSet<>();
+        Set<String> theirs = new HashSet<>();
+        for (CoupleCheckin row : checkinMapper.findBySpaceAndKind(space.getId(), kind)) {
+            (row.getUsername().equals(space.getUserA()) ? mine : theirs).add(row.getCheckinDay());
+        }
+        return mine.stream().filter(theirs::contains).count();
+    }
+
+    /** 双方都回答了今日一问的自然日数量。 */
+    private long bothAnsweredDays(CoupleSpace space) {
+        Map<String, Set<String>> byDay = new HashMap<>();
+        for (CoupleAnswer row : answerMapper.findBySpace(space.getId())) {
+            byDay.computeIfAbsent(row.getAnswerDay(), k -> new HashSet<>()).add(row.getUsername());
+        }
+        return byDay.values().stream()
+                .filter(users -> users.contains(space.getUserA()) && users.contains(space.getUserB()))
+                .count();
+    }
+
+    /** 纪念日在查询区间内（startDate ~ 今天）的落位日期：yearly 取本年度，非 yearly 取当年；不在区间返回 null。 */
+    private LocalDate anniversaryOccurrence(CoupleAnniversary row, LocalDate startDate) {
+        LocalDate date;
+        try {
+            date = LocalDate.parse(row.getEventDate());
+        } catch (Exception e) {
+            return null;
+        }
+        LocalDate today = LocalDate.now();
+        if (row.isYearly() && date.isBefore(startDate)) {
+            // 每年重复：落到今年（2/29 在平年跳过）
+            try {
+                date = date.withYear(today.getYear());
+            } catch (Exception e) {
+                return null;
+            }
+        }
+        if (date.isBefore(startDate) || date.isAfter(today)) {
+            return null;
+        }
+        return date;
     }
 
     private CoupleInvite requireInvite(String inviteId) {

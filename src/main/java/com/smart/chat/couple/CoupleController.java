@@ -10,6 +10,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
@@ -40,6 +41,9 @@ public class CoupleController {
     }
 
     public record AnniversaryCreateRequest(String title, String date, Boolean yearly) {
+    }
+
+    public record MoodSaveRequest(String mood, String note) {
     }
 
     private final CoupleService coupleService;
@@ -180,5 +184,36 @@ public class CoupleController {
     public ApiResponse<Void> deleteAnniversary(@PathVariable String id, HttpSession session) {
         coupleService.deleteAnniversary(Sessions.requireUser(session), id);
         return ApiResponse.ok();
+    }
+
+    // ---------- 4. 心情日记 ----------
+
+    /** 记录/修改今天的心情（每人每天一条，重复提交视为修改）。 */
+    @PostMapping("/moods")
+    public ApiResponse<CoupleService.MoodVO> saveMood(@RequestBody MoodSaveRequest req, HttpSession session) {
+        return ApiResponse.ok(coupleService.saveMood(Sessions.requireUser(session), req.mood(), req.note()));
+    }
+
+    /** 双方最近 N 天的心情（1-90，默认 14），按日期新→旧。 */
+    @GetMapping("/moods")
+    public ApiResponse<List<CoupleService.MoodDayVO>> moods(@RequestParam(defaultValue = "14") int days,
+                                                            HttpSession session) {
+        return ApiResponse.ok(coupleService.listMoods(Sessions.requireUser(session), days));
+    }
+
+    // ---------- 5. 恋爱时光轴 ----------
+
+    /** 最近 N 天（1-90，默认 30）的「我们的故事」聚合时间线。 */
+    @GetMapping("/timeline")
+    public ApiResponse<List<CoupleService.TimelineDay>> timeline(@RequestParam(defaultValue = "30") int days,
+                                                                 HttpSession session) {
+        return ApiResponse.ok(coupleService.timeline(Sessions.requireUser(session), days));
+    }
+
+    // ---------- 6. 心动值 & 恋爱等级 ----------
+
+    @GetMapping("/intimacy")
+    public ApiResponse<CoupleService.IntimacyVO> intimacy(HttpSession session) {
+        return ApiResponse.ok(coupleService.intimacy(Sessions.requireUser(session)));
     }
 }

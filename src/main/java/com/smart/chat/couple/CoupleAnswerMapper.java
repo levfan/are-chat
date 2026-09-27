@@ -26,6 +26,12 @@ public interface CoupleAnswerMapper extends BaseMapperCompat<CoupleAnswer> {
                 .eq(CoupleAnswer::getAnswerDay, day));
     }
 
+    /** 某空间全部回答（时光轴/心动值统计，量级：每天 ≤2 条，可控）。 */
+    default List<CoupleAnswer> findBySpace(String spaceId) {
+        return selectList(new LambdaQueryWrapper<CoupleAnswer>()
+                .eq(CoupleAnswer::getSpaceId, spaceId));
+    }
+
     /** 84 注销清理。 */
     default void deleteBySpace(String spaceId) {
         delete(new LambdaQueryWrapper<CoupleAnswer>().eq(CoupleAnswer::getSpaceId, spaceId));
