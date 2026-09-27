@@ -12,6 +12,7 @@ hs_err_pid*.log
 # TLS 证书与私钥（只放服务器，绝不进版本库）
 /deploy/certs/*
 !/deploy/certs/README.md
+!/deploy/certs/gen-self-signed.sh
 # 构建产物一律不入库（jar、镜像导出包等）
 *.jar
 *.tar
