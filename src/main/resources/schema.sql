@@ -2,7 +2,8 @@
 -- 表结构统一由 Flyway 自动执行 db/ 下 V 脚本创建与管理：V1__add_couple_space.sql（couple 系列表）
 -- + V2__legacy_tables_baseline.sql（存量业务表基线）+ V3__add_couple_mood.sql（心情日记表）
 -- + V4__add_couple_letter.sql（悄悄话信箱表）+ V5__add_couple_pact_city_fund.sql（恋爱条约/城市列/心愿基金）
--- + V6__add_couple_action_mood_reaction_nick.sql（贴贴动作/心情回应/专属爱称），
+-- + V6__add_couple_action_mood_reaction_nick.sql（贴贴动作/心情回应/专属爱称）
+-- + V7__add_couple_task_tacit.sql（甜蜜任务卡/默契大考验），
 -- 运行时不再执行本文件（spring.sql.init.mode=never）
 -- 修改表结构时：新增 V 脚本 + 同步更新本文件，保证文档与真实结构一致
 -- 注意：区分大小写的列（用户名/手机号）用列级 CHARACTER SET utf8mb4 COLLATE utf8mb4_bin 声明，不写 DEFAULT（可空为默认，语法对 H2/MySQL/MariaDB 通用）
@@ -408,6 +409,38 @@ CREATE TABLE `couple_mood_reaction` (
     PRIMARY KEY (`id`),
     UNIQUE KEY `uq_couple_mood_reaction` (`space_id`,`mood_day`,`from_user`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='情侣心情回应表：看到 TA 今天心情不好，贴一个抱抱/亲亲/加油，TA 会实时收到推送';
+
+
+-- smart_collections.couple_task definition
+
+CREATE TABLE `couple_task` (
+    `id` varchar(36) NOT NULL COMMENT '主键UUID',
+    `space_id` varchar(36) NOT NULL COMMENT '所属情侣空间ID，关联 couple_space.id',
+    `task_day` varchar(10) NOT NULL COMMENT '任务日期（yyyy-MM-dd，每人每天一题）',
+    `username` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '任务归属人用户名（区分大小写）',
+    `content` varchar(100) NOT NULL COMMENT '任务内容，如「今天夸对方 3 次」',
+    `status` varchar(16) NOT NULL DEFAULT 'PENDING' COMMENT '任务状态：PENDING 待完成 / DONE 已完成',
+    `done_at` bigint(20) DEFAULT NULL COMMENT '完成时间（毫秒时间戳）',
+    `created` bigint(20) NOT NULL COMMENT '生成时间（毫秒时间戳）',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uq_couple_task` (`space_id`,`task_day`,`username`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='情侣甜蜜任务卡表：每天一个小任务给彼此撒糖，完成打卡积累心动值';
+
+
+-- smart_collections.couple_tacit definition
+
+CREATE TABLE `couple_tacit` (
+    `id` varchar(36) NOT NULL COMMENT '主键UUID',
+    `space_id` varchar(36) NOT NULL COMMENT '所属情侣空间ID，关联 couple_space.id',
+    `question` varchar(100) NOT NULL COMMENT '题目（从默契题库随机）',
+    `answer_a` varchar(60) DEFAULT NULL COMMENT '用户 A 的答案（null = 还没答）',
+    `answer_b` varchar(60) DEFAULT NULL COMMENT '用户 B 的答案（null = 还没答）',
+    `match` tinyint(4) DEFAULT NULL COMMENT '是否默契一致：1 一致 / 0 不一致 / null 待结算',
+    `created` bigint(20) NOT NULL COMMENT '发起时间（毫秒时间戳）',
+    `settled_at` bigint(20) DEFAULT NULL COMMENT '结算时间（毫秒时间戳）',
+    PRIMARY KEY (`id`),
+    KEY `idx_couple_tacit_space` (`space_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='情侣默契大考验表：背对背回答同一道题，答案一致即为心有灵犀';
 
 
 -- smart_collections.user_profile definition
