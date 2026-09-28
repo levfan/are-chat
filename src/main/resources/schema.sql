@@ -3,7 +3,8 @@
 -- + V2__legacy_tables_baseline.sql（存量业务表基线）+ V3__add_couple_mood.sql（心情日记表）
 -- + V4__add_couple_letter.sql（悄悄话信箱表）+ V5__add_couple_pact_city_fund.sql（恋爱条约/城市列/心愿基金）
 -- + V6__add_couple_action_mood_reaction_nick.sql（贴贴动作/心情回应/专属爱称）
--- + V7__add_couple_task_tacit.sql（甜蜜任务卡/默契大考验），
+-- + V7__add_couple_task_tacit.sql（甜蜜任务卡/默契大考验）
+-- + V8__add_couple_care_tables.sql（和好卡/夸夸墙/生理期记录），
 -- 运行时不再执行本文件（spring.sql.init.mode=never）
 -- 修改表结构时：新增 V 脚本 + 同步更新本文件，保证文档与真实结构一致
 -- 注意：区分大小写的列（用户名/手机号）用列级 CHARACTER SET utf8mb4 COLLATE utf8mb4_bin 声明，不写 DEFAULT（可空为默认，语法对 H2/MySQL/MariaDB 通用）
@@ -441,6 +442,55 @@ CREATE TABLE `couple_tacit` (
     PRIMARY KEY (`id`),
     KEY `idx_couple_tacit_space` (`space_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='情侣默契大考验表：背对背回答同一道题，答案一致即为心有灵犀';
+
+
+-- smart_collections.couple_reconcile definition
+
+CREATE TABLE `couple_reconcile` (
+    `id` varchar(36) NOT NULL COMMENT '主键UUID',
+    `space_id` varchar(36) NOT NULL COMMENT '所属情侣空间ID，关联 couple_space.id',
+    `from_user` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '递卡人用户名（区分大小写）',
+    `message` varchar(200) NOT NULL COMMENT '和好留言，如「是我不好，抱一下就和好」',
+    `start_at` bigint(20) DEFAULT NULL COMMENT '这次别扭开始时间（毫秒时间戳，可空，用于计算和好耗时）',
+    `status` varchar(16) NOT NULL DEFAULT 'SENT' COMMENT '状态：SENT 已递出待接受 / ACCEPTED 已接受',
+    `accepted_by` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin COMMENT '接受人用户名',
+    `accepted_at` bigint(20) DEFAULT NULL COMMENT '接受时间（毫秒时间戳）',
+    `created` bigint(20) NOT NULL COMMENT '递卡时间（毫秒时间戳）',
+    PRIMARY KEY (`id`),
+    KEY `idx_couple_reconcile_space` (`space_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='情侣和好卡表：小别扭的温柔收尾，接受后记录和好时刻与耗时';
+
+
+-- smart_collections.couple_praise definition
+
+CREATE TABLE `couple_praise` (
+    `id` varchar(36) NOT NULL COMMENT '主键UUID',
+    `space_id` varchar(36) NOT NULL COMMENT '所属情侣空间ID，关联 couple_space.id',
+    `from_user` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '夸人用户名（区分大小写）',
+    `content` varchar(200) NOT NULL COMMENT '夸夸内容，要具体哦',
+    `status` varchar(16) NOT NULL DEFAULT 'POSTED' COMMENT '状态：POSTED 已张贴 / RECEIVED 已收到',
+    `received_at` bigint(20) DEFAULT NULL COMMENT '收到时间（毫秒时间戳）',
+    `created` bigint(20) NOT NULL COMMENT '张贴时间（毫秒时间戳）',
+    PRIMARY KEY (`id`),
+    KEY `idx_couple_praise_space` (`space_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='情侣夸夸墙表：把欣赏说出口，具体地夸，认真地收';
+
+
+-- smart_collections.couple_cycle definition
+
+CREATE TABLE `couple_cycle` (
+    `id` varchar(36) NOT NULL COMMENT '主键UUID',
+    `space_id` varchar(36) NOT NULL COMMENT '所属情侣空间ID，关联 couple_space.id',
+    `username` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '记录人用户名（区分大小写，记自己的）',
+    `period_day` varchar(10) NOT NULL COMMENT '最近一次生理期开始日期（yyyy-MM-dd）',
+    `cycle_days` int(11) NOT NULL DEFAULT 28 COMMENT '周期长度（天，默认 28）',
+    `period_days` int(11) NOT NULL DEFAULT 5 COMMENT '经期持续天数（默认 5）',
+    `note` varchar(100) DEFAULT NULL COMMENT '小备注，如「这几天想喝热的」',
+    `created` bigint(20) NOT NULL COMMENT '创建时间（毫秒时间戳）',
+    `updated_at` bigint(20) DEFAULT NULL COMMENT '最近修改时间（毫秒时间戳）',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uq_couple_cycle` (`space_id`,`username`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='情侣生理期记录表：自动预告下次日期，对方端展示温柔模式提醒';
 
 
 -- smart_collections.user_profile definition
