@@ -29,6 +29,10 @@ public class CoupleSpace {
     private String cityA;
     /** 用户 B 所在城市 */
     private String cityB;
+    /** user_a 的专属爱称（由对方起，如「宝宝」「猪猪」，空 = 未起） */
+    private String nickA;
+    /** user_b 的专属爱称（由对方起） */
+    private String nickB;
     private Long created;
     private Long dissolvedAt;
 
@@ -50,6 +54,20 @@ public class CoupleSpace {
     /** 我在这段关系里的另一半。 */
     public String partnerOf(String me) {
         return userA.equals(me) ? userB : userA;
+    }
+
+    /** 某人的专属爱称（由对方起的那个），空返回 null。 */
+    public String nickOf(String username) {
+        return userA.equals(username) ? nickA : nickB;
+    }
+
+    /** 设置某人的专属爱称（调用方应是 TA 的另一半）。 */
+    public void setNickOf(String username, String nick) {
+        if (userA.equals(username)) {
+            this.nickA = nick;
+        } else {
+            this.nickB = nick;
+        }
     }
 
     public boolean contains(String username) {

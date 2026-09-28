@@ -39,7 +39,7 @@ public class CoupleService {
         }
     }
 
-    public record PartnerVO(String username, String nickname, String avatar, boolean online) {
+    public record PartnerVO(String username, String nickname, String avatar, boolean online, String petName) {
     }
 
     public record SpaceVO(String id, PartnerVO partner, Long created, String anniversary, long days) {
@@ -1130,7 +1130,7 @@ public class CoupleService {
         String nickname = profile == null || profile.getNickname() == null || profile.getNickname().isBlank()
                 ? partner : profile.getNickname();
         String avatar = profile == null || profile.getAvatar() == null ? "" : profile.getAvatar();
-        PartnerVO partnerVO = new PartnerVO(partner, nickname, avatar, push.isOnline(partner));
+        PartnerVO partnerVO = new PartnerVO(partner, nickname, avatar, push.isOnline(partner), space.nickOf(partner));
         return new SpaceVO(space.getId(), partnerVO, space.getCreated(), space.getAnniversary(),
                 daysTogether(space));
     }
