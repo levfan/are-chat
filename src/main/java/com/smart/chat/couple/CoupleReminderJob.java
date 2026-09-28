@@ -30,15 +30,17 @@ public class CoupleReminderJob {
     private final CouplePromiseMapper promiseMapper;
     private final CoupleAnniversaryMapper anniversaryMapper;
     private final CoupleCareService careService;
+    private final CoupleMemoryService memoryService;
     private final ImPushService push;
 
     public CoupleReminderJob(CoupleSpaceMapper spaceMapper, CouplePromiseMapper promiseMapper,
                              CoupleAnniversaryMapper anniversaryMapper, CoupleCareService careService,
-                             ImPushService push) {
+                             CoupleMemoryService memoryService, ImPushService push) {
         this.spaceMapper = spaceMapper;
         this.promiseMapper = promiseMapper;
         this.anniversaryMapper = anniversaryMapper;
         this.careService = careService;
+        this.memoryService = memoryService;
         this.push = push;
     }
 
@@ -87,6 +89,12 @@ public class CoupleReminderJob {
     @Scheduled(cron = "0 0 10 * * ?", zone = "Asia/Shanghai")
     public void remindLowMoods() {
         careService.remindLowMoods();
+    }
+
+    /** 每天 09:45（Asia/Shanghai）倒数日提醒：期待的事倒数 7/3/1/0 天时提醒双方。 */
+    @Scheduled(cron = "0 45 9 * * ?", zone = "Asia/Shanghai")
+    public void remindCountdowns() {
+        memoryService.remindCountdowns();
     }
 
     /** 每天 09:30（Asia/Shanghai）检查纪念日倒数：提前 7 天 / 1 天 / 当天各提醒一次。 */
