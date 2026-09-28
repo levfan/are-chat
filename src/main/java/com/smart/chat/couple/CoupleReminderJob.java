@@ -29,13 +29,16 @@ public class CoupleReminderJob {
     private final CoupleSpaceMapper spaceMapper;
     private final CouplePromiseMapper promiseMapper;
     private final CoupleAnniversaryMapper anniversaryMapper;
+    private final CoupleCareService careService;
     private final ImPushService push;
 
     public CoupleReminderJob(CoupleSpaceMapper spaceMapper, CouplePromiseMapper promiseMapper,
-                             CoupleAnniversaryMapper anniversaryMapper, ImPushService push) {
+                             CoupleAnniversaryMapper anniversaryMapper, CoupleCareService careService,
+                             ImPushService push) {
         this.spaceMapper = spaceMapper;
         this.promiseMapper = promiseMapper;
         this.anniversaryMapper = anniversaryMapper;
+        this.careService = careService;
         this.push = push;
     }
 
@@ -78,6 +81,12 @@ public class CoupleReminderJob {
         if (reminded > 0) {
             log.info("情侣约定逾期提醒完成：提醒 {} 条约定", reminded);
         }
+    }
+
+    /** 每天 10:00（Asia/Shanghai）情绪急救箱：TA 连续 2 天低落时提醒对方哄一哄。 */
+    @Scheduled(cron = "0 0 10 * * ?", zone = "Asia/Shanghai")
+    public void remindLowMoods() {
+        careService.remindLowMoods();
     }
 
     /** 每天 09:30（Asia/Shanghai）检查纪念日倒数：提前 7 天 / 1 天 / 当天各提醒一次。 */
