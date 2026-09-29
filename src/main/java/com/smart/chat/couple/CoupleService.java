@@ -138,6 +138,7 @@ public class CoupleService {
     private final CouplePromiseMapper promiseMapper;
     private final CoupleCheckinMapper checkinMapper;
     private final CoupleAnswerMapper answerMapper;
+    private final CoupleAnswerReactionMapper answerReactionMapper;
     private final CoupleItemMapper itemMapper;
     private final CoupleAnniversaryMapper anniversaryMapper;
     private final CoupleMoodMapper moodMapper;
@@ -152,7 +153,8 @@ public class CoupleService {
 
     public CoupleService(CoupleSpaceMapper spaceMapper, CoupleInviteMapper inviteMapper,
                          CouplePromiseMapper promiseMapper, CoupleCheckinMapper checkinMapper,
-                         CoupleAnswerMapper answerMapper, CoupleItemMapper itemMapper,
+                         CoupleAnswerMapper answerMapper, CoupleAnswerReactionMapper answerReactionMapper,
+                         CoupleItemMapper itemMapper,
                          CoupleAnniversaryMapper anniversaryMapper, CoupleMoodMapper moodMapper,
                          CoupleLetterMapper letterMapper, CouplePactMapper pactMapper,
                          CoupleFundMapper fundMapper, CoupleFundDepositMapper fundDepositMapper,
@@ -163,6 +165,7 @@ public class CoupleService {
         this.promiseMapper = promiseMapper;
         this.checkinMapper = checkinMapper;
         this.answerMapper = answerMapper;
+        this.answerReactionMapper = answerReactionMapper;
         this.itemMapper = itemMapper;
         this.anniversaryMapper = anniversaryMapper;
         this.moodMapper = moodMapper;
@@ -503,6 +506,50 @@ public class CoupleService {
         }
         push.pushCoupleEvent("question-answered", me, space.partnerOf(me), "TA 已经回答了今日一问，快去看看吧 💬");
         return todayQuestion(me);
+    }
+
+    // ========== F48 一问互评 ==========
+
+    /** 互评条目：谁给的什么反应。 */
+    public record AnswerReactionVO(String fromUser, String emoji, Long created) {
+    }
+
+    /** 对某天 TA 的一问回答点一个反应（每人每天一条，可改）。 */
+    public List<AnswerReactionVO> reactAnswer(String me, String day, String emoji) {
+        CoupleSpace space = requireSpace(me);
+        String cleanDay = day == null ? "" : day.trim();
+        try {
+            LocalDate.parse(cleanDay);
+        } catch (Exception e) {
+            throw new BusinessException(400, "日期格式应为 yyyy-MM-dd");
+        }
+        String cleanEmoji = emoji == null ? "" : emoji.trim();
+        if (cleanEmoji.isEmpty() || cleanEmoji.length() > CoupleAnswerReaction.EMOJI_MAX) {
+            throw new BusinessException(400, "选一个表情送给 TA 的回答吧");
+        }
+        // 只有对方回答过才能互评
+        if (answerMapper.find(space.getId(), cleanDay, space.partnerOf(me)).isEmpty()) {
+            throw new BusinessException(409, "TA 还没有回答这一问，先等等吧");
+        }
+        CoupleAnswerReaction existing = answerReactionMapper.find(space.getId(), cleanDay, me).orElse(null);
+        if (existing != null) {
+            existing.setEmoji(cleanEmoji);
+            answerReactionMapper.updateById(existing);
+        } else {
+            answerReactionMapper.insert(CoupleAnswerReaction.of(space.getId(), cleanDay, me, cleanEmoji));
+        }
+        push.pushCoupleEvent("answer-reacted", me, space.partnerOf(me),
+                "TA 看了你的回答，回了你一个 " + cleanEmoji);
+        return listAnswerReactions(me, cleanDay);
+    }
+
+    /** 某天双方对彼此回答的反应列表。 */
+    public List<AnswerReactionVO> listAnswerReactions(String me, String day) {
+        CoupleSpace space = requireSpace(me);
+        String cleanDay = day == null ? "" : day.trim();
+        return answerReactionMapper.findByDay(space.getId(), cleanDay).stream()
+                .map(r -> new AnswerReactionVO(r.getFromUser(), r.getEmoji(), r.getCreated()))
+                .toList();
     }
 
     // ========== 3. 共享空间 ==========

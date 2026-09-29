@@ -30,6 +30,9 @@ public class CoupleMemoryController {
     public record CountdownDoneRequest(boolean done) {
     }
 
+    public record FirstRequest(String title, String firstDay, String note) {
+    }
+
     private final CoupleMemoryService memoryService;
 
     public CoupleMemoryController(CoupleMemoryService memoryService) {
@@ -105,6 +108,28 @@ public class CoupleMemoryController {
     public ApiResponse<CoupleMemoryService.MonthlyReportVO> monthlyReport(
             @RequestParam(required = false) String month, HttpSession session) {
         return ApiResponse.ok(memoryService.monthlyReport(Sessions.requireUser(session), month));
+    }
+
+    // ---------- F46 第一次清单 ----------
+
+    /** 记录一个「我们的第一次」。 */
+    @PostMapping("/firsts")
+    public ApiResponse<CoupleMemoryService.FirstVO> createFirst(@RequestBody FirstRequest req, HttpSession session) {
+        return ApiResponse.ok(memoryService.createFirst(Sessions.requireUser(session),
+                req.title(), req.firstDay(), req.note()));
+    }
+
+    /** 第一次清单：按发生日期升序。 */
+    @GetMapping("/firsts")
+    public ApiResponse<List<CoupleMemoryService.FirstVO>> listFirsts(HttpSession session) {
+        return ApiResponse.ok(memoryService.listFirsts(Sessions.requireUser(session)));
+    }
+
+    /** 删除一条第一次记录。 */
+    @DeleteMapping("/firsts/{id}")
+    public ApiResponse<Void> deleteFirst(@PathVariable String id, HttpSession session) {
+        memoryService.deleteFirst(Sessions.requireUser(session), id);
+        return ApiResponse.ok();
     }
 
     /** 数据总览：全部模块累计数字一览。 */

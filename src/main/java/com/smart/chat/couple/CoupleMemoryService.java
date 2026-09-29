@@ -62,6 +62,7 @@ public class CoupleMemoryService {
     private final CoupleTaskMapper taskMapper;
     private final CoupleCapsuleMapper capsuleMapper;
     private final CoupleCountdownMapper countdownMapper;
+    private final CoupleFirstMapper firstMapper;
     private final ImPushService push;
 
     @SuppressWarnings("java:S107")
@@ -73,7 +74,8 @@ public class CoupleMemoryService {
                                CoupleActionMapper actionMapper, CouplePraiseMapper praiseMapper,
                                CoupleReconcileMapper reconcileMapper, CoupleMoodMapper moodMapper,
                                CoupleTaskMapper taskMapper, CoupleCapsuleMapper capsuleMapper,
-                               CoupleCountdownMapper countdownMapper, ImPushService push) {
+                               CoupleCountdownMapper countdownMapper, CoupleFirstMapper firstMapper,
+                               ImPushService push) {
         this.spaceMapper = spaceMapper;
         this.checkinMapper = checkinMapper;
         this.answerMapper = answerMapper;
@@ -91,6 +93,7 @@ public class CoupleMemoryService {
         this.taskMapper = taskMapper;
         this.capsuleMapper = capsuleMapper;
         this.countdownMapper = countdownMapper;
+        this.firstMapper = firstMapper;
         this.push = push;
     }
 
@@ -547,6 +550,58 @@ public class CoupleMemoryService {
     private boolean inMonth(long at, String month) {
         String day = Instant.ofEpochMilli(at).atZone(ZoneId.systemDefault()).toLocalDate().toString();
         return day.startsWith(month);
+    }
+
+    // ========== F46 第一次清单 ==========
+
+    /** 第一次清单条目。 */
+    public record FirstVO(String id, String title, String firstDay, String note, String createdBy, Long created) {
+    }
+
+    /** 第一次清单：按发生日期升序。 */
+    public List<FirstVO> listFirsts(String me) {
+        CoupleSpace space = requireSpace(me);
+        return firstMapper.findBySpace(space.getId()).stream()
+                .map(f -> new FirstVO(f.getId(), f.getTitle(), f.getFirstDay(), f.getNote(), f.getCreatedBy(), f.getCreated()))
+                .toList();
+    }
+
+    /** 记录一个「我们的第一次」。 */
+    public FirstVO createFirst(String me, String title, String firstDay, String note) {
+        CoupleSpace space = requireSpace(me);
+        String cleanTitle = title == null ? "" : title.trim();
+        if (cleanTitle.isEmpty() || cleanTitle.length() > CoupleFirst.TITLE_MAX) {
+            throw new BusinessException(400, "写下一个第一次（1-100 字）");
+        }
+        String cleanDay = firstDay == null ? "" : firstDay.trim();
+        try {
+            LocalDate.parse(cleanDay);
+        } catch (Exception e) {
+            throw new BusinessException(400, "日期格式应为 yyyy-MM-dd");
+        }
+        String cleanNote = note == null ? null : note.trim();
+        if (cleanNote != null && cleanNote.isEmpty()) {
+            cleanNote = null;
+        }
+        if (cleanNote != null && cleanNote.length() > CoupleFirst.NOTE_MAX) {
+            throw new BusinessException(400, "心情补充最多 300 字");
+        }
+        CoupleFirst row = CoupleFirst.of(space.getId(), cleanTitle, cleanDay, cleanNote, me);
+        firstMapper.insert(row);
+        push.pushCoupleEvent("first-added", me, space.partnerOf(me),
+                "TA 记下了一个「我们的第一次」：" + cleanTitle + " ✨");
+        return new FirstVO(row.getId(), row.getTitle(), row.getFirstDay(), row.getNote(), row.getCreatedBy(), row.getCreated());
+    }
+
+    /** 删除第一次（记录人和对方都可以删，空间内共管）。 */
+    public void deleteFirst(String me, String id) {
+        CoupleSpace space = requireSpace(me);
+        CoupleFirst row = firstMapper.selectById(id);
+        if (row == null || !row.getSpaceId().equals(space.getId())) {
+            throw new BusinessException(404, "这条记录不存在");
+        }
+        firstMapper.deleteById(id);
+        push.pushCoupleEvent("first-removed", me, space.partnerOf(me), "TA 整理了第一次清单 🧾");
     }
 
     // ========== 内部工具 ==========

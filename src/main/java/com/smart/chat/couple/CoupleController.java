@@ -37,6 +37,9 @@ public class CoupleController {
     public record AnswerRequest(String answer) {
     }
 
+    public record AnswerReactRequest(String emoji) {
+    }
+
     public record ItemSaveRequest(String kind, String title, String note, String dueDate, Boolean done) {
     }
 
@@ -174,6 +177,23 @@ public class CoupleController {
     @PostMapping("/question")
     public ApiResponse<CoupleService.QuestionVO> answer(@RequestBody AnswerRequest req, HttpSession session) {
         return ApiResponse.ok(coupleService.answerQuestion(Sessions.requireUser(session), req.answer()));
+    }
+
+    // ---------- F48 一问互评 ----------
+
+    /** 对某天 TA 的回答点一个反应（每人每天一条，可改）。 */
+    @PostMapping("/answers/{day}/react")
+    public ApiResponse<List<CoupleService.AnswerReactionVO>> reactAnswer(@PathVariable String day,
+                                                                         @RequestBody AnswerReactRequest req,
+                                                                         HttpSession session) {
+        return ApiResponse.ok(coupleService.reactAnswer(Sessions.requireUser(session), day, req.emoji()));
+    }
+
+    /** 某天双方对彼此回答的反应列表。 */
+    @GetMapping("/answers/{day}/reactions")
+    public ApiResponse<List<CoupleService.AnswerReactionVO>> answerReactions(@PathVariable String day,
+                                                                             HttpSession session) {
+        return ApiResponse.ok(coupleService.listAnswerReactions(Sessions.requireUser(session), day));
     }
 
     // ---------- 3. 共享空间 ----------
