@@ -26,9 +26,9 @@ whenToUse: 任务涉及数据库表结构变更（CREATE/ALTER/DROP TABLE、字�
 1. 只前进不回滚：增量脚本只描述"从上一版本到本版本"的变更。
 2. 双兼容：必须同时兼容 MariaDB（生产外部库）与 H2 MODE=MySQL（内存库回退方案，测试也用它）。H2 语法约束参考 `src/main/resources/schema.sql` 头部注释，例如：带 CHARACTER SET/COLLATE 的列，DEFAULT 必须写在字符集声明之前。尽量写成可重复执行：`CREATE TABLE IF NOT EXISTS`；MariaDB 与 H2 支持 `ADD COLUMN IF NOT EXISTS`。
 3. 初始化数据：INSERT 必须显式列出列名；时间戳用毫秒 bigint（与现有 `created` 字段约定一致）；主键用 36 位 UUID 字符串。
-4. 同步全量基线：涉及表结构变更时，必须同步更新 `src/main/resources/schema.sql` 中对应表的定义（H2 内存库启动时自动执行的是 schema.sql，外部库靠 V 脚本手工执行，两条路径的最终结构必须一致）。纯数据初始化脚本不需要改 schema.sql。
+4. 同步全量结构文档：涉及表结构变更时，必须同步更新 `src/main/resources/schema.sql` 中对应表的定义。schema.sql 仅作对照用的全量结构文档，运行时不执行；外部库与 H2 测试库的表结构统一由 Flyway 执行 V 脚本得到，文档必须与脚本最终结构一致。纯数据初始化脚本不需要改 schema.sql。
 5. 脚本内不要包含 `USE` 或切库语句；文件头用注释说明目的、涉及表、日期。
-6. 本项目未启用 Flyway：不要添加 flyway 依赖或配置，脚本按版本号顺序由人工/部署流程在目标库执行。
+6. 迁移由 Flyway 启动时自动执行：pom 已显式引入 spring-boot-flyway + flyway-core/flyway-mysql（Boot 4 必须显式引入该模块，否则依赖不生效），`spring.flyway.locations=classpath:db`、`baseline-version=0`（存量老库首启自动打 0 基线后从 V1 全量执行——这也是每个 V 脚本必须幂等的原因）；不要再引入其它迁移工具，也不要手工去目标库按序执行脚本。
 
 ## 示例
 

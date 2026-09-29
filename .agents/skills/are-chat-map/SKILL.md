@@ -1,6 +1,7 @@
 ---
 name: are-chat-map
 description: are-chat 后端项目地图（Spring Boot 4 + MyBatis-Plus + Flyway + MariaDB）。凡在 are-chat 中开发新功能、修复缺陷、评审改动，开工前必须先加载本 skill——它提供模块地图、代码惯例、数据层规范与构建命令，避免重新通读项目。完成功能后若新增模块/表/接口，须同步更新本文件。
+whenToUse: 在 are-chat 后端开发新功能、修复缺陷或评审改动，开工前加载本 skill；功能完成后若新增/删除模块、表、接口、定时任务，也要回来更新它
 ---
 
 # are-chat 后端项目地图
@@ -64,14 +65,13 @@ description: are-chat 后端项目地图（Spring Boot 4 + MyBatis-Plus + Flyway
 
 ## 四、数据层规范（硬性）
 
-- 凡改表结构/初始化数据：在 `src/main/resources/db/` 新增 `V{最大版本+1}__{描述}.sql`（幂等：`CREATE TABLE IF NOT EXISTS`、`ADD COLUMN ... IF NOT EXISTS`），并同步更新 `src/main/resources/schema.sql`（全量结构文档，运行时不执行）
+- 凡改表结构或初始化数据，必须产出 Flyway 增量脚本并同步 schema.sql——触发条件、命名、幂等/双兼容写法、种子数据等完整规范见 `.agents/skills/db-migration/SKILL.md`
 - 现有迁移：V1 couple 基础表 → V2 存量基线 → V3 心情 → V4 信箱 → V5 条约/城市/基金 → V6 贴贴动作/心情回应/爱称 → V7 任务卡/默契 → V8 和好卡/夸夸/生理期 → V9 胶囊/倒数日 → V10 记账/家务/约会/习惯/暗号 → V11 空间个性化 → V12 私信心动时刻 → V13 通知中心/生日 → V14 第一次清单/一问互评
-- 双兼容写法、种子数据 `INSERT IGNORE` 等细节见 `.agents/skills/db-migration/SKILL.md`
 
 ## 五、代码惯例
 
-- 数据类一律 Lombok `@Data`（只读访问器用 `@Getter/@Setter`）；Service/Controller 用构造注入；详见 `.agents/skills/lombok-data/SKILL.md`
-- 提交规范（Conventional Commits 中文，DB 脚本独立成 commit，commit 后 pull --no-rebase 再 push）见 `.agents/skills/git-commit/SKILL.md`
+- Java 数据类（Lombok）规范：见 `.agents/skills/lombok-data/SKILL.md`
+- Git 提交与推送规范：见 `.agents/skills/git-commit/SKILL.md`
 - 新增用户可见文案的语气：情侣场景要可爱、口语化、带 emoji（参考现有 Service 里的推送文案）
 
 ## 六、测试
