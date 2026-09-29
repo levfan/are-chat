@@ -1,5 +1,10 @@
 # are-chat 项目规则（Spring Boot 后端）
 
+## 项目地图（每个任务开工前必读）
+
+- 凡在本项目开发功能、修复缺陷、评审改动：先加载 `.agents/skills/are-chat-map/SKILL.md`（项目模块地图、代码惯例、构建命令），不要重新通读源码
+- 功能完成后若新增/删除了模块、表、接口、定时任务：必须同步更新 `are-chat-map` skill 的对应小节，与功能同批提交（docs 不单独成 commit 时随 feat 一起提）
+
 ## 数据库变更（硬性）
 
 - 凡修改数据库表结构（建表、字段/索引/约束增删改）或需要初始化表数据的任务：必须在 `src/main/resources/db/` 下生成 `V{版本}__{描述}.sql` 增量脚本，并同步更新 `src/main/resources/schema.sql` 中对应表定义
