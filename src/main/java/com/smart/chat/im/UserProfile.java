@@ -18,5 +18,7 @@ public class UserProfile {
     private String signature;
     private String avatar;
     private String presenceStatus;
+    /** F42 生日（yyyy-MM-dd 或 MM-dd，空 = 未填写） */
+    private String birthday;
     private Long updatedAt;
 }

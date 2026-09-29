@@ -116,6 +116,13 @@ public class CoupleController {
                 req.slogan(), req.theme(), req.stickers()));
     }
 
+    /** F44 恋爱中徽章：查某人是否在恋爱中 + 在一起天数（好友资料卡展示）。 */
+    @GetMapping("/relationship-of/{username}")
+    public ApiResponse<CoupleService.RelationshipVO> relationshipOf(@PathVariable String username,
+                                                                    HttpSession session) {
+        return ApiResponse.ok(coupleService.relationshipOf(Sessions.requireUser(session), username));
+    }
+
     @PostMapping("/dissolve")
     public ApiResponse<Void> dissolve(HttpSession session) {
         coupleService.dissolve(Sessions.requireUser(session));

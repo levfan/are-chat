@@ -147,6 +147,7 @@ public class ImPushService {
     /** 情侣空间事件：推给除发起方之外的接收人（username 记录发起方）。 */
     public void pushCoupleEvent(String event, String actor, String toUser, String detail) {
         push(toUser, new CoupleEventPayload("couple", event, actor, detail));
+        recordNotify(event, actor, toUser, detail);
     }
 
     /** 情侣空间事件：推给双方（如今日仪式解锁），actor 为触发者。 */
@@ -156,5 +157,26 @@ public class ImPushService {
         if (!userA.equals(userB)) {
             push(userB, payload);
         }
+        recordNotify(event, actor, userA, detail);
+        recordNotify(event, actor, userB, detail);
+    }
+
+    /** F41 通知中心存档钩子：由 couple 包的 CoupleNotifyRecorder 实现（im 包不反向依赖 couple）。 */
+    private void recordNotify(String event, String actor, String toUser, String detail) {
+        if (notifySink != null && toUser != null && !toUser.isBlank()) {
+            notifySink.record(event, actor, toUser, detail);
+        }
+    }
+
+    /** 通知存档回调（可选注入：couple 模块存在时生效）。 */
+    public interface CoupleNotifySink {
+        void record(String event, String actor, String toUser, String detail);
+    }
+
+    private volatile CoupleNotifySink notifySink;
+
+    /** 由 CoupleNotifyRecorder 在启动时注册。 */
+    public void setNotifySink(CoupleNotifySink sink) {
+        this.notifySink = sink;
     }
 }

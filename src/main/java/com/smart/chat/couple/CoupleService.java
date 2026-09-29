@@ -306,6 +306,24 @@ public class CoupleService {
         return toSpaceVO(space, me);
     }
 
+    /** F44 恋爱中徽章：某人是否在恋爱中（只有其好友可查）。 */
+    public record RelationshipVO(boolean inRelationship, Long days, String anniversary) {
+    }
+
+    public RelationshipVO relationshipOf(String me, String target) {
+        String name = target == null ? "" : target.trim();
+        if (name.isEmpty()) {
+            throw new BusinessException(400, "用户名不能为空");
+        }
+        // 只有对方好友可以查看（保护隐私）
+        if (friendMapper.findByOwnerAndFriend(me, name).isEmpty()) {
+            throw new BusinessException(403, "只有好友才能查看恋爱状态");
+        }
+        return spaceMapper.findActiveByUser(name)
+                .<RelationshipVO>map(space -> new RelationshipVO(true, daysTogether(space), space.getAnniversary()))
+                .orElse(new RelationshipVO(false, null, null));
+    }
+
     // ========== 空间个性化：宣言 / 主题 / 贴纸墙（F26 / F27 / F28） ==========
 
     /**

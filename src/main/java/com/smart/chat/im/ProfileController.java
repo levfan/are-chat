@@ -12,23 +12,33 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Set;
 
 /**
- * 个人资料：预设 emoji 头像 + 昵称 + 个性签名；好友资料卡仅好友可见。
+ * 个人资料：预设 emoji 头像 + 昵称 + 个性签名 + 生日；好友资料卡仅好友可见。
  */
 @RestController
 @RequestMapping("/api/profile")
 public class ProfileController {
 
-    public record ProfileVO(String username, String nickname, String signature, String avatar, String presenceStatus) {
+    public record ProfileVO(String username, String nickname, String signature, String avatar, String presenceStatus,
+                            String birthday) {
         static ProfileVO of(UserProfile p) {
             return new ProfileVO(p.getUsername(), p.getNickname(), p.getSignature(), p.getAvatar(),
-                    p.getPresenceStatus() == null ? "online" : p.getPresenceStatus());
+                    p.getPresenceStatus() == null ? "online" : p.getPresenceStatus(), p.getBirthday());
         }
     }
 
-    public record UpdateProfileRequest(String nickname, String signature, String avatar, String presenceStatus) {
+    public record UpdateProfileRequest(String nickname, String signature, String avatar, String presenceStatus,
+                                       String birthday) {
+    }
+
+    /** F42 好友生日条目：daysUntil 为今年生日的剩余天数（今天 = 0）。 */
+    public record FriendBirthdayVO(String username, String nickname, String birthday, long daysUntil, boolean today) {
     }
 
     private final UserProfileMapper profileMapper;
@@ -91,9 +101,73 @@ public class ProfileController {
             }
             profile.setPresenceStatus(status);
         }
+        // F42 生日：yyyy-MM-dd 或 MM-dd，空串 = 清除
+        if (req.birthday() != null) {
+            String birthday = req.birthday().trim();
+            if (birthday.isEmpty()) {
+                profile.setBirthday(null);
+            } else {
+                validateBirthday(birthday);
+                profile.setBirthday(birthday);
+            }
+        }
         profile.setUpdatedAt(System.currentTimeMillis());
         profileMapper.updateById(profile);
         return ApiResponse.ok(ProfileVO.of(profile));
+    }
+
+    /** F42 好友生日列表：填了生日的好友，按今年剩余天数升序（今天生日的排最前）。 */
+    @GetMapping("/friends-birthdays")
+    public ApiResponse<List<FriendBirthdayVO>> friendsBirthdays(HttpSession session) {
+        String me = Sessions.requireUser(session);
+        List<FriendBirthdayVO> list = new ArrayList<>();
+        LocalDate today = LocalDate.now();
+        for (var friend : friendMapper.findAllByOwner(me)) {
+            UserProfile profile = profileMapper.selectById(friend.getFriendUsername());
+            String birthday = profile == null ? null : profile.getBirthday();
+            if (birthday == null || birthday.isBlank()) {
+                continue;
+            }
+            String monthDay = birthday.length() >= 10 ? birthday.substring(5) : birthday;
+            LocalDate next;
+            try {
+                next = LocalDate.parse(today.getYear() + "-" + monthDay, DateTimeFormatter.ofPattern("yyyy-MM-dd"));
+            } catch (Exception e) {
+                continue;
+            }
+            if (next.isBefore(today)) {
+                next = next.plusYears(1);
+            }
+            long days = java.time.temporal.ChronoUnit.DAYS.between(today, next);
+            String nickname = profile.getNickname();
+            list.add(new FriendBirthdayVO(friend.getFriendUsername(),
+                    nickname == null || nickname.isBlank() ? friend.getFriendUsername() : nickname,
+                    birthday, days, days == 0));
+        }
+        list.sort((a, b) -> Long.compare(a.daysUntil(), b.daysUntil()));
+        return ApiResponse.ok(list);
+    }
+
+    /** 生日格式校验：yyyy-MM-dd 或 MM-dd。 */
+    private void validateBirthday(String birthday) {
+        boolean ok = false;
+        try {
+            LocalDate.parse(birthday, DateTimeFormatter.ofPattern("yyyy-MM-dd"));
+            ok = true;
+        } catch (Exception ignored) {
+            // 尝试下一种格式
+        }
+        if (!ok) {
+            try {
+                LocalDate.parse("2000-" + birthday, DateTimeFormatter.ofPattern("yyyy-MM-dd"));
+                ok = birthday.length() == 5;
+            } catch (Exception ignored) {
+                // 保持 false
+            }
+        }
+        if (!ok) {
+            throw new BusinessException(400, "生日格式应为 yyyy-MM-dd 或 MM-dd");
+        }
     }
 
     private UserProfile ensureProfile(String username) {
