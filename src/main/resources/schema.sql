@@ -6,7 +6,8 @@
 -- + V7__add_couple_task_tacit.sql（甜蜜任务卡/默契大考验）
 -- + V8__add_couple_care_tables.sql（和好卡/夸夸墙/生理期记录）
 -- + V9__add_couple_capsule_countdown.sql（时光胶囊/倒数日期待清单）
--- + V10__add_couple_life_tables.sql（记账本/家务轮值/约会规划/双人习惯/暗号本），
+-- + V10__add_couple_life_tables.sql（记账本/家务轮值/约会规划/双人习惯/暗号本）
+-- + V11__add_couple_space_personalization.sql（空间个性化：宣言/主题/贴纸墙），
 -- 运行时不再执行本文件（spring.sql.init.mode=never）
 -- 修改表结构时：新增 V 脚本 + 同步更新本文件，保证文档与真实结构一致
 -- 注意：区分大小写的列（用户名/手机号）用列级 CHARACTER SET utf8mb4 COLLATE utf8mb4_bin 声明，不写 DEFAULT（可空为默认，语法对 H2/MySQL/MariaDB 通用）
@@ -203,6 +204,9 @@ CREATE TABLE `couple_space` (
     `city_b` varchar(50) DEFAULT NULL COMMENT '用户 B 所在城市（手填，匹配内置城市库计算时差/距离）',
     `nick_a` varchar(30) DEFAULT NULL COMMENT 'user_a 的专属爱称（由对方设置，如「宝宝」「猪猪」）',
     `nick_b` varchar(30) DEFAULT NULL COMMENT 'user_b 的专属爱称（由对方设置）',
+    `slogan` varchar(60) DEFAULT NULL COMMENT '我们的宣言：只有彼此懂的一句话（60 字内）',
+    `theme` varchar(20) NOT NULL DEFAULT 'classic' COMMENT '空间主题：classic 经典粉 / cherry 樱花 / ocean 海盐 / forest 森绿 / night 星夜',
+    `stickers` varchar(200) DEFAULT NULL COMMENT '贴纸墙佩戴的贴纸 key（逗号分隔，最多 6 枚）',
     `created` bigint(20) NOT NULL COMMENT '建立时间（毫秒时间戳）',
     `dissolved_at` bigint(20) DEFAULT NULL COMMENT '解除时间（毫秒时间戳）',
     PRIMARY KEY (`id`),
