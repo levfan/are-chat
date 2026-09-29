@@ -117,7 +117,8 @@ public class CoupleService {
     }
 
     /** 异地恋助手卡片：任一方城市缺失或不在城市库时，hoursDiff/distanceKm 为 null（城市文本照常展示）。 */
-    public record CityCardVO(String myCity, String partnerCity, Integer hoursDiff, Long distanceKm) {
+    public record CityCardVO(String myCity, String partnerCity, Integer hoursDiff, Long distanceKm,
+                             String partnerZoneId) {
     }
 
     /** 心愿基金存入流水。 */
@@ -1150,11 +1151,13 @@ public class CoupleService {
         var partner = CoupleCities.find(partnerName).orElse(null);
         Integer hoursDiff = null;
         Long distanceKm = null;
+        String partnerZoneId = null;
         if (my != null && partner != null) {
             hoursDiff = Math.round((float) (CoupleCities.offsetSeconds(partner) - CoupleCities.offsetSeconds(my)) / 3600);
             distanceKm = CoupleCities.distanceKm(my, partner);
+            partnerZoneId = partner.zoneId();
         }
-        return new CityCardVO(myName, partnerName, hoursDiff, distanceKm);
+        return new CityCardVO(myName, partnerName, hoursDiff, distanceKm, partnerZoneId);
     }
 
     private FundVO toFundVO(CoupleFund fund, String me) {

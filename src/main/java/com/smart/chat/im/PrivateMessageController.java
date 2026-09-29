@@ -28,6 +28,10 @@ public class PrivateMessageController {
     public record ReactionRequest(String emoji) {
     }
 
+    /** F36 心动时刻标记请求。 */
+    public record HeartRequest(boolean hearted) {
+    }
+
     private final PrivateMessageService messageService;
 
     public PrivateMessageController(PrivateMessageService messageService) {
@@ -95,6 +99,21 @@ public class PrivateMessageController {
     public ApiResponse<Void> star(@PathVariable String id, HttpSession session) {
         messageService.toggleStar(Sessions.requireUser(session), id);
         return ApiResponse.ok();
+    }
+
+    /** F36 心动时刻标记/取消标记。 */
+    @PostMapping("/{id}/heart")
+    public ApiResponse<PrivateMessageService.MessageVO> markHeart(@PathVariable String id,
+                                                                  @RequestBody HeartRequest req,
+                                                                  HttpSession session) {
+        return ApiResponse.ok(messageService.markHeart(Sessions.requireUser(session), id, req.hearted()));
+    }
+
+    /** F36 心动时刻列表（peer 可选：限定与某人的会话）。 */
+    @GetMapping("/hearts")
+    public ApiResponse<List<PrivateMessageService.MessageVO>> hearts(
+            @RequestParam(required = false) String peer, HttpSession session) {
+        return ApiResponse.ok(messageService.heartMoments(Sessions.requireUser(session), peer));
     }
 
     // ---------- 新增：81 全局搜索 / 84 置顶 / 85 清空 / 95 附件 ----------

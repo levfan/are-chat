@@ -32,10 +32,10 @@ public class PrivateMessageService {
     /** 82 文件消息：content 为 JSON（name/size/url），url 必须是站内下载地址 */
     public static final String TYPE_FILE = PrivateMessage.TYPE_FILE;
 
-    /** 会话消息视图：在消息之上装配回应列表 / 收藏 / 已读回执 / 编辑标记。 */
+    /** 会话消息视图：在消息之上装配回应列表 / 收藏 / 已读回执 / 编辑标记 / 心动时刻。 */
     public record MessageVO(String id, String fromUser, String toUser, String content, String msgType,
                             String status, String replyToId, boolean read, boolean edited, boolean starred,
-                            List<ReactionVO> reactions, Long created) {
+                            List<ReactionVO> reactions, Long created, Long heartAt) {
     }
 
     public record ReactionVO(String username, String emoji) {
@@ -236,9 +236,43 @@ public class PrivateMessageService {
             result.add(new MessageVO(m.getId(), m.getFromUser(), m.getToUser(), m.getContent(), m.getMsgType(),
                     m.getStatus(), m.getReplyToId(), read, Integer.valueOf(1).equals(m.getEdited()),
                     starredIds.contains(m.getId()),
-                    reactionMap.getOrDefault(m.getId(), List.of()), m.getCreated()));
+                    reactionMap.getOrDefault(m.getId(), List.of()), m.getCreated(), m.getHeartAt()));
         }
         return result;
+    }
+
+    /**
+     * F36 心动时刻：标记/取消标记一条消息。只有消息双方能操作；
+     * 标记后实时推送给对方（message-hearted 事件），在情侣空间可回顾。
+     */
+    public MessageVO markHeart(String me, String messageId, boolean hearted) {
+        PrivateMessage message = messageMapper.selectById(messageId);
+        if (message == null) {
+            throw new BusinessException(404, "这条消息不存在");
+        }
+        if (!message.getFromUser().equals(me) && !message.getToUser().equals(me)) {
+            throw new BusinessException(403, "只能标记你们俩的聊天记录哦");
+        }
+        if (PrivateMessage.STATUS_RECALLED.equals(message.getStatus())) {
+            throw new BusinessException(409, "撤回的消息不能标记");
+        }
+        message.setHeartAt(hearted ? System.currentTimeMillis() : null);
+        messageMapper.updateById(message);
+        String peer = message.getFromUser().equals(me) ? message.getToUser() : message.getFromUser();
+        push.pushCoupleEvent(hearted ? "message-hearted" : "message-unhearted", me, peer,
+                hearted ? "TA 收藏了一条心动时刻 💗 快去情侣空间看看" : "TA 取消了一条心动时刻标记");
+        return new MessageVO(message.getId(), message.getFromUser(), message.getToUser(), message.getContent(),
+                message.getMsgType(), message.getStatus(), message.getReplyToId(),
+                message.getFromUser().equals(me) && Integer.valueOf(1).equals(message.getReadFlag()),
+                Integer.valueOf(1).equals(message.getEdited()), false, List.of(),
+                message.getCreated(), message.getHeartAt());
+    }
+
+    /** F36 心动时刻列表：与某人聊天中被标记的消息（新→旧，最多 100 条）。 */
+    public List<MessageVO> heartMoments(String me, String peer) {
+        String peerName = peer == null ? "" : peer.trim();
+        List<PrivateMessage> rows = messageMapper.findHeartMoments(me, peerName);
+        return toVOs(rows, me);
     }
 
     @Transactional
