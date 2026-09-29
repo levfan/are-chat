@@ -95,7 +95,8 @@ public class CoupleService {
     }
 
     public record IntimacyVO(int score, int level, String title, String icon, Integer nextLevelAt,
-                             IntimacyBreakdown breakdown) {
+                             /** 距下一级进度 0-100（满级=100） */
+                             int levelProgress, IntimacyBreakdown breakdown) {
     }
 
     /**
@@ -772,7 +773,16 @@ public class CoupleService {
         String[] titles = {"", "怦然心动", "心动初启", "甜甜热恋", "形影不离", "心有灵犀", "相依相伴", "相守一生"};
         String[] icons = {"", "✨", "💫", "🍬", "🧡", "💞", "🌷", "💍"};
         Integer next = level >= 7 ? null : nextAt[level - 1];
-        return new IntimacyVO(score, level, titles[level], icons[level], next, breakdown);
+        // 距下一级进度：以本级起点与下一级阈值插值（满级恒为 100）
+        int progress;
+        if (level >= 7) {
+            progress = 100;
+        } else {
+            int floor = level == 1 ? 0 : nextAt[level - 2];
+            int span = nextAt[level - 1] - floor;
+            progress = span <= 0 ? 100 : (int) Math.min(99, (score - floor) * 100L / span);
+        }
+        return new IntimacyVO(score, level, titles[level], icons[level], next, progress, breakdown);
     }
 
     // ========== 7. 悄悄话信箱 ==========
