@@ -31,7 +31,7 @@ description: are-chat 后端项目地图（Spring Boot 4 + MyBatis-Plus + Flyway
 | `common` | ApiResponse/BusinessException/Sessions | — |
 | `config` | 配置类 | FileStorageProperties 等 |
 
-推送机制（重要）：`ImPushService.pushCoupleEvent(event, actor, toUser, detail)` 给单人推 WS 事件（type=couple），`pushCoupleEventBoth(...)` 推双方；`isOnline(username)` 查在线。前端 store 把 `arechat:couple` 自定义事件按 event 分发刷新。
+推送机制（重要）：`ImPushService.pushCoupleEvent(event, actor, toUser, detail)` 给单人推 WS 事件（type=couple），`pushCoupleEventBoth(...)` 推双方；每次情侣事件推送同时落库 `couple_notify`（F41 通知中心，`CoupleNotifyRecorder` 启动时经 `ImPushService.setNotifySink` 挂接，im 包不反向依赖 couple 包）；`isOnline(username)` 查在线。前端 store 把 `arechat:couple` 自定义事件按 event 分发刷新。
 
 ## 三、情侣空间模块全景（couple 包）
 
@@ -45,12 +45,16 @@ description: are-chat 后端项目地图（Spring Boot 4 + MyBatis-Plus + Flyway
 5. 前端联动：`pushCoupleEvent(Both)` 的事件名需在前端 `stores/couple.ts` 的 `handleCoupleEvent` 中注册 case
 
 现有 Controller 与路由前缀：
-- `CoupleController` `/api/couple`：总览/邀请/纪念日/解除/约定/打卡/一问/清单/纪念日历/心情/时光轴/心动值/信箱/一问历史/条约/城市/基金
+- `CoupleController` `/api/couple`：总览/邀请/纪念日/解除/约定/打卡/一问(+F48 互评 reactions)/清单/纪念日历/心情/时光轴/心动值/信箱/一问历史/条约/城市/基金/个性化(profile: 宣言/主题/贴纸)/恋爱状态徽章(relationship-of)
 - `CoupleBondController` `/api/couple/bond`：贴贴动作（sendAction/动作流/统计/里程碑）、心情回应、专属爱称
 - `CoupleRitualController` `/api/couple/ritual`：甜蜜任务卡、默契大考验、情话抽卡、恋爱运势、晚安故事
 - `CoupleCareController` `/api/couple/care`：情绪天气预报、情绪急救箱、和好卡、夸夸墙、生理期关怀
-- `CoupleMemoryController` `/api/couple/memory`：徽章墙（里程碑+成就）、那年今天、时光胶囊、倒数日
+- `CoupleMemoryController` `/api/couple/memory`：徽章墙（里程碑+成就）、那年今天、时光胶囊、倒数日、恋爱月报/数据总览、第一次清单（F46）
 - `CoupleLifeController` `/api/couple/life`：甜蜜记账本、家务轮值、约会规划、双人习惯、暗号小本本
+- `CoupleGameController` `/api/couple/game`：恋爱加成、互动热力图、心情曲线、恋爱红绿灯
+- `CoupleNotifyController` `/api/couple/notify`：空间动态通知中心（F41 列表/全部已读）
+- `CoupleAdminController` `/api/couple/admin`：情侣空间运营看板（F45 仅管理员）
+- `ProfileController` `/api/profile`：资料卡含生日（F42 本人填写 + friends-birthdays 好友生日列表）
 
 内容库（静态，只增不改顺序）：
 - `CoupleQuestions`：今日一问题库（105 题 11 主题，按 epochDay 轮换）
@@ -61,7 +65,7 @@ description: are-chat 后端项目地图（Spring Boot 4 + MyBatis-Plus + Flyway
 ## 四、数据层规范（硬性）
 
 - 凡改表结构/初始化数据：在 `src/main/resources/db/` 新增 `V{最大版本+1}__{描述}.sql`（幂等：`CREATE TABLE IF NOT EXISTS`、`ADD COLUMN ... IF NOT EXISTS`），并同步更新 `src/main/resources/schema.sql`（全量结构文档，运行时不执行）
-- 现有迁移：V1 couple 基础表 → V2 存量基线 → V3 心情 → V4 信箱 → V5 条约/城市/基金 → V6 贴贴动作/心情回应/爱称 → V7 任务卡/默契 → V8 和好卡/夸夸/生理期 → V9 胶囊/倒数日 → V10 记账/家务/约会/习惯/暗号
+- 现有迁移：V1 couple 基础表 → V2 存量基线 → V3 心情 → V4 信箱 → V5 条约/城市/基金 → V6 贴贴动作/心情回应/爱称 → V7 任务卡/默契 → V8 和好卡/夸夸/生理期 → V9 胶囊/倒数日 → V10 记账/家务/约会/习惯/暗号 → V11 空间个性化 → V12 私信心动时刻 → V13 通知中心/生日 → V14 第一次清单/一问互评
 - 双兼容写法、种子数据 `INSERT IGNORE` 等细节见 `.agents/skills/db-migration/SKILL.md`
 
 ## 五、代码惯例
