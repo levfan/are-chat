@@ -42,7 +42,8 @@ public class CoupleService {
     public record PartnerVO(String username, String nickname, String avatar, boolean online, String petName) {
     }
 
-    public record SpaceVO(String id, PartnerVO partner, Long created, String anniversary, long days) {
+    public record SpaceVO(String id, PartnerVO partner, Long created, String anniversary, long days,
+                          String slogan, String theme, String stickers) {
     }
 
     public record CheckinHalf(boolean morning, boolean night) {
@@ -300,6 +301,47 @@ public class CoupleService {
         space.setAnniversary(normalized);
         spaceMapper.updateById(space);
         push.pushCoupleEvent("anniversary-updated", me, space.partnerOf(me), "TA 更新了你们「在一起」的日子 📅");
+        return toSpaceVO(space, me);
+    }
+
+    // ========== 空间个性化：宣言 / 主题 / 贴纸墙（F26 / F27 / F28） ==========
+
+    /**
+     * 更新空间个性化：宣言（可空，≤60 字）、主题（白名单）、贴纸墙佩戴（≤6 枚 key，逗号分隔）。
+     * 任一传 null 表示该项不修改；全部字段校验后一次性保存，双方推送 space-themed。
+     */
+    public SpaceVO updateProfile(String me, String slogan, String theme, String stickers) {
+        CoupleSpace space = requireSpace(me);
+        if (slogan != null) {
+            String text = slogan.trim();
+            if (text.length() > 60) {
+                throw new BusinessException(400, "宣言最多 60 字，留白也很美");
+            }
+            space.setSlogan(text.isEmpty() ? null : text);
+        }
+        if (theme != null) {
+            if (!CoupleSpace.THEMES.contains(theme)) {
+                throw new BusinessException(400, "这个主题还没上架哦");
+            }
+            space.setTheme(theme);
+        }
+        if (stickers != null) {
+            String normalized = stickers.trim();
+            if (!normalized.isEmpty()) {
+                String[] keys = normalized.split(",");
+                if (keys.length > CoupleSpace.STICKER_MAX) {
+                    throw new BusinessException(400, "贴纸墙最多佩戴 " + CoupleSpace.STICKER_MAX + " 枚");
+                }
+                for (String key : keys) {
+                    if (key.isBlank() || key.length() > 30) {
+                        throw new BusinessException(400, "贴纸选择有误，刷新后再试试");
+                    }
+                }
+            }
+            space.setStickers(normalized.isEmpty() ? null : normalized);
+        }
+        spaceMapper.updateById(space);
+        push.pushCoupleEvent("space-themed", me, space.partnerOf(me), "TA 打扮了你们的小空间 ✨ 快去看看");
         return toSpaceVO(space, me);
     }
 
@@ -1132,7 +1174,8 @@ public class CoupleService {
         String avatar = profile == null || profile.getAvatar() == null ? "" : profile.getAvatar();
         PartnerVO partnerVO = new PartnerVO(partner, nickname, avatar, push.isOnline(partner), space.nickOf(partner));
         return new SpaceVO(space.getId(), partnerVO, space.getCreated(), space.getAnniversary(),
-                daysTogether(space));
+                daysTogether(space), space.getSlogan(),
+                space.getTheme() == null ? "classic" : space.getTheme(), space.getStickers());
     }
 
     /** 在一起天数：从纪念日（缺省取建立日）算到今天，含当天（建立当天 = 第 1 天）。 */

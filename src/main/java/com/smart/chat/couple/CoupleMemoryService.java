@@ -418,6 +418,137 @@ public class CoupleMemoryService {
         }
     }
 
+    // ========== F29+F30 恋爱月报 / 数据总览 ==========
+
+    /** 月报单项统计。 */
+    public record ReportItem(String key, String label, String emoji, long value, String unit) {
+    }
+
+    /** 恋爱月报：某个月（yyyy-MM，默认当月）双方互动的完整盘点。 */
+    public record MonthlyReportVO(String month, List<ReportItem> items, String summary) {
+    }
+
+    /** 数据总览：全部模块累计数字一览。 */
+    public record DataOverviewVO(long daysTogether, List<ReportItem> items) {
+    }
+
+    /**
+     * 恋爱月报：统计某个月内的早晚安（双人齐的天数）、一问、贴贴、任务卡、默契、
+     * 心情、信件、约定兑现、清单完成、账单合计，并生成一句温柔总结。
+     */
+    public MonthlyReportVO monthlyReport(String me, String month) {
+        CoupleSpace space = requireSpace(me);
+        String target = month == null || month.isBlank()
+                ? LocalDate.now().toString().substring(0, 7) : month.trim();
+        if (!target.matches("\\d{4}-\\d{2}")) {
+            throw new BusinessException(400, "月份格式应为 yyyy-MM");
+        }
+        String spaceId = space.getId();
+        long morningDays = monthBothCheckins(space, CoupleCheckin.KIND_MORNING, target);
+        long nightDays = monthBothCheckins(space, CoupleCheckin.KIND_NIGHT, target);
+        long questionDays = monthBothAnswers(space, target);
+        long bondCount = actionMapper.findBySpace(spaceId).stream()
+                .filter(a -> a.getCreated() != null && inMonth(a.getCreated(), target)).count();
+        long taskCount = taskMapper.findBySpace(spaceId).stream()
+                .filter(t -> CoupleTask.STATUS_DONE.equals(t.getStatus()))
+                .filter(t -> t.getDoneAt() != null && inMonth(t.getDoneAt(), target)).count();
+        long tacitCount = tacitMapper.findBySpace(spaceId).stream()
+                .filter(t -> t.getCreated() != null && inMonth(t.getCreated(), target)).count();
+        long moodCount = moodMapper.findBySpace(spaceId).stream()
+                .filter(m -> m.getCreated() != null && inMonth(m.getCreated(), target)).count();
+        long letterCount = letterMapper.findBySpace(spaceId).stream()
+                .filter(l -> l.getCreated() != null && inMonth(l.getCreated(), target)).count();
+        long promiseDone = promiseMapper.findBySpace(spaceId).stream()
+                .filter(p -> CouplePromise.STATUS_DONE.equals(p.getStatus()))
+                .filter(p -> p.getDoneAt() != null && inMonth(p.getDoneAt(), target)).count();
+        long itemCount = itemMapper.findBySpace(spaceId).stream()
+                .filter(CoupleItem::isDone)
+                .filter(i -> i.getDoneAt() != null && inMonth(i.getDoneAt(), target)).count();
+
+        List<ReportItem> items = new ArrayList<>();
+        items.add(new ReportItem("morning", "互道早安", "🌅", morningDays, "天"));
+        items.add(new ReportItem("night", "互道晚安", "🌙", nightDays, "天"));
+        items.add(new ReportItem("question", "一问同答", "💬", questionDays, "天"));
+        items.add(new ReportItem("bond", "贴贴互动", "🫶", bondCount, "次"));
+        items.add(new ReportItem("task", "甜蜜任务", "🍬", taskCount, "张"));
+        items.add(new ReportItem("tacit", "默契考验", "🎯", tacitCount, "次"));
+        items.add(new ReportItem("mood", "心情记录", "📔", moodCount, "条"));
+        items.add(new ReportItem("letter", "悄悄话", "💌", letterCount, "封"));
+        items.add(new ReportItem("promise", "兑现承诺", "🤙", promiseDone, "个"));
+        items.add(new ReportItem("item", "完成小事", "✅", itemCount, "件"));
+
+        long active = morningDays + nightDays + questionDays + bondCount + taskCount + tacitCount
+                + moodCount + letterCount + promiseDone + itemCount;
+        String summary;
+        if (active == 0) {
+            summary = target + " 这个月我们都在忙各自的生活，新的一月记得多来看看对方呀 🌱";
+        } else if (active >= 60) {
+            summary = target + " 是超级甜的一个月！" + active + " 次互动，你们的默契又升级了 💖";
+        } else {
+            summary = target + " 这个月我们互动了 " + active + " 次，每一件小事都算数，继续攒甜度 🍬";
+        }
+        return new MonthlyReportVO(target, items, summary);
+    }
+
+    /** 数据总览：在一起天数 + 各模块累计。 */
+    public DataOverviewVO dataOverview(String me) {
+        CoupleSpace space = requireSpace(me);
+        String spaceId = space.getId();
+        List<ReportItem> items = new ArrayList<>();
+        items.add(new ReportItem("morning", "累计互道早安", "🌅", bothDays(space, CoupleCheckin.KIND_MORNING), "天"));
+        items.add(new ReportItem("night", "累计互道晚安", "🌙", bothDays(space, CoupleCheckin.KIND_NIGHT), "天"));
+        items.add(new ReportItem("question", "一问同答", "💬", bothAnsweredDays(space), "天"));
+        items.add(new ReportItem("bond", "累计贴贴", "🫶", actionMapper.findBySpace(spaceId).size(), "次"));
+        items.add(new ReportItem("letter", "悄悄话", "💌", letterMapper.findBySpace(spaceId).size(), "封"));
+        items.add(new ReportItem("promise", "兑现承诺", "🤙", promiseMapper.findBySpace(spaceId).stream()
+                .filter(p -> CouplePromise.STATUS_DONE.equals(p.getStatus())).count(), "个"));
+        items.add(new ReportItem("item", "完成小事", "✅", itemMapper.findBySpace(spaceId).stream()
+                .filter(CoupleItem::isDone).count(), "件"));
+        items.add(new ReportItem("pact", "恋爱条约", "📜", pactMapper.findBySpace(spaceId).stream()
+                .filter(CouplePact::isAccepted).count(), "条"));
+        items.add(new ReportItem("fund", "达成心愿", "⛵", fundMapper.findBySpace(spaceId).stream()
+                .filter(CoupleFund::isReached).count(), "个"));
+        items.add(new ReportItem("tacit", "默契答对", "🎯", tacitMapper.countMatched(spaceId), "次"));
+        items.add(new ReportItem("praise", "夸夸签收", "🌟", praiseMapper.findBySpace(spaceId).stream()
+                .filter(p -> CouplePraise.STATUS_RECEIVED.equals(p.getStatus())).count(), "张"));
+        items.add(new ReportItem("reconcile", "和好次数", "🕊️", reconcileMapper.countAccepted(spaceId), "次"));
+        items.add(new ReportItem("capsule", "时光胶囊", "⏳", capsuleMapper.findBySpace(spaceId).size(), "枚"));
+        items.add(new ReportItem("countdown", "期待成真", "🎉", countdownMapper.findBySpace(spaceId).stream()
+                .filter(CoupleCountdown::isDone).count(), "个"));
+        return new DataOverviewVO(daysTogether(space), items);
+    }
+
+    /** 某个月中「双方都完成某类打卡」的自然日数量。 */
+    private long monthBothCheckins(CoupleSpace space, String kind, String month) {
+        Set<String> mine = new HashSet<>();
+        Set<String> theirs = new HashSet<>();
+        for (CoupleCheckin row : checkinMapper.findBySpaceAndKind(space.getId(), kind)) {
+            if (row.getCheckinDay() != null && row.getCheckinDay().startsWith(month)) {
+                (row.getUsername().equals(space.getUserA()) ? mine : theirs).add(row.getCheckinDay());
+            }
+        }
+        return mine.stream().filter(theirs::contains).count();
+    }
+
+    /** 某个月中「双方都回答一问」的自然日数量。 */
+    private long monthBothAnswers(CoupleSpace space, String month) {
+        Map<String, Set<String>> byDay = new HashMap<>();
+        for (CoupleAnswer row : answerMapper.findBySpace(space.getId())) {
+            if (row.getAnswerDay() != null && row.getAnswerDay().startsWith(month)) {
+                byDay.computeIfAbsent(row.getAnswerDay(), k -> new HashSet<>()).add(row.getUsername());
+            }
+        }
+        return byDay.values().stream()
+                .filter(users -> users.contains(space.getUserA()) && users.contains(space.getUserB()))
+                .count();
+    }
+
+    /** 毫秒时间戳是否落在 yyyy-MM 内。 */
+    private boolean inMonth(long at, String month) {
+        String day = Instant.ofEpochMilli(at).atZone(ZoneId.systemDefault()).toLocalDate().toString();
+        return day.startsWith(month);
+    }
+
     // ========== 内部工具 ==========
 
     private CoupleSpace requireSpace(String me) {

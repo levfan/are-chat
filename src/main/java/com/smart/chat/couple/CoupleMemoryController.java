@@ -9,12 +9,13 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
 
 /**
- * 纪念与回忆：徽章墙 / 那年今天 / 时光胶囊 / 倒数日期待清单。
+ * 纪念与回忆：徽章墙 / 那年今天 / 时光胶囊 / 倒数日期待清单 / 恋爱月报 / 数据总览。
  */
 @RestController
 @RequestMapping("/api/couple/memory")
@@ -95,5 +96,20 @@ public class CoupleMemoryController {
     public ApiResponse<Void> deleteCountdown(@PathVariable String id, HttpSession session) {
         memoryService.deleteCountdown(Sessions.requireUser(session), id);
         return ApiResponse.ok();
+    }
+
+    // ---------- 恋爱月报 / 数据总览 ----------
+
+    /** 恋爱月报：某个月（yyyy-MM，默认当月）双方互动盘点。 */
+    @GetMapping("/monthly-report")
+    public ApiResponse<CoupleMemoryService.MonthlyReportVO> monthlyReport(
+            @RequestParam(required = false) String month, HttpSession session) {
+        return ApiResponse.ok(memoryService.monthlyReport(Sessions.requireUser(session), month));
+    }
+
+    /** 数据总览：全部模块累计数字一览。 */
+    @GetMapping("/data-overview")
+    public ApiResponse<CoupleMemoryService.DataOverviewVO> dataOverview(HttpSession session) {
+        return ApiResponse.ok(memoryService.dataOverview(Sessions.requireUser(session)));
     }
 }

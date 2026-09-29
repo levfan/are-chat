@@ -18,6 +18,13 @@ public class CoupleSpace {
     public static final String STATUS_ACTIVE = "ACTIVE";
     public static final String STATUS_DISSOLVED = "DISSOLVED";
 
+    /** F27 空间主题白名单 */
+    public static final java.util.Set<String> THEMES =
+            java.util.Set.of("classic", "cherry", "ocean", "forest", "night");
+
+    /** F28 贴纸墙佩戴上限 */
+    public static final int STICKER_MAX = 6;
+
     @TableId(value = "id", type = IdType.INPUT)
     private String id;
     private String userA;
@@ -33,6 +40,12 @@ public class CoupleSpace {
     private String nickA;
     /** user_b 的专属爱称（由对方起） */
     private String nickB;
+    /** F26 我们的宣言：只有彼此懂的一句话（60 字内，可空） */
+    private String slogan;
+    /** F27 空间主题（classic/cherry/ocean/forest/night，默认 classic） */
+    private String theme;
+    /** F28 贴纸墙佩戴的贴纸 key（逗号分隔，最多 6 枚，可空） */
+    private String stickers;
     private Long created;
     private Long dissolvedAt;
 

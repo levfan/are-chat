@@ -61,6 +61,10 @@ public class CoupleController {
     public record FundDepositRequest(Long amount, String note) {
     }
 
+    /** 空间个性化：宣言 / 主题 / 贴纸墙（传 null 表示该项不修改）。 */
+    public record ProfileUpdateRequest(String slogan, String theme, String stickers) {
+    }
+
     private final CoupleService coupleService;
 
     public CoupleController(CoupleService coupleService) {
@@ -102,6 +106,14 @@ public class CoupleController {
     public ApiResponse<CoupleService.SpaceVO> setAnniversary(@RequestBody AnniversaryDateRequest req,
                                                              HttpSession session) {
         return ApiResponse.ok(coupleService.setAnniversary(Sessions.requireUser(session), req.date()));
+    }
+
+    /** 空间个性化：我们的宣言 / 空间主题 / 贴纸墙佩戴。 */
+    @PutMapping("/profile")
+    public ApiResponse<CoupleService.SpaceVO> updateProfile(@RequestBody ProfileUpdateRequest req,
+                                                            HttpSession session) {
+        return ApiResponse.ok(coupleService.updateProfile(Sessions.requireUser(session),
+                req.slogan(), req.theme(), req.stickers()));
     }
 
     @PostMapping("/dissolve")
