@@ -28,6 +28,7 @@ CREATE TABLE IF NOT EXISTS `couple_mood_reaction` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='情侣心情回应表：看到 TA 今天心情不好，贴一个抱抱/亲亲/加油，TA 会实时收到推送';
 
 -- 空间双方专属爱称：nick_a = user_a 的专属爱称（由对方起，空间内展示）
-ALTER TABLE `couple_space`
-    ADD COLUMN `nick_a` varchar(30) DEFAULT NULL CHARACTER SET utf8mb4 COLLATE utf8mb4_bin COMMENT 'user_a 的专属爱称（由对方设置，如「宝宝」「猪猪」）' IF NOT EXISTS,
-    ADD COLUMN `nick_b` varchar(30) DEFAULT NULL CHARACTER SET utf8mb4 COLLATE utf8mb4_bin COMMENT 'user_b 的专属爱称（由对方设置）' IF NOT EXISTS;
+-- 注意：IF NOT EXISTS 前置且逐列独立语句（MariaDB 与 H2 MODE=MySQL 双兼容；
+-- 后置写法及一条 ALTER 携带多个 IF NOT EXISTS 子句，H2 均无法解析）
+ALTER TABLE `couple_space` ADD COLUMN IF NOT EXISTS `nick_a` varchar(30) DEFAULT NULL COMMENT 'user_a 的专属爱称（由对方设置，如「宝宝」「猪猪」）';
+ALTER TABLE `couple_space` ADD COLUMN IF NOT EXISTS `nick_b` varchar(30) DEFAULT NULL COMMENT 'user_b 的专属爱称（由对方设置）';

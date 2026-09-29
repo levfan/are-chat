@@ -8,7 +8,7 @@ CREATE TABLE IF NOT EXISTS `couple_notify` (
     `id` varchar(36) NOT NULL COMMENT '主键UUID',
     `username` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '收件人用户名（区分大小写）',
     `event` varchar(40) NOT NULL COMMENT '事件名（如 letter-created / countdown-reminder）',
-    `actor` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin DEFAULT NULL COMMENT '触发人用户名（system = 定时任务）',
+    `actor` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin COMMENT '触发人用户名（system = 定时任务）',
     `detail` varchar(300) NOT NULL COMMENT '通知文案',
     `read_flag` tinyint(4) DEFAULT 0 COMMENT '是否已读：1 已读 / 0 未读',
     `created` bigint(20) NOT NULL COMMENT '时间（毫秒时间戳）',
@@ -17,4 +17,4 @@ CREATE TABLE IF NOT EXISTS `couple_notify` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='情侣空间通知中心表：每次事件推送都给收件人存档一条，登录后可补看与标记已读';
 
 -- F42 好友生日：本人填写，生日当天好友列表会亮起蛋糕提示
-ALTER TABLE `user_profile` ADD COLUMN `birthday` varchar(10) DEFAULT NULL COMMENT '生日（yyyy-MM-dd，允许只填 MM-dd 表达不在意年份）' AFTER `presence_status`;
+ALTER TABLE `user_profile` ADD COLUMN IF NOT EXISTS `birthday` varchar(10) DEFAULT NULL COMMENT '生日（yyyy-MM-dd，允许只填 MM-dd 表达不在意年份）' AFTER `presence_status`;
