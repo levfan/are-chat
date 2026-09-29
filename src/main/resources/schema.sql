@@ -9,7 +9,8 @@
 -- + V10__add_couple_life_tables.sql（记账本/家务轮值/约会规划/双人习惯/暗号本）
 -- + V11__add_couple_space_personalization.sql（空间个性化：宣言/主题/贴纸墙）
 -- + V12__add_private_message_heart.sql（私聊消息心动时刻标记列）
--- + V13__add_couple_notify_birthday.sql（情侣通知中心表/用户生日列），
+-- + V13__add_couple_notify_birthday.sql（情侣通知中心表/用户生日列）
+-- + V14__add_couple_first_answer_reaction.sql（第一次清单表/一问互评表），
 -- 运行时不再执行本文件（spring.sql.init.mode=never）
 -- 修改表结构时：新增 V 脚本 + 同步更新本文件，保证文档与真实结构一致
 -- 注意：区分大小写的列（用户名/手机号）用列级 CHARACTER SET utf8mb4 COLLATE utf8mb4_bin 声明，不写 DEFAULT（可空为默认，语法对 H2/MySQL/MariaDB 通用）
@@ -657,3 +658,32 @@ CREATE TABLE `couple_notify` (
     PRIMARY KEY (`id`),
     KEY `idx_couple_notify_user` (`username`,`created`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='情侣空间通知中心表：每次事件推送都给收件人存档一条，登录后可补看与标记已读';
+
+
+-- smart_collections.couple_first definition
+
+CREATE TABLE `couple_first` (
+    `id` varchar(36) NOT NULL COMMENT '主键UUID',
+    `space_id` varchar(36) NOT NULL COMMENT '情侣空间ID（关联 couple_space.id）',
+    `title` varchar(100) NOT NULL COMMENT '第一次做的事（如 第一次一起看海）',
+    `first_day` varchar(10) NOT NULL COMMENT '发生的日期（yyyy-MM-dd）',
+    `note` varchar(300) DEFAULT NULL COMMENT '当时的心情/补充（可空）',
+    `created_by` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '记录人用户名（区分大小写）',
+    `created` bigint(20) NOT NULL COMMENT '时间（毫秒时间戳）',
+    PRIMARY KEY (`id`),
+    KEY `idx_couple_first_space` (`space_id`,`first_day`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='第一次清单表：恋爱里每个第一次的日子与心情，时光轴的重要素材';
+
+
+-- smart_collections.couple_answer_reaction definition
+
+CREATE TABLE `couple_answer_reaction` (
+    `id` varchar(36) NOT NULL COMMENT '主键UUID',
+    `space_id` varchar(36) NOT NULL COMMENT '情侣空间ID（关联 couple_space.id）',
+    `answer_day` varchar(10) NOT NULL COMMENT '一问日期（yyyy-MM-dd）',
+    `from_user` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '评价人用户名（区分大小写）',
+    `emoji` varchar(16) NOT NULL COMMENT '反应 emoji（如 ❤️😂）',
+    `created` bigint(20) NOT NULL COMMENT '时间（毫秒时间戳）',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_answer_reaction` (`space_id`,`answer_day`,`from_user`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='今日一问互评表：对 TA 回答的表情反应，每人每天一条（upsert）';
