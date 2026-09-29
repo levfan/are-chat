@@ -8,7 +8,8 @@
 -- + V9__add_couple_capsule_countdown.sql（时光胶囊/倒数日期待清单）
 -- + V10__add_couple_life_tables.sql（记账本/家务轮值/约会规划/双人习惯/暗号本）
 -- + V11__add_couple_space_personalization.sql（空间个性化：宣言/主题/贴纸墙）
--- + V12__add_private_message_heart.sql（私聊消息心动时刻标记列），
+-- + V12__add_private_message_heart.sql（私聊消息心动时刻标记列）
+-- + V13__add_couple_notify_birthday.sql（情侣通知中心表/用户生日列），
 -- 运行时不再执行本文件（spring.sql.init.mode=never）
 -- 修改表结构时：新增 V 脚本 + 同步更新本文件，保证文档与真实结构一致
 -- 注意：区分大小写的列（用户名/手机号）用列级 CHARACTER SET utf8mb4 COLLATE utf8mb4_bin 声明，不写 DEFAULT（可空为默认，语法对 H2/MySQL/MariaDB 通用）
@@ -637,6 +638,22 @@ CREATE TABLE `user_profile` (
     `signature` varchar(100) DEFAULT NULL COMMENT '个性签名',
     `avatar` varchar(16) DEFAULT NULL COMMENT '头像标识（内置头像色档编号，如 c0）',
     `presence_status` varchar(16) DEFAULT 'online' COMMENT '在线状态：online 在线 / busy 忙碌 / away 离开',
+    `birthday` varchar(10) DEFAULT NULL COMMENT '生日（yyyy-MM-dd，允许只填 MM-dd 表达不在意年份）',
     `updated_at` bigint(20) DEFAULT NULL COMMENT '资料更新时间（毫秒时间戳）',
     PRIMARY KEY (`username`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='用户资料表：与 app_user 一一对应（注册时同步创建），存昵称/签名/头像/在线状态';
+
+
+-- smart_collections.couple_notify definition
+
+CREATE TABLE `couple_notify` (
+    `id` varchar(36) NOT NULL COMMENT '主键UUID',
+    `username` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '收件人用户名（区分大小写）',
+    `event` varchar(40) NOT NULL COMMENT '事件名（如 letter-created / countdown-reminder）',
+    `actor` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin DEFAULT NULL COMMENT '触发人用户名（system = 定时任务）',
+    `detail` varchar(300) NOT NULL COMMENT '通知文案',
+    `read_flag` tinyint(4) DEFAULT 0 COMMENT '是否已读：1 已读 / 0 未读',
+    `created` bigint(20) NOT NULL COMMENT '时间（毫秒时间戳）',
+    PRIMARY KEY (`id`),
+    KEY `idx_couple_notify_user` (`username`,`created`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='情侣空间通知中心表：每次事件推送都给收件人存档一条，登录后可补看与标记已读';
