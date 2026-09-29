@@ -7,7 +7,8 @@
 -- + V8__add_couple_care_tables.sql（和好卡/夸夸墙/生理期记录）
 -- + V9__add_couple_capsule_countdown.sql（时光胶囊/倒数日期待清单）
 -- + V10__add_couple_life_tables.sql（记账本/家务轮值/约会规划/双人习惯/暗号本）
--- + V11__add_couple_space_personalization.sql（空间个性化：宣言/主题/贴纸墙），
+-- + V11__add_couple_space_personalization.sql（空间个性化：宣言/主题/贴纸墙）
+-- + V12__add_private_message_heart.sql（私聊消息心动时刻标记列），
 -- 运行时不再执行本文件（spring.sql.init.mode=never）
 -- 修改表结构时：新增 V 脚本 + 同步更新本文件，保证文档与真实结构一致
 -- 注意：区分大小写的列（用户名/手机号）用列级 CHARACTER SET utf8mb4 COLLATE utf8mb4_bin 声明，不写 DEFAULT（可空为默认，语法对 H2/MySQL/MariaDB 通用）
@@ -154,6 +155,7 @@ CREATE TABLE `private_message` (
     `reply_to_id` varchar(36) DEFAULT NULL COMMENT '引用回复的消息ID',
     `read_flag` tinyint(4) DEFAULT 0 COMMENT '是否已读：1 已读 / 0 未读',
     `edited` tinyint(4) DEFAULT 0 COMMENT '内容是否已编辑：1 已编辑 / 0 未编辑',
+    `heart_at` bigint(20) DEFAULT NULL COMMENT '心动时刻标记时间（毫秒时间戳，null = 未标记）',
     `created` bigint(20) NOT NULL COMMENT '发送时间（毫秒时间戳）',
     PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='点对点私聊消息表：支持文本/图片/拍一拍/系统/名片/位置/文件消息';
