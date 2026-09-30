@@ -108,7 +108,10 @@ public class CoupleTodayService {
     /** 指定年份的互动热力：心情/存折/挑战/百日打卡/真心话，每天计数分级。 */
     public HeatmapVO heatmap(String me, Integer year) {
         CoupleSpace space = requireSpace(me);
-        int targetYear = year == null ? LocalDate.now().getYear() : year;
+        // 架构复审修复：年份入参钳制在 2000 ~ 明年，越界回落当年，防止超大年份撑爆内存
+        int maxYear = LocalDate.now().getYear() + 1;
+        int currentYear = LocalDate.now().getYear();
+        int targetYear = year == null || year < 2000 || year > maxYear ? currentYear : year;
         Map<String, Integer> counter = new HashMap<>();
         for (CoupleMood m : moodMapper.findBySpace(space.getId())) {
             bump(counter, m.getMoodDay(), targetYear);

@@ -148,6 +148,22 @@ class CoupleTodayServiceTest {
         assertThat(heat.days()).hasSize(LocalDate.of(year, 12, 31).getDayOfYear());
     }
 
+    @Test
+    void heatmapClampsOutOfRangeYearToCurrentYear() {
+        stubSpace();
+        int currentYear = LocalDate.now().getYear();
+        when(moodMapper.findBySpace("s1")).thenReturn(List.of());
+        when(passbookMapper.findBySpace("s1")).thenReturn(List.of());
+        when(challengeMapper.findBySpace("s1")).thenReturn(List.of());
+        when(truthMapper.findBySpace("s1")).thenReturn(List.of());
+        when(hundredMapper.findBySpace("s1")).thenReturn(List.of());
+
+        // 超大年份与过老年份都回落到当年，防止内存放大
+        assertThat(todayService.heatmap("alice", 999999).year()).isEqualTo(currentYear);
+        assertThat(todayService.heatmap("alice", 1999).year()).isEqualTo(currentYear);
+        assertThat(todayService.heatmap("alice", null).year()).isEqualTo(currentYear);
+    }
+
     // ========== F92 生日前 3 天预告 ==========
 
     @Test
