@@ -49,7 +49,9 @@ whenToUse: 在 are-chat 后端开发新功能、修复缺陷或评审改动，�
 - `CoupleController` `/api/couple`：总览/邀请/纪念日/解除/约定/打卡/一问(+F48 互评 reactions)/清单/纪念日历/心情/时光轴/心动值/信箱/一问历史/条约/城市/基金/个性化(profile: 宣言/主题/贴纸)/恋爱状态徽章(relationship-of)
 - `CoupleBondController` `/api/couple/bond`：贴贴动作（sendAction/动作流/统计/里程碑）、心情回应、专属爱称
 - `CoupleRitualController` `/api/couple/ritual`：甜蜜任务卡、默契大考验、情话抽卡、恋爱运势、晚安故事
-- `CoupleCareController` `/api/couple/care`：情绪天气预报、情绪急救箱、和好卡、夸夸墙、生理期关怀
+- `CoupleCareController` `/api/couple/care`：情绪天气预报、情绪急救箱、和好卡、夸夸墙、生理期关怀 + F60 求抱抱（看板/发出/话术卡/回应）+ F63 陪聊话题卡 + F64 情绪同步率
+- `CoupleMakeupController` `/api/couple/makeup`：F61 矛盾复盘（双方各一份，齐了合成和好锦囊）+ F62 道歉券（每人同时 2 张有效，对方收下）
+- `CoupleTalkController` `/api/couple/talk`：F66 真心话（空间+天稳定同题，双方必答+存档）、F67 匿名树洞（匿名投递/在途 1 个/回答后揭晓）、F68 心灵感应（题库选项作答，每天 3 轮，双答自动结算）、F69 情话储蓄罐（存入只发预告，21:00 利息送达）
 - `CoupleMemoryController` `/api/couple/memory`：徽章墙（里程碑+成就）、那年今天、时光胶囊、倒数日、恋爱月报/数据总览、第一次清单（F46）
 - `CoupleLifeController` `/api/couple/life`：甜蜜记账本、家务轮值、约会规划、双人习惯、暗号小本本
 - `CoupleGameController` `/api/couple/game`：恋爱加成、互动热力图、心情曲线、恋爱红绿灯
@@ -63,14 +65,16 @@ whenToUse: 在 are-chat 后端开发新功能、修复缺陷或评审改动，�
 - `CoupleQuestions`：今日一问题库（105 题 11 主题，按 epochDay 轮换）
 - `CoupleRitualBank`：甜蜜任务/默契题/情话/运势/晚安故事库 + `stableHash`（FNV-1a，按天+空间稳定取值）
 - `CoupleSurpriseBank`：惊喜内容库（刮刮乐券面 24 种/盲盒任务灵感 16 条/花语 8 种/幸运签 20 支）+ stableHash 按周稳定抽券
+- `CoupleTalkBank`：懂我与被接住内容库（安慰话术卡按感受 5 类×5 条/陪聊话题 20 条/真心话题 30 道/心灵感应选题 24 道+选项/深夜关怀文案）+ stableHash 按天稳定取真心话题
 
 定时任务 `CoupleReminderJob`（Asia/Shanghai）：09:00 约定逾期提醒；09:30 纪念日倒数（7/1/0 天）；09:45 倒数日提醒（7/3/1/0 天）；10:00 情绪急救箱（连续 2 天低落提醒对方）。
 定时任务 `CoupleSurpriseJob`（Asia/Shanghai）：每分钟送达心动闹钟与思念速递（alarm-fired/miss-delivered）；09:15 告白重现；09:20 生日彩蛋（读 im 包 UserProfile.birthday）；10:15 花园缺水巡检（garden-withered）。
+定时任务 `CoupleCareTalkJob`（Asia/Shanghai）：21:00 情话储蓄罐利息（每人随机取一句未投递情话送达，love-bank-interest）；23:00 深夜陪伴（当天负面心情且未被求抱抱接住时提醒对方，night-care）。
 
 ## 四、数据层规范（硬性）
 
 - 凡改表结构或初始化数据，必须产出 Flyway 增量脚本并同步 schema.sql——触发条件、命名、幂等/双兼容写法、种子数据等完整规范见 `.agents/skills/db-migration/SKILL.md`
-- 现有迁移：V1 couple 基础表 → V2 存量基线 → V3 心情 → V4 信箱 → V5 条约/城市/基金 → V6 贴贴动作/心情回应/爱称 → V7 任务卡/默契 → V8 和好卡/夸夸/生理期 → V9 胶囊/倒数日 → V10 记账/家务/约会/习惯/暗号 → V11 空间个性化 → V12 私信心动时刻 → V13 通知中心/生日 → V14 第一次清单/一问互评 → V15 惊喜与期待（刮刮乐/盲盒/闹钟/思念/花园/玫瑰/幸运签/告白/藏宝图）
+- 现有迁移：V1 couple 基础表 → V2 存量基线 → V3 心情 → V4 信箱 → V5 条约/城市/基金 → V6 贴贴动作/心情回应/爱称 → V7 任务卡/默契 → V8 和好卡/夸夸/生理期 → V9 胶囊/倒数日 → V10 记账/家务/约会/习惯/暗号 → V11 空间个性化 → V12 私信心动时刻 → V13 通知中心/生日 → V14 第一次清单/一问互评 → V15 惊喜与期待（刮刮乐/盲盒/闹钟/思念/花园/玫瑰/幸运签/告白/藏宝图）→ V16 懂我与被接住（求抱抱/矛盾复盘/道歉券/真心话/树洞/心灵感应/情话储蓄罐）
 
 ## 五、代码惯例
 
