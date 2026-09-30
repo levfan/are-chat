@@ -206,12 +206,24 @@ public class CoupleCommService {
 
     // ========== F103 你比划我猜 ==========
 
-    public List<CoupleGuessRound> guessRounds(String me) {
-        return guessMapper.findBySpace(requireSpace(me).getId());
+    public List<GuessVO> guessRounds(String me) {
+        return guessMapper.findBySpace(requireSpace(me).getId()).stream()
+                .map(r -> toGuessVO(r, me))
+                .toList();
+    }
+
+    /** 比划猜 VO：词只给比划人看，结算后双方可见。 */
+    private GuessVO toGuessVO(CoupleGuessRound r, String me) {
+        boolean visible = r.getFromUser().equals(me)
+                || CoupleGuessRound.STATUS_HIT.equals(r.getStatus())
+                || CoupleGuessRound.STATUS_MISSED.equals(r.getStatus());
+        return new GuessVO(r.getId(), r.getDay(), r.getFromUser(), visible ? r.getWord() : null,
+                r.getClue(), r.getGuess(), r.getAttempts() == null ? 0 : r.getAttempts(),
+                r.getStatus(), r.getSettledAt(), r.getCreated());
     }
 
     /** 开一轮：系统抽词，只有比划人能看到词。 */
-    public List<CoupleGuessRound> startGuess(String me) {
+    public List<GuessVO> startGuess(String me) {
         CoupleSpace space = requireSpace(me);
         String day = LocalDate.now().toString();
         if (guessMapper.countByDay(space.getId(), day) >= CoupleGuessRound.DAILY_ROUNDS) {
@@ -227,7 +239,7 @@ public class CoupleCommService {
     }
 
     /** 比划人出提示（不能包含原词）。 */
-    public List<CoupleGuessRound> clueGuess(String me, String id, String clue) {
+    public List<GuessVO> clueGuess(String me, String id, String clue) {
         CoupleSpace space = requireSpace(me);
         CoupleGuessRound row = requireGuess(space.getId(), id);
         if (!row.getFromUser().equals(me)) {
@@ -255,7 +267,7 @@ public class CoupleCommService {
     }
 
     /** 猜词人猜词：中则 HIT，错满 3 次则 MISSED。 */
-    public List<CoupleGuessRound> doGuess(String me, String id, String word) {
+    public List<GuessVO> doGuess(String me, String id, String word) {
         CoupleSpace space = requireSpace(me);
         CoupleGuessRound row = requireGuess(space.getId(), id);
         if (row.getFromUser().equals(me)) {

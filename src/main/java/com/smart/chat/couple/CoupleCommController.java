@@ -113,26 +113,26 @@ public class CoupleCommController {
     // ---------- F103 你比划我猜 ----------
 
     @GetMapping("/guesses")
-    public ApiResponse<List<CoupleGuessRound>> guesses(HttpSession session) {
+    public ApiResponse<List<CoupleCommService.GuessVO>> guesses(HttpSession session) {
         return ApiResponse.ok(commService.guessRounds(Sessions.requireUser(session)));
     }
 
     /** 开一轮（每天最多 5 轮）。 */
     @PostMapping("/guesses")
-    public ApiResponse<List<CoupleGuessRound>> startGuess(HttpSession session) {
+    public ApiResponse<List<CoupleCommService.GuessVO>> startGuess(HttpSession session) {
         return ApiResponse.ok(commService.startGuess(Sessions.requireUser(session)));
     }
 
     /** 比划人出提示（不能包含原词）。 */
     @PostMapping("/guesses/{id}/clue")
-    public ApiResponse<List<CoupleGuessRound>> clueGuess(@PathVariable String id,
+    public ApiResponse<List<CoupleCommService.GuessVO>> clueGuess(@PathVariable String id,
                                                          @RequestBody GuessClueRequest req, HttpSession session) {
         return ApiResponse.ok(commService.clueGuess(Sessions.requireUser(session), id, req.clue()));
     }
 
     /** 猜词人猜词（错满 3 次结算）。 */
     @PostMapping("/guesses/{id}/guess")
-    public ApiResponse<List<CoupleGuessRound>> doGuess(@PathVariable String id,
+    public ApiResponse<List<CoupleCommService.GuessVO>> doGuess(@PathVariable String id,
                                                        @RequestBody GuessRequest req, HttpSession session) {
         return ApiResponse.ok(commService.doGuess(Sessions.requireUser(session), id, req.word()));
     }
