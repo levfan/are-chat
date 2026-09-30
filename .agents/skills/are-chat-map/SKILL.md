@@ -53,6 +53,8 @@ whenToUse: 在 are-chat 后端开发新功能、修复缺陷或评审改动，�
 - `CoupleMemoryController` `/api/couple/memory`：徽章墙（里程碑+成就）、那年今天、时光胶囊、倒数日、恋爱月报/数据总览、第一次清单（F46）
 - `CoupleLifeController` `/api/couple/life`：甜蜜记账本、家务轮值、约会规划、双人习惯、暗号小本本
 - `CoupleGameController` `/api/couple/game`：恋爱加成、互动热力图、心情曲线、恋爱红绿灯
+- `CoupleSurpriseController` `/api/couple/surprise`：惊喜与期待——刮刮乐（周卡懒生成/刮开/核销）、恋爱盲盒（装盒/到日开箱）、心动闹钟（24h 内定时送达）、思念速递（5~30min 随机延迟）、藏宝图任务、告白重现（每年今天重播）
+- `CoupleGardenController` `/api/couple/garden`：爱情花园（浇水养成 0-6 阶段/缺水会蔫/复活）、每日玫瑰（每人 3 朵+花语）、幸运签（每天为 TA 抽一支可覆盖）
 - `CoupleNotifyController` `/api/couple/notify`：空间动态通知中心（F41 列表/全部已读）
 - `CoupleAdminController` `/api/couple/admin`：情侣空间运营看板（F45 仅管理员）
 - `ProfileController` `/api/profile`：资料卡含生日（F42 本人填写 + friends-birthdays 好友生日列表）
@@ -60,13 +62,15 @@ whenToUse: 在 are-chat 后端开发新功能、修复缺陷或评审改动，�
 内容库（静态，只增不改顺序）：
 - `CoupleQuestions`：今日一问题库（105 题 11 主题，按 epochDay 轮换）
 - `CoupleRitualBank`：甜蜜任务/默契题/情话/运势/晚安故事库 + `stableHash`（FNV-1a，按天+空间稳定取值）
+- `CoupleSurpriseBank`：惊喜内容库（刮刮乐券面 24 种/盲盒任务灵感 16 条/花语 8 种/幸运签 20 支）+ stableHash 按周稳定抽券
 
 定时任务 `CoupleReminderJob`（Asia/Shanghai）：09:00 约定逾期提醒；09:30 纪念日倒数（7/1/0 天）；09:45 倒数日提醒（7/3/1/0 天）；10:00 情绪急救箱（连续 2 天低落提醒对方）。
+定时任务 `CoupleSurpriseJob`（Asia/Shanghai）：每分钟送达心动闹钟与思念速递（alarm-fired/miss-delivered）；09:15 告白重现；09:20 生日彩蛋（读 im 包 UserProfile.birthday）；10:15 花园缺水巡检（garden-withered）。
 
 ## 四、数据层规范（硬性）
 
 - 凡改表结构或初始化数据，必须产出 Flyway 增量脚本并同步 schema.sql——触发条件、命名、幂等/双兼容写法、种子数据等完整规范见 `.agents/skills/db-migration/SKILL.md`
-- 现有迁移：V1 couple 基础表 → V2 存量基线 → V3 心情 → V4 信箱 → V5 条约/城市/基金 → V6 贴贴动作/心情回应/爱称 → V7 任务卡/默契 → V8 和好卡/夸夸/生理期 → V9 胶囊/倒数日 → V10 记账/家务/约会/习惯/暗号 → V11 空间个性化 → V12 私信心动时刻 → V13 通知中心/生日 → V14 第一次清单/一问互评
+- 现有迁移：V1 couple 基础表 → V2 存量基线 → V3 心情 → V4 信箱 → V5 条约/城市/基金 → V6 贴贴动作/心情回应/爱称 → V7 任务卡/默契 → V8 和好卡/夸夸/生理期 → V9 胶囊/倒数日 → V10 记账/家务/约会/习惯/暗号 → V11 空间个性化 → V12 私信心动时刻 → V13 通知中心/生日 → V14 第一次清单/一问互评 → V15 惊喜与期待（刮刮乐/盲盒/闹钟/思念/花园/玫瑰/幸运签/告白/藏宝图）
 
 ## 五、代码惯例
 
