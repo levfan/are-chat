@@ -56,6 +56,8 @@ whenToUse: 在 are-chat 后端开发新功能、修复缺陷或评审改动，�
 - `CoupleChronicleController` `/api/couple/chronicle`：F80 恋爱编年史（firsts/纪念日/胶囊/兑现约定/旅行打卡/真心话按年聚合倒序）、F81 考古卡（真心话/存折/语录/心情随笔随机挖卡，30 天前优先）、F82 恋爱问答机（真实数据出 2-3 道选择题：第一次日期/在一起日期/在一起天数，正确索引随题返回前端判分）、F85 周年报告（最近周年以来 6 项统计+情绪化 summary）、F86 生日回顾（TA 生日 MM-dd 的历史事件聚合，无生日 404）
 - `CoupleKeepsakeController` `/api/couple/keepsake`：F83 甜蜜语录收藏册（收藏/场景/删）、F88 电影票根（片名/观看日/1-5 星缺省满分/感想/撕掉）、F89 我们的歌单（歌名/歌手/为什么/移除）；全部双方可整理、WS 事件 quote-kept/ticket-added/song-added
 - `CoupleMemoryJob`：F87 每天 09:05 扫描当日到期 SEALED 胶囊 → pushCoupleEventBoth "capsule-due"（CoupleCapsuleMapper.findByOpenDay）
+- `CoupleTodayController` `/api/couple/today`：F95 今日看点（挑战/真心话/心情/存折/百日打卡状态 + 最近到期胶囊聚合）、F96 年度热力日历（心情+存折+挑战+真心话+百日打卡按天计数分级 0-3，`/heatmap?year=`）
+- `CoupleSurpriseJob.birthdayCards`：F92 在生日贺卡基础上增加生日前 3 天 "birthday-eve" 预告推送
 - `CoupleMemoryController` `/api/couple/memory`：徽章墙（里程碑+成就）、那年今天、时光胶囊、倒数日、恋爱月报/数据总览、第一次清单（F46）
 - `CoupleLifeController` `/api/couple/life`：甜蜜记账本、家务轮值、约会规划、双人习惯、暗号小本本
 - `CoupleGameController` `/api/couple/game`：恋爱加成、互动热力图、心情曲线、恋爱红绿灯
