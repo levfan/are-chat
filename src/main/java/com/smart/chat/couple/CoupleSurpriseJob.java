@@ -84,10 +84,11 @@ public class CoupleSurpriseJob {
         surpriseService.replayTodaysConfessions();
     }
 
-    /** 每天 09:20：TA 的生日贺卡（F59，按资料生日）。 */
+    /** 每天 09:20：TA 的生日贺卡（F59，按资料生日）+ 生日前 3 天预告（F92）。 */
     @Scheduled(cron = "0 20 9 * * ?", zone = "Asia/Shanghai")
     public void birthdayCards() {
         String todayMonthDay = LocalDate.now().toString().substring(5);
+        String eveMonthDay = LocalDate.now().plusDays(3).toString().substring(5);
         for (CoupleSpace space : spaceMapper.findAllActive()) {
             for (String user : List.of(space.getUserA(), space.getUserB())) {
                 UserProfile profile = profileMapper.selectById(user);
@@ -96,6 +97,13 @@ public class CoupleSurpriseJob {
                     continue;
                 }
                 String monthDay = birthday.length() >= 10 ? birthday.substring(5) : birthday;
+                // F92 生日前 3 天预告：给双方一个准备惊喜的缓冲
+                if (eveMonthDay.equals(monthDay)) {
+                    String petName = space.nickOf(user);
+                    String who = petName == null || petName.isBlank() ? "TA" : petName;
+                    push.pushCoupleEvent("birthday-eve", "system", space.partnerOf(user),
+                            "⏳ 小声提醒：3 天后（" + birthday + "）是 " + who + " 的生日——礼物可以慢慢挑，但惊喜要开始准备啦 🎁");
+                }
                 if (!todayMonthDay.equals(monthDay)) {
                     continue;
                 }
