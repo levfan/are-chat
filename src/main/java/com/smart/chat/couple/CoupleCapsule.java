@@ -20,9 +20,9 @@ public class CoupleCapsule {
     public static final String STATUS_OPENED = "OPENED";
 
     public static final int CONTENT_MAX = 500;
-    /** 封存期限下限/上限（天） */
+    /** 封存期限下限/上限（天），上限支持 10 年远期（F84） */
     public static final int OPEN_MIN_DAYS = 30;
-    public static final int OPEN_MAX_DAYS = 365;
+    public static final int OPEN_MAX_DAYS = 3650;
 
     @TableId(value = "id", type = IdType.INPUT)
     private String id;
