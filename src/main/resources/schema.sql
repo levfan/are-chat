@@ -2320,8 +2320,6 @@ CREATE TABLE `couple_dine_topic` (
 
 
 -- smart_collections.couple_cozy_lightout definition
-CREATE TABLE
-
 CREATE TABLE `couple_cozy_lightout` (
     `id` varchar(36) NOT NULL COMMENT '主键UUID',
     `space_id` varchar(36) NOT NULL COMMENT '情侣空间ID（关联 couple_space.id）',
