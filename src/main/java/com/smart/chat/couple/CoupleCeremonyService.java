@@ -521,7 +521,7 @@ public class CoupleCeremonyService {
         long days = ChronoUnit.DAYS.between(base, today);
         LocalDate byHundred = base.plusDays((Math.floorDiv(Math.max(days, 0), RENEW_EVERY_DAYS) + 1) * RENEW_EVERY_DAYS);
         LocalDate anniv = base.withYear(today.getYear());
-        if (anniv.isBefore(today)) {
+        if (anniv.isBefore(today) || anniv.isEqual(today)) {
             anniv = anniv.plusYears(1);
         }
         return anniv.isBefore(byHundred) ? anniv : byHundred;
