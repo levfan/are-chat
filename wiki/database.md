@@ -1,8 +1,8 @@
 # 数据库
 
-> 本页回答：全库数据约定、V1→V30 Flyway 迁移时间线、按域分组的表清单。
+> 本页回答：全库数据约定、V1→V33 Flyway 迁移时间线、按域分组的表清单。
 
-结构事实源：`src/main/resources/schema.sql`（全量结构文档，148 张表，不由运行时执行）+ `src/main/resources/db/V*.sql`（真正被 Flyway 执行的增量脚本）。运行时建表路径只有 Flyway；生产与测试（H2）统一走同一批 V 脚本。
+结构事实源：`src/main/resources/schema.sql`（全量结构文档，170 张表，不由运行时执行）+ `src/main/resources/db/V*.sql`（真正被 Flyway 执行的增量脚本）。运行时建表路径只有 Flyway；生产与测试（H2）统一走同一批 V 脚本。
 
 ## 数据约定（硬性）
 
@@ -20,7 +20,7 @@
 
 改表流程与幂等细则：`.agents/skills/db-migration/SKILL.md`；"新增 V 脚本 + 同步 schema.sql + 独立 db commit" 为硬性要求（见 [dev-guide.md](dev-guide.md)）。
 
-## 迁移时间线（V1 → V28）
+## 迁移时间线（V1 → V33）
 
 | 版本 | 主题 | 新增表 / 变更 |
 |---|---|---|
@@ -54,10 +54,13 @@
 | V28 | 时光博物馆 F190-F199 | couple_doc_scene, couple_exhibit, couple_hidden_achievement, couple_house_rule, couple_dnd_setting |
 | V29 | 常用收藏 F207 | couple_user_pin |
 | V30 | 两个人的饭桌 F210-F219 | couple_dine_ticket, couple_dine_rate, couple_dine_nogo, couple_dine_weekplan, couple_dine_homecook, couple_dine_cart, couple_dine_topic |
+| V31 | 体温同步·作息与健康 F220-F229 | couple_cozy_lightout, couple_cozy_sleep, couple_cozy_sheep, couple_cozy_water, couple_cozy_weather, couple_cozy_latenight, couple_cozy_slow, couple_cozy_remedy, couple_cozy_hug（F229 月度小结聚合无表） |
+| V32 | 小日子·仪式感 F230-F239 | couple_ceremony_founded, couple_ceremony_ritual, couple_ceremony_mark, couple_ceremony_policy, couple_ceremony_renew, couple_ceremony_coupon, couple_ceremony_recap（F231 黄历/F237 史册/F238 加冕聚合无表） |
+| V33 | 我们公司 F240-F249 | couple_board_role, couple_board_vote, couple_board_report, couple_board_salary, couple_board_idea, couple_board_attend（F243 职级/F248 名片/F249 周报聚合无表；发薪复用 V27 couple_point_ledger 插 EARN 流水） |
 
-注：个别 V 脚本尾部含种子数据（如题库类内容存库的场景）；schema.sql 历史遗留的 2 处悬空 `CREATE TABLE` 残行已修复删除。
+注：个别 V 脚本尾部含种子数据（如题库类内容存库的场景）；schema.sql 历史遗留的悬空 `CREATE TABLE` 残行（含 V31 同步基线时引入的第 2323 行一处）已全部修复删除，现 `grep -c "CREATE TABLE"` 与 `^CREATE TABLE \`` 一致，均为 170 张。
 
-## 表清单（按域分组，共 148 张）
+## 表清单（按域分组，共 170 张，其中 `couple_*` 157 张）
 
 ### 账号与运营（auth / system）
 
@@ -144,19 +147,28 @@
 | `couple_love_lang` / `couple_heart_flash` / `couple_what_if` | 爱语测评结果 / 心动闪光 / 「如果」问答 |
 | `couple_secret_signal` / `couple_sync_tap` / `couple_heart_day` | 动作暗语 / 同频共振按键 / 心动日历 |
 
-### 情侣空间 — 经营、博物馆与饭桌（V27-V30）
+### 情侣空间 — 经营、博物馆、饭桌、体温、仪式与公司（V27-V33）
 
 | 表 | 用途 |
 |---|---|
 | `couple_family_meeting` / `couple_week_host` / `couple_skill_swap` | 家庭会议纪要（周一锚）/ 本周主理人 / 技能交换所 |
 | `couple_month_review` / `couple_emergency_card` / `couple_month_snapshot` | 月度互评 / 应急卡 / 情侣存档点（每月 upsert） |
-| `couple_point_ledger` / `couple_five_year_plan` / `couple_anniv_plan` | 家务积分流水 / 五年计划双轨（MINE/OURS）/ 纪念日策划案 |
+| `couple_point_ledger` / `couple_five_year_plan` / `couple_anniv_plan` | 家务积分流水（F244 发薪日亦插 EARN 流水）/ 五年计划双轨（MINE/OURS）/ 纪念日策划案 |
 | `couple_doc_scene` / `couple_exhibit` / `couple_hidden_achievement` | 纪录片分镜（三幕）/ 博物馆展品 / 隐藏成就解锁记录 |
 | `couple_house_rule` / `couple_dnd_setting` | 家规与修正案（RULE/AMENDMENT）/ 免打扰时段（支持跨零点） |
 | `couple_user_pin` | F207 常用收藏（每人一行，pins 逗号分隔 ≤6 键） |
 | `couple_dine_ticket` / `couple_dine_rate` / `couple_dine_nogo` | 今晚饭票（uk space+day+user）/ 吃过星评 / 踩雷库（uk space+name） |
 | `couple_dine_weekplan` / `couple_dine_homecook` | 本周菜单（week=周一锚）/ 周拿手菜（uk space+week+user） |
 | `couple_dine_cart` / `couple_dine_topic` | 搭伙车（OPEN/LOCKED 双锁成行）/ 饭桌话题打卡（uk space+day） |
+| `couple_cozy_lightout` / `couple_cozy_sleep` / `couple_cozy_sheep` | 晚安熄灯打卡（uk space+day+user）/ 昨夜睡眠单（1-5 星+梦话）/ 数羊计数（taps+done+用时，60s 窗口锚 updated_at） |
+| `couple_cozy_water` / `couple_cozy_weather` / `couple_cozy_latenight` | 每日杯数接力 / 冷暖互报（city+feel+temp_text，advised_by 记录叮嘱人）/ 熬夜陪伴卡（uk space+day+user） |
+| `couple_cozy_slow` / `couple_cozy_remedy` / `couple_cozy_hug` | 周慢生活小事（week=周一锚，done_day 打卡）/ 疼痛对策本（uk space+for_user，每人一本）/ 抱抱流水（append 流水表，仅 idx space+day，无 uk） |
+| `couple_ceremony_founded` / `couple_ceremony_ritual` / `couple_ceremony_mark` | 自定义小日子（repeat_year 是否每年）/ 过法卡（每日子≤3）/ 庆祝打勾（uk ritual+day 当日唯一） |
+| `couple_ceremony_policy` / `couple_ceremony_renew` | 保险柜月保费（uk space+month+user，一人一月一句）/ 续约签字（anchor_day=满百天或周年当日） |
+| `couple_ceremony_coupon` / `couple_ceremony_recap` | 愿望券（OPEN/USED，ref 记 policy-N payout 幂等）/ 当日体感（uk space+day+user，含年份天然分届） |
+| `couple_board_role` / `couple_board_vote` | 头衔任命（from/to_user，appointed 盖章位）/ 董事会决议（PENDING/PASSED/VETOED，veto_by+decided_at 留痕） |
+| `couple_board_report` / `couple_board_salary` | 年度述职（uk space+year+user，review+goal）/ 感谢工资（uk space+month+user 一月一次） |
+| `couple_board_idea` / `couple_board_attend` | 金点子（adopted+vote_id 转决议）/ 例会签到（uk space+day+user，convened 记 10s 双签） |
 
 ## 查询与访问模式备忘
 

@@ -1,6 +1,6 @@
 # REST 接口总表
 
-> 本页回答：全部 Controller 的端点清单（方法+路径+一句话）。路径省略类前缀 `/api`；couple 系前缀见各节标题。
+> 本页回答：全部 Controller 的端点清单（方法+路径+一句话）。路径省略类前缀 `/api`；couple 系前缀见各节标题。全库共 42 个 Controller、508 个 REST 端点（批次二十后按源码注解清点）。
 
 来源：`src/main/java` 各 `*Controller.java` 的映射注解与 javadoc。返回统一 `ApiResponse{code,message,data}`；除 `/api/auth/**` 与 `/api/health` 外均需登录会话。业务功能编号（F 号）含义见 [couple-space.md](couple-space.md)。
 
@@ -230,3 +230,39 @@
 - GET `/board` 本周看板（菜单+拿手菜+搭伙车）｜ POST `/plan` 排/擦某天宫格（F214）｜ POST `/homecook` 报周拿手菜（F215）
 - GET `/drink?mood=` 点单机（静态无表）（F216）
 - POST `/cart` · POST `/cart/{id}/lock` · DELETE `/cart/{id}` 搭伙车（双锁成行）（F217）｜ GET `/year` 年度干饭账（F219）
+
+### `CoupleCozyController` `/couple/cozy`（批次十八，F220-F229）
+- GET `/today` 今日体温同步总览（熄灯/睡眠单/数羊/喝水/冷暖/陪伴卡/慢生活/对策本/抱抱一次拉齐）
+- POST `/lightout` {atTime?} 道晚安点灯（双方当晚都点=熄灯；连击满 7 晚推 both）（F220）
+- POST `/sleep` {day,stars,dream} 报昨夜睡眠单（1-5 星钳制、梦话≤70 字，本人当日可改）（F221）
+- POST `/sheep` 数一只羊（60s 窗口累计满 10 下数完，超时重置；双方数完推 both 比用时）（F222）
+- POST `/water` 干一杯水（TA 杯子加一格；对方 3h 未回总览带 nudge 轻提醒）（F223）
+- POST `/weather` {city,feel,tempText} 互报冷暖（当日可改）（F224）｜ POST `/weather/advise` 一键叮嘱添衣（同一人一天一次）
+- POST `/latenight` 递「早点睡」陪伴卡（一天一张幂等不再推）（F225）
+- POST `/slow` {thing} 提本周慢生活小事（可改；凑齐两提推 both）｜ POST `/slow/check` 慢生活打卡（双方都打完推 both 回放）（F226）
+- POST `/remedy` {body} 登记我的疼痛对策本（≤300 字随时改）（F227）｜ POST `/comfort` TA 不适日按 TA 对策一键执行并送达
+- POST `/hug` {cnt,note} 自报抱抱（1-99 钳制，破 10/50/100/520/1000 里程碑推 both）（F228）
+- GET `/monthly?month=` 月度安眠小结（聚合无表，体温同步指数 0-100）（F229）
+- 除 `/monthly` 返回 MonthlyVO 外，其余全部返回 TodayVO 聚合（同 GET `/today`）
+
+### `CoupleCeremonyController` `/couple/ceremony`（批次十九，F230-F239）
+- GET `/overview` 今日仪式总览（小日子/黄历宜忌/补催/保险柜/续约/券本/双人体感/去年今日/加冕一次拉齐）
+- POST `/founded` {name,startDay,repeatYear} 新建小日子（名≤60 字，默认每年重复）（F230）｜ POST `/founded/remove` {id} 删除（连带过法卡与打卡）
+- POST `/ritual` {foundedId,content} 写过法任务卡（每小日子最多 3 条）（F232）｜ POST `/ritual/remove` {id} 划掉（连带其打卡）
+- POST `/mark` {id} 庆祝打卡（当日幂等；该小日子全部过法打满推 both，否则推 TA）（F233）
+- POST `/policy` {quote} 交本月保费=夸 TA 一句（一人一月一句可改写；双方交齐=满一月，满 3/6/12 月 payout 愿望券推 both）（F234）
+- POST `/renew` {line} 续约日签字「我还是选你」（每满 100 天或周年当天，非续约日 400；双签推 both）（F235）
+- POST `/coupon` {title} 发愿望券（券面≤80 字）｜ POST `/coupon/use` {id} 核销（OPEN→USED，一人说了算）（F236）
+- POST `/recap` {day?,feeling} 此刻感觉（一人一天一句可改写不重推；双留推 both）（F239）
+- GET `/chronicle?foundedId=` 小日子史册（一年一页，F237；黄历 F231、加冕 F238 为总览内聚合无表）
+- 除 `/chronicle` 返回 ChronicleVO 外，其余全部返回 OverviewVO 聚合（同 GET `/overview`）
+
+### `CoupleBoardController` `/couple/board`（批次二十，F240-F249）
+- GET `/overview` 公司总览（任命/决议/述职/发薪/点子/签到/职级/名片/周报一次拉齐；F243 职级、F248 名片、F249 周报均聚合无表）
+- POST `/role` {title} 给 TA 封职位（每人待任命最多 2 个）（F240）｜ POST `/role/appoint` {id} 被任命者本人盖章上任（非本人/已生效 400）
+- POST `/vote` {title} 提交决议议案（F241）｜ POST `/vote/decide` {id,agree} 附议通过或一票否决（提案人不能裁自己的案；PASSED/VETOED 留痕推 both）
+- POST `/report` {year,review,goal} 交年度述职+小目标（≤500/200 字，同年可改写；双提交才互见）（F242）
+- POST `/salary` {thanks} 发本月感谢工资（一月一次；向 couple_point_ledger 插 EARN 5 分流，F186 台账复用）（F244）
+- POST `/idea` {content} 投金点子（一句话≤140 字）｜ POST `/idea/adopt` {id} 采纳 TA 的点子自动生成决议转表决（自己点子 400）（F245）
+- POST `/attend` 例会签到（10s 窗口内双签到=召开会议，只推一次 both）（F247）
+- 写操作全部返回 OverviewVO 聚合（同 GET `/overview`）

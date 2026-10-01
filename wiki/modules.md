@@ -43,11 +43,14 @@
 
 ## couple — 情侣空间（核心业务，占代码量大头）
 
-职责：F1–F219 全部情侣功能域；包内 350 个文件按"实体+Mapper 平铺 + 每域一对 Service/Controller + Bank 静态库 + 4 个 Job"组织。
+职责：F1–F249 全部情侣功能域；包内 403 个文件按"实体+Mapper 平铺 + 每域一对 Service/Controller + Bank 静态库 + 4 个 Job"组织。
 
 - 聚合根：`CoupleSpace`（userA/userB 字典序）、`CoupleSpaceMapper`、`CoupleService`（总览/邀请/解除/纪念日/清单/心情/信箱/条约/城市/基金/个性化等基础域）。
+- 批次十八 `CoupleCozyController` `/api/couple/cozy`（F220-F229 体温同步）：作息与健康小动作域——熄灯连击、睡眠单、数羊 60s 窗口、喝水接力、冷暖叮嘱、熬夜陪伴卡、慢生活、疼痛对策本、抱抱里程碑、月度安眠小结（聚合）。
+- 批次十九 `CoupleCeremonyController` `/api/couple/ceremony`（F230-F239 小日子仪式感）：自造节日域——建国纪念日、老黄历三源倒数、过法卡（每日子≤3）、保险柜保费满 3/6/12 月 payout 愿望券、100 天/周年续约签字、愿望券本、史册、520/跨年/元旦加冕、当日体感。
+- 批次二十 `CoupleBoardController` `/api/couple/board`（F240-F249 我们公司）：角色扮演经营域——封官需本人盖章、决议提案人不能自裁（附议/一票否决留痕）、述职双提交互见、发薪日 +5 分入 F186 `couple_point_ledger`（EARN 流水）、金点子采纳转决议、例会 10s 双签开会、职级/名片/周报无表聚合。
 - 域控制器全名单与前缀见 [couple-space.md](couple-space.md) 与 [api.md](api.md)。
-- 内容库：`CoupleQuestions`、`CoupleRitualBank`、`CoupleSurpriseBank`、`CoupleTalkBank`、`CoupleGrowthBank`、`CoupleCommBank`、`CouplePlayBank`、`CoupleDailyLifeBank`、`CoupleCoachBank`、`CouplePoemBank`、`CoupleSparkBank`、`CoupleManageBank`、`CoupleMuseumBank`、`CoupleDistanceBank`、`CoupleSecurityBank`、`CouplePraiseBank`（静态内容 + `stableHash` 工具）。
+- 内容库：`CoupleQuestions`、`CoupleRitualBank`、`CoupleSurpriseBank`、`CoupleTalkBank`、`CoupleGrowthBank`、`CoupleCommBank`、`CouplePlayBank`、`CoupleDailyLifeBank`、`CoupleCoachBank`、`CouplePoemBank`、`CoupleSparkBank`、`CoupleManageBank`、`CoupleMuseumBank`、`CoupleDistanceBank`、`CoupleSecurityBank`、`CouplePraiseBank`、`CoupleCozyBank`、`CoupleCeremonyBank`、`CoupleBoardBank`（静态内容 + `stableHash` 工具）。
 - 定时任务：`CoupleReminderJob`、`CoupleSurpriseJob`、`CoupleCareTalkJob`、`CoupleMemoryJob`（详见 [scheduled-jobs.md](scheduled-jobs.md)）。
 - 通知落库：`CoupleNotifyRecorder`（经 `ImPushService.setNotifySink` 挂接）、`CoupleNotifyController` `/api/couple/notify`。
 
