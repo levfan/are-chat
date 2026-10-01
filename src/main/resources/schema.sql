@@ -1672,3 +1672,111 @@ CREATE TABLE `couple_custom_badge` (
     PRIMARY KEY (`id`),
     KEY `idx_custom_badge` (`space_id`,`status`,`created`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='自定义成就表：我们自己定义什么值得庆祝';
+
+
+-- smart_collections.couple_habit_streak definition
+
+CREATE TABLE `couple_habit_streak` (
+    `id` varchar(36) NOT NULL COMMENT '主键UUID',
+    `space_id` varchar(36) NOT NULL COMMENT '情侣空间ID（关联 couple_space.id）',
+    `from_user` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '立习惯人用户名（区分大小写）',
+    `title` varchar(60) NOT NULL COMMENT '习惯名（每天读书30分钟）',
+    `target_days` int(11) NOT NULL DEFAULT 21 COMMENT '目标天数',
+    `done_days` int(11) NOT NULL DEFAULT 0 COMMENT '已打卡天数',
+    `last_done_day` varchar(10) DEFAULT NULL COMMENT '最近打卡日期（yyyy-MM-dd）',
+    `status` varchar(10) NOT NULL DEFAULT 'OPEN' COMMENT '状态：OPEN 挑战中 / DONE 已达成',
+    `done_at` bigint(20) DEFAULT NULL COMMENT '达成时间（毫秒）',
+    `created` bigint(20) NOT NULL COMMENT '时间（毫秒时间戳）',
+    PRIMARY KEY (`id`),
+    KEY `idx_habit_streak` (`space_id`,`status`,`created`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='21天习惯搭子表：TA 盯着的日子，总不好意思偷懒';
+
+
+-- smart_collections.couple_thanks_note definition
+
+CREATE TABLE `couple_thanks_note` (
+    `id` varchar(36) NOT NULL COMMENT '主键UUID',
+    `space_id` varchar(36) NOT NULL COMMENT '情侣空间ID（关联 couple_space.id）',
+    `from_user` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '致谢人用户名（区分大小写）',
+    `content` varchar(200) NOT NULL COMMENT '感谢内容',
+    `created` bigint(20) NOT NULL COMMENT '时间（毫秒时间戳）',
+    PRIMARY KEY (`id`),
+    KEY `idx_thanks_note` (`space_id`,`created`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='感恩便签墙：把「理所当然」写回「谢谢」';
+
+
+-- smart_collections.couple_feel_log definition
+
+CREATE TABLE `couple_feel_log` (
+    `id` varchar(36) NOT NULL COMMENT '主键UUID',
+    `space_id` varchar(36) NOT NULL COMMENT '情侣空间ID（关联 couple_space.id）',
+    `from_user` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '记录人用户名（区分大小写）',
+    `day` varchar(10) NOT NULL COMMENT '所属日期（yyyy-MM-dd）',
+    `word` varchar(20) NOT NULL COMMENT '细名情绪词（委屈/雀跃/怅然…）',
+    `intensity` int(11) NOT NULL DEFAULT 3 COMMENT '强度 1-5',
+    `note` varchar(200) DEFAULT NULL COMMENT '一句注脚（可空）',
+    `updated_at` bigint(20) NOT NULL COMMENT '更新时间（毫秒）',
+    `created` bigint(20) NOT NULL COMMENT '时间（毫秒时间戳）',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_feel_day_user` (`space_id`,`day`,`from_user`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='情绪颗粒度日记表：情绪词汇量越大，越不需要用吵架说话';
+
+
+-- smart_collections.couple_weekly_star definition
+
+CREATE TABLE `couple_weekly_star` (
+    `id` varchar(36) NOT NULL COMMENT '主键UUID',
+    `space_id` varchar(36) NOT NULL COMMENT '情侣空间ID（关联 couple_space.id）',
+    `week` varchar(10) NOT NULL COMMENT '所属周（周一日期 yyyy-MM-dd）',
+    `from_user` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '提名人工用户名（区分大小写）',
+    `highlight` varchar(200) NOT NULL COMMENT '对方本周的高光瞬间',
+    `created` bigint(20) NOT NULL COMMENT '时间（毫秒时间戳）',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_week_star` (`space_id`,`week`,`from_user`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='每周高光互评表：被看见，是关系里最好的营养';
+
+
+-- smart_collections.couple_read_minute definition
+
+CREATE TABLE `couple_read_minute` (
+    `id` varchar(36) NOT NULL COMMENT '主键UUID',
+    `space_id` varchar(36) NOT NULL COMMENT '情侣空间ID（关联 couple_space.id）',
+    `day` varchar(10) NOT NULL COMMENT '所属日期（yyyy-MM-dd）',
+    `from_user` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '感想人用户名（区分大小写）',
+    `thought` varchar(200) NOT NULL COMMENT '今日感想',
+    `created` bigint(20) NOT NULL COMMENT '时间（毫秒时间戳）',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_read_day_user` (`space_id`,`day`,`from_user`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='共读一分钟表：读同一段文字，是在精神里散步';
+
+
+-- smart_collections.couple_delay_task definition
+
+CREATE TABLE `couple_delay_task` (
+    `id` varchar(36) NOT NULL COMMENT '主键UUID',
+    `space_id` varchar(36) NOT NULL COMMENT '情侣空间ID（关联 couple_space.id）',
+    `from_user` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '立事人用户名（区分大小写）',
+    `title` varchar(100) NOT NULL COMMENT '拖延的事（去体检/交年报）',
+    `deadline_day` varchar(10) DEFAULT NULL COMMENT '截止日期（可空）',
+    `nag_count` int(11) NOT NULL DEFAULT 0 COMMENT '被催次数',
+    `last_nag_at` bigint(20) DEFAULT NULL COMMENT '最近催办时间（毫秒）',
+    `status` varchar(10) NOT NULL DEFAULT 'OPEN' COMMENT '状态：OPEN 拖着 / DONE 完成',
+    `done_at` bigint(20) DEFAULT NULL COMMENT '完成时间（毫秒）',
+    `created` bigint(20) NOT NULL COMMENT '时间（毫秒时间戳）',
+    PRIMARY KEY (`id`),
+    KEY `idx_delay_task` (`space_id`,`status`,`created`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='拖延互助所表：成年人的自律，需要一个盯着你的爱人';
+
+
+-- smart_collections.couple_praise_bank definition
+
+CREATE TABLE `couple_praise_bank` (
+    `id` varchar(36) NOT NULL COMMENT '主键UUID',
+    `space_id` varchar(36) NOT NULL COMMENT '情侣空间ID（关联 couple_space.id）',
+    `from_user` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '存款人用户名（区分大小写）',
+    `content` varchar(200) NOT NULL COMMENT '对方的一个优点',
+    `scene` varchar(60) DEFAULT NULL COMMENT '存入场景（可空：吵架时读）',
+    `created` bigint(20) NOT NULL COMMENT '时间（毫秒时间戳）',
+    PRIMARY KEY (`id`),
+    KEY `idx_praise_bank` (`space_id`,`created`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='优点存折表：生气时先取三条利息，再决定要不要吵架';
