@@ -201,15 +201,16 @@ public class CoupleTheaterService {
         if (!row.getApprenticeUser().equals(me)) {
             throw new BusinessException(400, "这周你是师父，侍奉记录由徒弟来写");
         }
-        String day = now.toString();
-        if (row.hasServed(day)) {
+        // 记号用周几 1-7（serves 列只有 40 宽，存 ISO 日期三天就满，一周要能记七天）
+        String token = String.valueOf(now.getDayOfWeek().getValue());
+        if (row.hasServed(token)) {
             return build(space, me, now);
         }
         if (row.serveCount() >= 7) {
             throw new BusinessException(400, "一周最多侍奉 7 天，师父不是地主");
         }
         row.setServes(row.getServes() == null || row.getServes().isEmpty()
-                ? day : row.getServes() + "," + day);
+                ? token : row.getServes() + "," + token);
         row.setUpdatedAt(System.currentTimeMillis());
         masterMapper.updateById(row);
         push.pushCoupleEvent("theater-serve", me, row.getMasterUser(),
@@ -627,7 +628,8 @@ public class CoupleTheaterService {
         CoupleMasterDay master = ensureMaster(space, now);
         MasterVO masterVO = new MasterVO(week, master.getMasterUser(), master.getApprenticeUser(),
                 me.equals(master.getMasterUser()), master.serveCount(), CoupleMasterDay.SERVE_TARGET,
-                master.hasServed(today), me.equals(master.getMasterUser()) && master.getGrade().isEmpty(),
+                master.hasServed(String.valueOf(now.getDayOfWeek().getValue())),
+                me.equals(master.getMasterUser()) && master.getGrade().isEmpty(),
                 master.getReview(), master.getGrade());
 
         List<BoothVO> booths = new ArrayList<>();

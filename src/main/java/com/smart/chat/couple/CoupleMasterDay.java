@@ -48,7 +48,8 @@ public class CoupleMasterDay {
         return (int) java.util.Arrays.stream(serves.split(",")).map(String::trim).filter(s -> !s.isEmpty()).count();
     }
 
-    public boolean hasServed(String day) {
-        return serves != null && (("," + serves + ",").contains("," + day + ","));
+    /** serves 存周几记号（1-7，逗号分隔）。 */
+    public boolean hasServed(String token) {
+        return serves != null && (("," + serves + ",").contains("," + token + ","));
     }
 }

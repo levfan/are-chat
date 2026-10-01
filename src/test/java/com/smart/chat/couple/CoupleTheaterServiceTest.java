@@ -241,12 +241,13 @@ class CoupleTheaterServiceTest {
         assertThatThrownBy(() -> service.masterReview(master, "再写一次", "GRADUATED"))
                 .isInstanceOf(BusinessException.class).hasMessageContaining("定过级");
 
-        // 徒弟隔日可再打卡（构造昨天）
+        // 徒弟隔日可再打卡（serves 记号是周几，构造成昨天那一格）
         CoupleMasterDay row = masters.get(0);
-        row.setServes(LocalDate.now().minusDays(1).toString());
+        row.setServes(String.valueOf(LocalDate.now().minusDays(1).getDayOfWeek().getValue()));
         row.setUpdatedAt(System.currentTimeMillis());
         service.masterServe(apprentice);
         assertThat(row.serveCount()).isEqualTo(2);
+        assertThat(row.getServes()).doesNotContain("-");
     }
 
     // ========== F303 时空电话亭 ==========

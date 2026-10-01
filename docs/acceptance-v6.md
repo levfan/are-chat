@@ -121,3 +121,12 @@
 - **文档一致性已知偏差**：`couple_legacy_ten.answers` 列注释仍写「十答 CSV」，实现是**换行分隔**（用户答案里可能有逗号，CSV 会破）。V43 已推远端，改注释会造成 Flyway 校验和漂移，故不改 DDL，改以地图/验收为准记载；实体 `CoupleLegacyTen.SEP` 是唯一事实源。
 - **代码走查顺手收掉的异味**：`CoupleLegacyService` 里 `ANSWER_MAX = size()*0 + …` 的伪表达式、算了不用的 `daysPerRound`、`fxSettleLine` 空操作 `replaceAll`、从未被使用的 `brand(..., Boolean publish)` 形参、`composeReview` 里 `|| y.equals(now年份)` 的假过滤（等于没过滤，已改 `yearOf(ts)` 按年归属）；年审单条 60 字硬编码提为 `AUDIT_ITEM_MAX` 常量。
 - **情绪闭环补齐（心动值）**：v6 十个模块此前只有 F275 代拿快递、F245 发薪日会写 `couple_point_ledger`，最难的「主动复温」和「说到做到到期解除」反而没回报。已补两条：修复车间解冻成功向答完三问的冷冻提出人记 EARN 8 分；社会信用到期且已见证自动解除时向立保证人记 EARN 10 分。两者都由读时结算触发，幂等（状态一改就不再进 ledger），不新增 Job。用例各自断言台账行数、item 文案与分值，全量 500 绿。
+
+## 架构师代码走查（第二轮：CSV 列宽专项）
+
+- 用 `grep '+ "," +'` 把 v6 里所有「往同一列累加写」的点找出来，逐个对 DDL 列宽算最坏长度，抓到两处会静默截断/报错的真雷：
+  1. `couple_theater_master_day.serves varchar(40)` 存 ISO 日期（10 字 + 逗号 = 11），**三天就写满，而一周要记七天**；师徒日的 `servedToday` 也会因列溢出而永远算错。
+  2. `couple_body_quit.broke_days varchar(160)` 同理，ISO 日期最多 14 条，而 100 天营期理论上可以记满 100 次破戒。
+- 修复方式（都不动已推送的 V39/V40，避免 Flyway 校验和漂移）：侍奉记号改为**周几 1-7**（本行就是按周一行，周几在周内唯一，14 字符就能记满七天），`hasServed(token)` 与聚合里的 `servedToday` 同步换成周几口径；破戒记号压成 **MMdd**（5 字 + 逗号）并把单营破戒记录上限设为 25 条，超出 400「先把这一期结掉再开新的」——上限是诚实提示，比截断丢数据好。
+- 顺带把 v6 已知的三处「按天记号」列宽口径统一写进地图：**日期进 CSV 列一律用 MMdd 或周几，不用 ISO**（`couple_repair_plan.signed_days` 上一轮已改 MMdd:A/B）。
+- 全量 500 绿；新增断言：`serves` 里不得出现 `-`（防 ISO 日期回潮）。

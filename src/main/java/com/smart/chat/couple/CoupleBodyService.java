@@ -324,10 +324,15 @@ public class CoupleBodyService {
             throw new BusinessException(400, "这个营已经结营了");
         }
         String d = day == null || day.isBlank() ? now.toString() : validDay(day, "破戒日");
-        if (camp.hasBroke(d)) {
+        // 记号压成 MMdd（broke_days 只有 160 宽，ISO 日期十几条就顶满），一期最多留 25 条
+        String token = d.replace("-", "").substring(4);
+        if (camp.hasBroke(token)) {
             return build(space, me, now);
         }
-        camp.setBrokeDays(camp.getBrokeDays().isEmpty() ? d : camp.getBrokeDays() + "," + d);
+        if (camp.brokeCount() >= 25) {
+            throw new BusinessException(400, "破戒已经记了 25 条，先把这一期结掉再开新的");
+        }
+        camp.setBrokeDays(camp.getBrokeDays().isEmpty() ? token : camp.getBrokeDays() + "," + token);
         camp.setUpdatedAt(System.currentTimeMillis());
         quitMapper.updateById(camp);
         push.pushCoupleEvent("body-quit-broke", me, space.partnerOf(me),
