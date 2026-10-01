@@ -1,6 +1,6 @@
 ---
 name: are-chat-map
-description: are-chat 后端项目地图（Spring Boot 4 + MyBatis-Plus + Flyway + MariaDB）。凡在 are-chat 中开发新功能、修复缺陷、评审改动，开工前必须先加载本 skill——它提供模块地图、代码惯例、数据层规范与构建命令，避免重新通读项目。完成功能后若新增模块/表/接口，须同步更新本文件。
+description: are-chat 后端项目地图（Spring Boot 4 + MyBatis-Plus + Flyway + MariaDB）。凡在 are-chat 中开发新功能、修复缺陷、评审改动，开工前必须先加载本 skill——它提供模块地图、代码惯例、数据层规范、开发规范硬性流程（第八节交付门禁）与产品红线（不做照片/视频上传、情绪价值优先），避免重新通读项目。完成功能后若新增模块/表/接口，须同步更新本文件。
 whenToUse: 在 are-chat 后端开发新功能、修复缺陷或评审改动，开工前加载本 skill；功能完成后若新增/删除模块、表、接口、定时任务，也要回来更新它
 ---
 
@@ -119,3 +119,17 @@ whenToUse: 在 are-chat 后端开发新功能、修复缺陷或评审改动，�
 2. 改后端：找同类功能照抄分层模式（如加"XX卡"→ 参考 CoupleLetter/CoupleCapsule 全链路）
 3. 涉及新事件：后端 push + 前端 store case + 前端 api/types 同步（见 are-chat-web-map skill）
 4. 提交前：`mvn -q compile`；改了表：跑 `mvn test` 验证 Flyway 脚本在 H2 可执行
+
+## 八、开发规范硬性流程（交付门禁）
+
+规范全集在各专项 skill 里，本节只做流程串联与红线登记，不复述细节：
+
+1. **开工**：必读本 skill（项目地图）；任务触及表结构/初始化数据 → db-migration；新建 Java 数据类 → lombok-data；提交推送 → git-commit
+2. **编码**：照抄第三节分层模板；静态内容库只增不改顺序（第四节）；用户可见文案口语化+emoji（第五节）
+3. **自检**：git-commit skill 的「架构师 Code Review 五项」清单全过
+4. **构建**：`mvn -q compile`；涉测试改动 `mvn test` 全绿
+5. **提交**：按改动性质分组，一类一 commit；数据库脚本（V*.sql+schema.sql）永远独立成 commit；信息 `type(scope): 中文描述`
+6. **推送**：commit → `git pull --no-rebase` → push；失败保留本地 commit 并报告，不 force push
+7. **收尾**：新增/删除模块、表、接口、定时任务 → 更新本 skill 对应小节，与功能同批提交（不单独成 docs commit 时随 feat 一起提）
+
+**产品红线（用户长期约束，各批次均适用）**：情侣空间功能注重情绪价值；**不做照片/视频上传类功能**（服务器部署要求高）；迁移脚本必须幂等且 H2/MariaDB 双兼容（见第四节）。
