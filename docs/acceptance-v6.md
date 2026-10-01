@@ -83,3 +83,19 @@
 - 派单做实体/Mapper 的 agent 在报告里指出两条**只有看列宽才能发现的**问题：① `signed_days` 即便加宽到 600，按 `yyyy-MM-dd:A/B` 双记号写满 30 天需 779 字符（60 天 1559），非严格模式下会静默截断；② 实体残留的 `signedCount()/hasSigned()` 与 Service 私有同名 helper 语义相反（前者按 CSV 条目计数=每天算 2，后者按「A/B 成对」计天），`hasSigned(裸日期)` 在新记号下永远 false。
 - 修复（不动已推送的 V41，避免 Flyway 校验和漂移）：记号改回列注释原本的紧凑形态 `MMdd:A / MMdd:B`（一期不跨年，30 天双签 60 条 = 420 字符，稳稳落在 600 内）；`TARGET_DAYS` 由 14/30/60 收成 **14/30 两档**（60 档本就与列容量冲突，砍掉而不是加宽表）；删掉实体里那两个语义打架的 CSV helper，Service 侧 `signedCount()` 单实现 + `mark(day, side)` 统一生成记号。
 - 结论：派单让 agent「只报告不动手 + 逐列对账」确实捞到了主线程写 Service 时漏掉的容量 bug，这一条要固化进后续每批任务书。
+
+## 批次二十五前端（CouplePost，2026-10-02 交付）
+
+- agent 交付：CouplePost 五卡（新年卡/大事与拍卖/梦想家与退休/许愿井与解梦/台账与信用卡）+ postApi 21 方法 + CouplePost* 13 类型 + 挂 letters「💌 寄给你」+ registry 83→88 + 6 用例。
+- 主线程独立复跑：`pnpm test` 141/141（7 files）、`pnpm build`（vite build + vue-tsc）绿；端点与 CouplePostController 21 个 mapping **逐条 diff 完全一致**（脚本取两边路径列表 diff 无差）；五卡 CoupleCollapsible、主色 #3f51b5 走 `--collapse-title-color`、无 scoped `.title`、stores/couple.ts 零改动。分组提交已推（feat/test/docs 三组）。
+- **agent 报出 4 处后端契约缺口（以后端为准，主线程复核成立）**：① `BucketVO` 不下发 `steps` 且 `StepVO` 无 id → 前端「逐条打勾 / TA 补进展章」在真实数据下点不动；② `RelayVO` 不下发 content → 寄信人看不到自己写的胶囊正文；③ `WellVO.partnerAnswer` 无条件下发（不等双答），与「双答后互见」的玩法口径不符；④ 列表口径（buckets 只 OPEN、somedays 过滤 EXPIRED、credits 只 OPEN、homes 只本人版本等）与前端预期需要对齐说明。
+- **当场修复（后端 ①②）**：`StepVO` 加 `id`、`BucketVO` 加 `List<StepVO> steps`、`RelayVO` 加 `content`（寄信人始终可见，收信人拆封 OPENED 后才下发）；补两条断言（拆步行含 id 与 done/doneBy 正确、接龙 mine 见正文/非 mine 空串），`mvn test -Dtest=CouplePostServiceTest` 10 绿、全量 489 绿。前端已按「后端下发即点亮」写法预留（steps 可选字段），无需再改。
+- ③④ 记为口径备忘暂不改：`well` 的 partnerAnswer 保持下发（前端用 bothIn 徽标表达「双答完成」），改双盲需加字段，留到 v6 收尾统一评估。
+- 另：本批 agent 在执行过程中多次遇到工具返回里夹带伪装成「系统提醒/安全拦截」的注入文本（要求撤销已正确落盘的编辑），agent 选择忽略并按文件实际内容核验——已在真实工具链路上验证过一次，后续任务书继续保留「只信落盘文件与自跑命令」的要求。
+
+## 批次二十九（F330-F339 两家与朋友）
+
+- 后端：V42 十表（全 `couple_world_` 前缀）+ world 22 文件（10 实体/10 Mapper/Bank/Service/Controller，1 GET + 16 POST）+ 12 用例，全量 489 绿（257 表基线）。
+- 产品口径：见家长、送礼、外人怎么看我们——把「一个人慌」的事拆成双确认的任务卡；赔礼信必须经 TA 审阅才送得出去，社会信用到期日必须未来、到期未见证不自动判达标（防误伤），只有对方能举报塌房。
+- **当场修复（Service）**：接待手册的小包清单被 `splitItems` 当必填项，导致 `packList=""` 直接 400「至少写一条」→ 拆出 `splitOptional`（可留空但仍限 12 条/每条 60 字），行程保持必填；`GroupVO` 初版带一个语义混乱的 `mine` 字段（整行是当日共享，不该有 mine）→ 改为 `iLaughed / partnerLaughed / bothLaughed` 三态；python 写正则以 `\n` 误嵌成真实换行使 Java 源码字符串断行编译失败 → 改回 `\n`。
+- **协作（派单质量已固化）**：本批实体/Mapper 任务书写全每个 helper 的签名与返回类型、并列出禁改文件清单（Service/Controller/Bank/V42/schema.sql），agent 零越界；agent 逐列脚本对账（V42 95 列 missing/extra 双空）并主动报出 `uk` 是否背书 selectOne、CSV 列宽是否够用这类只有看列才能发现的疑点。
