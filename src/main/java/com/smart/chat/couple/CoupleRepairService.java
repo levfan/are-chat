@@ -41,7 +41,8 @@ public class CoupleRepairService {
     static final int BOX_TASK_MAX = 80;
     static final int PEACE_MAX = 140;
     static final int PEACE_NOTE_MAX = 80;
-    static final List<Integer> TARGET_DAYS = List.of(14, 30, 60);
+    /** 档位限 14/30：signed_days 存 MMdd:A/MMdd:B 记号，30 天双签正好落在列宽内。 */
+    static final List<Integer> TARGET_DAYS = List.of(14, 30);
 
     private final CoupleSpaceMapper spaceMapper;
     private final CoupleRepairFreezeMapper freezeMapper;
@@ -427,7 +428,7 @@ public class CoupleRepairService {
         }
         int days = targetDays == null ? 30 : targetDays;
         if (!TARGET_DAYS.contains(days)) {
-            throw new BusinessException(400, "目标天数只有 14/30/60");
+            throw new BusinessException(400, "目标天数只有 14/30 两档");
         }
         String c = cause == null ? "" : cause.trim();
         if (c.length() > REASON_MAX) {
@@ -451,8 +452,8 @@ public class CoupleRepairService {
         }
         String d = day == null || day.isBlank() ? now.toString() : validDay(day, "签到日");
         List<String> marks = tokens(row.getSignedDays());
-        String mine = d + ":" + side(space, me);
-        String other = d + ":" + side(space, space.partnerOf(me));
+        String mine = mark(d, side(space, me));
+        String other = mark(d, side(space, space.partnerOf(me)));
         if (marks.contains(mine)) {
             return build(space, me, now);
         }
@@ -916,7 +917,7 @@ public class CoupleRepairService {
         return user.equals(space.getUserA()) ? "A" : "B";
     }
 
-    /** 双方都签到的天数（记号形如 2026-10-02:A / :B）。 */
+    /** 双方都签到的天数（记号 MMdd:A 与 MMdd:B 成对才算一天）。 */
     private int signedCount(String signedDays) {
         Set<String> seen = new LinkedHashSet<>(tokens(signedDays));
         int out = 0;
@@ -927,6 +928,11 @@ public class CoupleRepairService {
             }
         }
         return out;
+    }
+
+    /** 签到记号：MMdd:A / MMdd:B（一期内不跨年重复，列宽容得下 30 天双签）。 */
+    private String mark(String day, String side) {
+        return day.replace("-", "").substring(4) + ":" + side;
     }
 
     private List<String> tokens(String csv) {

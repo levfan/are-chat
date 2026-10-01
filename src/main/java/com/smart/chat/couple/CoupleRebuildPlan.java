@@ -58,15 +58,5 @@ public class CoupleRebuildPlan {
                 .filter(s -> !s.isEmpty()).count();
     }
 
-    public int signedCount() {
-        if (signedDays == null || signedDays.isEmpty()) {
-            return 0;
-        }
-        return (int) java.util.Arrays.stream(signedDays.split(",")).map(String::trim)
-                .filter(s -> !s.isEmpty()).count();
-    }
 
-    public boolean hasSigned(String day) {
-        return signedDays != null && ("," + signedDays + ",").contains("," + day + ",");
-    }
 }

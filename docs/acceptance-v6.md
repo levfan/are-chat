@@ -77,3 +77,9 @@
 - **当场修复（Service）**：`makeupEnd` 先把 status 置 ENDED 再判 RUNNING（判不到，台阶卡漏递）→ 调整为先补递台阶再置 ENDED；`report()` 里把聚合入参 `SorryVO` 列表当实体遍历（`s.status()` 找不到符号）→ 改 `for (SorryVO s : sorries)`；`signedCount` 双 set 冗余实现简化为「seen 含 `day:A` 且含 `day:B`」单趟计数。
 - **当场修复（测试）**：`bottomSet` 少传 sinceDay（编译 arity 错）；`bottomMapper.findBySlot(…, int slot)` 用 `any()` 匹配基本类型 int 触发 Mockito `InvalidUseOfMatchers`/NPE → 改 `anyInt()`；一处 python 按 1-based 行号误替换导致断言行被截半，Read+Edit 修回。**教训重申**：改测试文件别用行号硬替换，改完必须立刻 `mvn test` 单类验证。
 - 协作：本批实体/Mapper 派单时在任务书里写死了每个 helper 的**签名与返回类型**，并禁止 agent 碰 Service/Controller/SQL/schema——agent 全程零越界，报告还主动列出了 5 处「无人调用的 Mapper 方法」与 `OWULARE` 拼写疑点待主线程拍板（比批次二十七的派单质量明显改善，该做法已固化进后续任务书）。
+
+### 批次二十八补记（agent 自检发现的真 bug，主线程修复）
+
+- 派单做实体/Mapper 的 agent 在报告里指出两条**只有看列宽才能发现的**问题：① `signed_days` 即便加宽到 600，按 `yyyy-MM-dd:A/B` 双记号写满 30 天需 779 字符（60 天 1559），非严格模式下会静默截断；② 实体残留的 `signedCount()/hasSigned()` 与 Service 私有同名 helper 语义相反（前者按 CSV 条目计数=每天算 2，后者按「A/B 成对」计天），`hasSigned(裸日期)` 在新记号下永远 false。
+- 修复（不动已推送的 V41，避免 Flyway 校验和漂移）：记号改回列注释原本的紧凑形态 `MMdd:A / MMdd:B`（一期不跨年，30 天双签 60 条 = 420 字符，稳稳落在 600 内）；`TARGET_DAYS` 由 14/30/60 收成 **14/30 两档**（60 档本就与列容量冲突，砍掉而不是加宽表）；删掉实体里那两个语义打架的 CSV helper，Service 侧 `signedCount()` 单实现 + `mark(day, side)` 统一生成记号。
+- 结论：派单让 agent「只报告不动手 + 逐列对账」确实捞到了主线程写 Service 时漏掉的容量 bug，这一条要固化进后续每批任务书。

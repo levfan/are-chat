@@ -286,8 +286,8 @@ class CoupleRepairServiceTest {
 
     @Test
     void rebuildGuardsTasksDaysSignsAndCompletion() {
-        assertThatThrownBy(() -> service.rebuildStart("alice", "重建", "爽约那次", 21, "每天说一句真话"))
-                .isInstanceOf(BusinessException.class).hasMessageContaining("只有 14/30/60");
+        assertThatThrownBy(() -> service.rebuildStart("alice", "重建", "爽约那次", 60, "每天说一句真话"))
+                .isInstanceOf(BusinessException.class).hasMessageContaining("只有 14/30 两档");
         assertThatThrownBy(() -> service.rebuildStart("alice", "重建", "", 30, ""))
                 .isInstanceOf(BusinessException.class).hasMessageContaining("至少一条");
         StringBuilder many = new StringBuilder();
@@ -320,7 +320,7 @@ class CoupleRepairServiceTest {
         // 造满档：补 13 天双签后再签今天 → 达成
         StringBuilder marks = new StringBuilder(plans.get(0).getSignedDays());
         for (int i = 1; i <= 13; i++) {
-            String d = LocalDate.now().minusDays(i).toString();
+            String d = LocalDate.now().minusDays(i).toString().replace("-", "").substring(4);
             marks.append(",").append(d).append(":A,").append(d).append(":B");
         }
         plans.get(0).setSignedDays(marks.toString());
