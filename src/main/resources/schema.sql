@@ -1780,3 +1780,112 @@ CREATE TABLE `couple_praise_bank` (
     PRIMARY KEY (`id`),
     KEY `idx_praise_bank` (`space_id`,`created`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='优点存折表：生气时先取三条利息，再决定要不要吵架';
+
+
+-- smart_collections.couple_poem_chain definition
+
+CREATE TABLE `couple_poem_chain` (
+    `id` varchar(36) NOT NULL COMMENT '主键UUID',
+    `space_id` varchar(36) NOT NULL COMMENT '情侣空间ID（关联 couple_space.id）',
+    `day` varchar(10) NOT NULL COMMENT '所属日期（yyyy-MM-dd）',
+    `from_user` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '执笔人用户名（区分大小写）',
+    `line` varchar(100) NOT NULL COMMENT '今天这一句诗',
+    `created` bigint(20) NOT NULL COMMENT '时间（毫秒时间戳）',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_poem_day_user` (`space_id`,`day`,`from_user`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='情诗接龙表：一天一句，把日子连成一首写不完的诗';
+
+
+-- smart_collections.couple_poem_3line definition
+
+CREATE TABLE `couple_poem_3line` (
+    `id` varchar(36) NOT NULL COMMENT '主键UUID',
+    `space_id` varchar(36) NOT NULL COMMENT '情侣空间ID（关联 couple_space.id）',
+    `from_user` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '作者用户名（区分大小写）',
+    `line1` varchar(60) NOT NULL COMMENT '第一行',
+    `line2` varchar(60) NOT NULL COMMENT '第二行',
+    `line3` varchar(60) NOT NULL COMMENT '第三行',
+    `liked_by` varchar(50) DEFAULT NULL COMMENT '点赞人用户名（对方，可空；H2 兼容：可空列不带 charset）',
+    `liked_at` bigint(20) DEFAULT NULL COMMENT '点赞时间（毫秒）',
+    `created` bigint(20) NOT NULL COMMENT '时间（毫秒时间戳）',
+    PRIMARY KEY (`id`),
+    KEY `idx_poem_3line` (`space_id`,`created`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='三行情书表：最深的话，用最短的诗说';
+
+
+-- smart_collections.couple_morning_note definition
+
+CREATE TABLE `couple_morning_note` (
+    `id` varchar(36) NOT NULL COMMENT '主键UUID',
+    `space_id` varchar(36) NOT NULL COMMENT '情侣空间ID（关联 couple_space.id）',
+    `from_user` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '写信人用户名（区分大小写）',
+    `content` varchar(300) NOT NULL COMMENT '想说的那句话',
+    `deliver_day` varchar(10) NOT NULL COMMENT '送达日期（写信次日 yyyy-MM-dd）',
+    `read_at` bigint(20) DEFAULT NULL COMMENT '对方已读时间（毫秒，可空）',
+    `created` bigint(20) NOT NULL COMMENT '时间（毫秒时间戳）',
+    PRIMARY KEY (`id`),
+    KEY `idx_morning_note` (`space_id`,`deliver_day`,`created`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='醒来第一条表：让 TA 的一天，从你的话开始';
+
+
+-- smart_collections.couple_drift_bottle definition
+
+CREATE TABLE `couple_drift_bottle` (
+    `id` varchar(36) NOT NULL COMMENT '主键UUID',
+    `space_id` varchar(36) NOT NULL COMMENT '情侣空间ID（关联 couple_space.id）',
+    `from_user` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '扔瓶人用户名（区分大小写）',
+    `mood` varchar(20) NOT NULL COMMENT '瓶中心情（委屈/疲惫/烦躁…）',
+    `content` varchar(300) NOT NULL COMMENT '瓶中信内容',
+    `reply` varchar(300) DEFAULT NULL COMMENT '对方的回信（可空）',
+    `replied_at` bigint(20) DEFAULT NULL COMMENT '回信时间（毫秒，可空）',
+    `status` varchar(10) NOT NULL DEFAULT 'FLOATING' COMMENT '状态：FLOATING 漂着 / REPLIED 已回信',
+    `created` bigint(20) NOT NULL COMMENT '时间（毫秒时间戳）',
+    PRIMARY KEY (`id`),
+    KEY `idx_drift_bottle` (`space_id`,`status`,`created`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='心情漂流瓶表：把坏情绪交给海，把回应留给爱人';
+
+
+-- smart_collections.couple_cipher_note definition
+
+CREATE TABLE `couple_cipher_note` (
+    `id` varchar(36) NOT NULL COMMENT '主键UUID',
+    `space_id` varchar(36) NOT NULL COMMENT '情侣空间ID（关联 couple_space.id）',
+    `from_user` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '加密人用户名（区分大小写）',
+    `cipher` varchar(500) NOT NULL COMMENT '数字密码串',
+    `hint` varchar(100) DEFAULT NULL COMMENT '解码提示（可空）',
+    `decoded_by` varchar(50) DEFAULT NULL COMMENT '解码人用户名（可空；H2 兼容：可空列不带 charset）',
+    `decoded_at` bigint(20) DEFAULT NULL COMMENT '解码时间（毫秒，可空）',
+    `created` bigint(20) NOT NULL COMMENT '时间（毫秒时间戳）',
+    PRIMARY KEY (`id`),
+    KEY `idx_cipher_note` (`space_id`,`created`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='数字密码情书表：看懂那串数字的人，是全世界最幸运的';
+
+
+-- smart_collections.couple_soul_answer definition
+
+CREATE TABLE `couple_soul_answer` (
+    `id` varchar(36) NOT NULL COMMENT '主键UUID',
+    `space_id` varchar(36) NOT NULL COMMENT '情侣空间ID（关联 couple_space.id）',
+    `day` varchar(10) NOT NULL COMMENT '所属日期（yyyy-MM-dd）',
+    `from_user` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '作答人用户名（区分大小写）',
+    `answer` varchar(300) NOT NULL COMMENT '答案',
+    `created` bigint(20) NOT NULL COMMENT '时间（毫秒时间戳）',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_soul_day_user` (`space_id`,`day`,`from_user`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='灵魂提问盲盒表：深聊一次，胜过闲聊一百次';
+
+
+-- smart_collections.couple_journal definition
+
+CREATE TABLE `couple_journal` (
+    `id` varchar(36) NOT NULL COMMENT '主键UUID',
+    `space_id` varchar(36) NOT NULL COMMENT '情侣空间ID（关联 couple_space.id）',
+    `day` varchar(10) NOT NULL COMMENT '所属日期（yyyy-MM-dd）',
+    `from_user` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '手账人用户名（区分大小写）',
+    `sticker` varchar(20) NOT NULL DEFAULT '✨' COMMENT '贴纸 emoji',
+    `text` varchar(200) NOT NULL COMMENT '手账正文',
+    `updated_at` bigint(20) NOT NULL COMMENT '更新时间（毫秒）',
+    `created` bigint(20) NOT NULL COMMENT '时间（毫秒时间戳）',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_journal_day_user` (`space_id`,`day`,`from_user`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='贴纸手账表：一天一页，把平凡日子贴成册';
