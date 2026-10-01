@@ -1,0 +1,46 @@
+package com.smart.chat.couple;
+
+import com.baomidou.mybatisplus.annotation.IdType;
+import com.baomidou.mybatisplus.annotation.TableId;
+import com.baomidou.mybatisplus.annotation.TableName;
+import lombok.Data;
+
+import java.util.UUID;
+
+/** F270 家务轮盘：周锚分派的一条事项，双签生效、完成打勾。 */
+@Data
+@TableName("couple_spin_task")
+public class CoupleSpinTask {
+
+    @TableId(value = "id", type = IdType.INPUT)
+    private String id;
+    private String spaceId;
+    private String week;
+    private String item;
+    private String assignedUser;
+    private Integer confirmed;
+    private Integer done;
+    private Long doneAt;
+    private Long created;
+
+    public static CoupleSpinTask of(String spaceId, String week, String item, String assignedUser) {
+        CoupleSpinTask row = new CoupleSpinTask();
+        row.id = UUID.randomUUID().toString();
+        row.spaceId = spaceId;
+        row.week = week;
+        row.item = item;
+        row.assignedUser = assignedUser;
+        row.confirmed = 0;
+        row.done = 0;
+        row.created = System.currentTimeMillis();
+        return row;
+    }
+
+    public boolean isConfirmed() {
+        return Integer.valueOf(1).equals(confirmed);
+    }
+
+    public boolean isDone() {
+        return Integer.valueOf(1).equals(done);
+    }
+}
