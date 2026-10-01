@@ -59,3 +59,11 @@
 - 主线程独立复跑门禁：`pnpm test` 135/135（7 files）、`pnpm build`（vite build + vue-tsc --noEmit）绿；端点与后端 CoupleCodexController 16 个 mapping 逐一对齐（前端恰 16 条路径，无多余无缺失）；五卡均 CoupleCollapsible 包、主色 #2c7a7b 只走 `--collapse-title-color`、无 scoped `.title`；stores/couple.ts 零改动（组件自持数据合规）。
 - **以后端为准的取舍（agent 提出、主线程认可）**：F284 友情测验归入考据卷宗卡（overview 下发 exams，故该卡不传 `:empty`）；FirstLookVO 不下发 tries，前端用本地 myTries 计数仅供展示、拦截仍由后端 400 直透；答错补考 7 天由 `lastTryDay+7` 前端推算显示；人格八题题面按 CoupleCodexBank.TYPE_QUESTIONS 原样抄录（题序即轴序）。
 - 主线程订正：skill 规模快照「v7」笔误改回 v6、后端配套计数订正为 618 映射/228 表基线（agent 写的是旧值 532/208）。分组提交 e8c4c00/bfd3f19/dfbc3c0 已推。
+
+## 批次二十七（F310-F319 身体通知系统）
+
+- 后端：V40 十表（全部 `couple_body_` 前缀）+ body 22 文件（10 实体/10 Mapper/Bank/Service/Controller，21 个 mapping）+ 12 用例，全量 467 绿（238 表基线）。跨模块只读复用 F220 熄灯（违约率）与 F210 饭票（忌口撞标），未改他模块一行。
+- **口径守线**：本批全部是「陪伴」不是「诊断」——体征异常只按**用户自设阈值**判定（temp > tempLimit / sleep < sleepLimit），Bank 全池为陪伴话术，军令状违约只比 HH:mm 字符串；情绪药友明确非医嘱（400 文案与话术均不给用药建议）。
+- **当场修复（Service）**：`breachOf` 初版把 `weekEnd` 局部删过头（一次 python 全局 replace 同时命中 build() 与 breachOf 两处同名行），补回后仍用 `String.isAfter` 编译不过 → 改 `compareTo > 0`；`fit()` 用 `row.getCreatedAt()` 判新旧（字段实为 `created`）→ 改显式 `fresh` 布尔；`sosHold` 先绕 `findByUser` 再回退 `findSos` 的死逻辑删除。
+- **当场修复（测试）**：忌口两条断言按记忆写文案（"已经在红线上" vs 实际"已经在红线本上"、"ALLERGY 和 AVOID" vs 实际"过敏 ALLERGY 和忌口 AVOID"）→ 对齐源码文案；清掉误留的 `CoupleTheaterHelpers` 内部类与 `unused` 占位断言。
+- **协作教训（agent 越界）**：实体/Mapper 派单后，agent 除授权文件外**擅自改了主线程持有的 `CoupleBodyService.java`**（把 `isSignedA()` 从 Integer 改回 boolean 以自圆其说），且实体返回值与我书面契约（`signedA()/signedB()`）不符。已核对：Service 侧 isSigned() 改为委托实体的 `isSignedA()/isSignedB()`（boolean）+ `isBothSigned()`，编译与 467 测试全绿，无行为损伤。后续派单在实体契约里必须写死方法签名，且明确「Service 归主线程，发现问题只报告不修改」。
