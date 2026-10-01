@@ -2709,3 +2709,150 @@ CREATE TABLE `couple_normal_day` (
     UNIQUE KEY `uk_normal_day` (`space_id`, `year`, `day`),
     KEY `idx_normal_space` (`space_id`, `year`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='F258 反仪式感日：每年最多 3 天，双方提报合并';
+
+-- smart_collections.couple_listen_slot definition
+CREATE TABLE `couple_listen_slot` (
+    `id` varchar(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '主键UUID',
+    `space_id` varchar(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '情侣空间ID',
+    `day` varchar(10) NOT NULL COMMENT '申请日 yyyy-MM-dd',
+    `from_user` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '要说的人（区分大小写）',
+    `topic` varchar(140) NOT NULL DEFAULT '' COMMENT '想聊的主题',
+    `status` varchar(12) NOT NULL DEFAULT 'OPEN' COMMENT 'OPEN CONFIRMED DONE CANCELLED',
+    `confirmed_at` bigint(20) DEFAULT NULL COMMENT '倾听人确认时间',
+    `done_at` bigint(20) DEFAULT NULL COMMENT '聊完时间',
+    `rate_mine` int(11) DEFAULT NULL COMMENT '我给自己的表达感 1-5',
+    `rate_partner` int(11) DEFAULT NULL COMMENT '倾听人给的被听感 1-5',
+    `note` varchar(140) NOT NULL DEFAULT '' COMMENT '一句话收尾',
+    `created` bigint(20) NOT NULL COMMENT '时间（毫秒时间戳）',
+    PRIMARY KEY (`id`),
+    KEY `idx_slot_space` (`space_id`, `status`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='F260 想被听时段：申请-确认-聊完-互评';
+
+-- smart_collections.couple_proxy_word definition
+CREATE TABLE `couple_proxy_word` (
+    `id` varchar(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '主键UUID',
+    `space_id` varchar(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '情侣空间ID',
+    `content` varchar(200) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '替 TA 写的话',
+    `from_user` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '代笔人（区分大小写）',
+    `status` varchar(10) NOT NULL DEFAULT 'DRAFT' COMMENT 'DRAFT ADOPTED',
+    `final_text` varchar(200) NOT NULL DEFAULT '' COMMENT '定稿（TA 可改写）',
+    `adopted_by` varchar(50) NOT NULL DEFAULT '' COMMENT '定稿人（可空位不写 charset）',
+    `created` bigint(20) NOT NULL COMMENT '时间（毫秒时间戳）',
+    `updated_at` bigint(20) NOT NULL COMMENT '更新时间（毫秒时间戳）',
+    PRIMARY KEY (`id`),
+    KEY `idx_proxy_space` (`space_id`, `status`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='F261 替我说：草稿到定稿';
+
+-- smart_collections.couple_misrewind definition
+CREATE TABLE `couple_misrewind` (
+    `id` varchar(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '主键UUID',
+    `space_id` varchar(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '情侣空间ID',
+    `topic` varchar(60) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '争执主题（同空间当日唯一）',
+    `day` varchar(10) NOT NULL COMMENT '记录日 yyyy-MM-dd',
+    `from_user` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '填写人（区分大小写）',
+    `mine` varchar(200) NOT NULL DEFAULT '' COMMENT '我当时以为',
+    `theirs` varchar(200) NOT NULL DEFAULT '' COMMENT '我猜你其实想',
+    `created` bigint(20) NOT NULL COMMENT '时间（毫秒时间戳）',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_misrewind` (`space_id`, `day`, `topic`, `from_user`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='F262 误会倒带：同一天同主题双方各一份';
+
+-- smart_collections.couple_stuck_q definition
+CREATE TABLE `couple_stuck_q` (
+    `id` varchar(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '主键UUID',
+    `space_id` varchar(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '情侣空间ID',
+    `week` varchar(10) NOT NULL COMMENT '周锚 yyyy-MM-dd（周一）',
+    `from_user` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '出题人（区分大小写）',
+    `question` varchar(140) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '难住我的问题',
+    `answer` varchar(200) NOT NULL DEFAULT '' COMMENT 'TA 的作答',
+    `answered_at` bigint(20) DEFAULT NULL COMMENT '作答时间',
+    `created` bigint(20) NOT NULL COMMENT '时间（毫秒时间戳）',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_stuck_q` (`space_id`, `week`, `from_user`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='F263 卡壳一问：一周一题，答对方题';
+
+-- smart_collections.couple_swap_letter definition
+CREATE TABLE `couple_swap_letter` (
+    `id` varchar(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '主键UUID',
+    `space_id` varchar(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '情侣空间ID',
+    `day` varchar(10) NOT NULL COMMENT '写信日 yyyy-MM-dd',
+    `from_user` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '写信人（区分大小写）',
+    `content` varchar(500) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '以你的口吻写的信',
+    `open_day` varchar(10) NOT NULL COMMENT '开放日 yyyy-MM-dd（须晚于写信日）',
+    `status` varchar(10) NOT NULL DEFAULT 'SEALED' COMMENT 'SEALED OPENED',
+    `opened_at` bigint(20) DEFAULT NULL COMMENT '拆信时间',
+    `created` bigint(20) NOT NULL COMMENT '时间（毫秒时间戳）',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_swap_letter` (`space_id`, `day`, `from_user`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='F264 换位信：封存到日互拆';
+
+-- smart_collections.couple_hold_word definition
+CREATE TABLE `couple_hold_word` (
+    `id` varchar(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '主键UUID',
+    `space_id` varchar(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '情侣空间ID',
+    `content` varchar(200) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '早就想说的一句话',
+    `from_user` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '封存人（区分大小写）',
+    `open_day` varchar(10) NOT NULL COMMENT '放行日 yyyy-MM-dd',
+    `status` varchar(10) NOT NULL DEFAULT 'HELD' COMMENT 'HELD SENT',
+    `sent_at` bigint(20) DEFAULT NULL COMMENT '送达时间',
+    `created` bigint(20) NOT NULL COMMENT '时间（毫秒时间戳）',
+    PRIMARY KEY (`id`),
+    KEY `idx_hold_space` (`space_id`, `status`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='F265 早想说：7 天一放行';
+
+-- smart_collections.couple_three_line definition
+CREATE TABLE `couple_three_line` (
+    `id` varchar(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '主键UUID',
+    `space_id` varchar(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '情侣空间ID',
+    `day` varchar(10) NOT NULL COMMENT '打卡日 yyyy-MM-dd',
+    `from_user` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '打卡人（区分大小写）',
+    `morning` varchar(80) NOT NULL DEFAULT '' COMMENT '今日印象',
+    `thanks` varchar(80) NOT NULL DEFAULT '' COMMENT '谢的一件',
+    `praise` varchar(80) NOT NULL DEFAULT '' COMMENT '夸的一件',
+    `created` bigint(20) NOT NULL COMMENT '时间（毫秒时间戳）',
+    `updated_at` bigint(20) NOT NULL COMMENT '更新时间（毫秒时间戳）',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_three_line` (`space_id`, `day`, `from_user`),
+    KEY `idx_three_space` (`space_id`, `from_user`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='F266 每天三行：一人一天一条可改写';
+
+-- smart_collections.couple_tone_note definition
+CREATE TABLE `couple_tone_note` (
+    `id` varchar(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '主键UUID',
+    `space_id` varchar(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '情侣空间ID',
+    `day` varchar(10) NOT NULL COMMENT '语气日 yyyy-MM-dd',
+    `from_user` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '自报人（区分大小写）',
+    `tone` varchar(10) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT 'TIRED BUSY SAD OKAY',
+    `note` varchar(60) NOT NULL DEFAULT '' COMMENT '补一句',
+    `created` bigint(20) NOT NULL COMMENT '时间（毫秒时间戳）',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_tone_day` (`space_id`, `day`, `from_user`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='F267 语气自报：给冷淡加字幕';
+
+-- smart_collections.couple_truce definition
+CREATE TABLE `couple_truce` (
+    `id` varchar(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '主键UUID',
+    `space_id` varchar(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '情侣空间ID',
+    `raiser` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '举旗人（区分大小写）',
+    `until_at` bigint(20) NOT NULL COMMENT '解冻时刻（毫秒）',
+    `decide_a` int(11) DEFAULT NULL COMMENT 'userA 决定：1 继续 0 算了',
+    `decide_b` int(11) DEFAULT NULL COMMENT 'userB 决定：1 继续 0 算了',
+    `status` varchar(10) NOT NULL DEFAULT 'ON' COMMENT 'ON ENDED',
+    `ended_at` bigint(20) DEFAULT NULL COMMENT '结束时间',
+    `created` bigint(20) NOT NULL COMMENT '时间（毫秒时间戳）',
+    PRIMARY KEY (`id`),
+    KEY `idx_truce_space` (`space_id`, `status`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='F268 休战旗：吵架急停 30 分钟';
+
+-- smart_collections.couple_name_day definition
+CREATE TABLE `couple_name_day` (
+    `id` varchar(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '主键UUID',
+    `space_id` varchar(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '情侣空间ID',
+    `day` varchar(10) NOT NULL COMMENT '称呼日 yyyy-MM-dd',
+    `name_text` varchar(40) NOT NULL DEFAULT '' COMMENT '今日称呼（Bank 存档）',
+    `used_a` tinyint(4) NOT NULL DEFAULT 0 COMMENT 'userA 用过了',
+    `used_b` tinyint(4) NOT NULL DEFAULT 0 COMMENT 'userB 用过了',
+    `created` bigint(20) NOT NULL COMMENT '时间（毫秒时间戳）',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_name_day` (`space_id`, `day`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='F269 称呼日：日抛爱称双人用完';
