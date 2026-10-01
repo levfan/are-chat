@@ -613,12 +613,36 @@ public class CoupleService {
     }
 
     public AnniversaryVO createAnniversary(String me, String title, String date, Boolean yearly, String kind) {
+        return createAnniversary(me, title, date, yearly, kind, null, null);
+    }
+
+    /** F253 支持农历：calendarType=LUNAR 时 lunarMd（MMDD）为真源，eventDate 存首次换算出的公历日（date 可缺省）。 */
+    public AnniversaryVO createAnniversary(String me, String title, String date, Boolean yearly, String kind,
+                                           String calendarType, String lunarMd) {
         CoupleSpace space = requireSpace(me);
-        String normalized = normalizeDate(date, "日期格式应为 yyyy-MM-dd");
+        boolean lunar = CoupleAnniversary.CALENDAR_LUNAR.equals(calendarType);
+        LocalDate firstSolar = null;
+        if (lunar) {
+            String md = lunarMd == null ? "" : lunarMd.trim();
+            if (!md.matches("(0[1-9]|1[0-2])(0[1-9]|[12]\\d|30)")) {
+                throw new BusinessException(400, "农历月日格式应为 MMDD（如腊月初八写 1208）");
+            }
+            firstSolar = CoupleTermBank.lunarToSolar(LocalDate.now().getYear(),
+                    Integer.parseInt(md.substring(0, 2)), Integer.parseInt(md.substring(2)), false);
+            if (firstSolar == null) {
+                throw new BusinessException(400, "这个农历日子换算不了，检查下月日");
+            }
+        }
+        String normalized = (date == null || date.isBlank()) && firstSolar != null
+                ? firstSolar.toString() : normalizeDate(date, "日期格式应为 yyyy-MM-dd");
         CoupleAnniversary row = CoupleAnniversary.of(space.getId(),
                 requireText(title, "纪念日名称不能为空（最多 60 字）", CoupleAnniversary.TITLE_MAX),
                 normalized, yearly == null || yearly, me);
         row.setKind(normalizeAnniversaryKind(kind));
+        if (lunar) {
+            row.setCalendarType(CoupleAnniversary.CALENDAR_LUNAR);
+            row.setLunarMd(lunarMd.trim());
+        }
         anniversaryMapper.insert(row);
         push.pushCoupleEvent("anniversaries-changed", me, space.partnerOf(me), "共同日历有更新 📅：" + row.getTitle());
         return toAnniversaryVO(row);

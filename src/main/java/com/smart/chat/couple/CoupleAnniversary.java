@@ -22,6 +22,9 @@ public class CoupleAnniversary {
     public static final String KIND_FAMILY = "FAMILY";
     public static final String KIND_FRIEND = "FRIEND";
     public static final String KIND_WORK = "WORK";
+    /** F253 历法：SOLAR 公历 / LUNAR 农历 */
+    public static final String CALENDAR_SOLAR = "SOLAR";
+    public static final String CALENDAR_LUNAR = "LUNAR";
 
     @TableId(value = "id", type = IdType.INPUT)
     private String id;
@@ -32,6 +35,10 @@ public class CoupleAnniversary {
     private Integer yearly;
     /** 日子类型（F127），默认 NORMAL */
     private String kind;
+    /** F253 历法类型：SOLAR 公历 / LUNAR 农历（农历时 eventDate 仅为首年换算结果，lunarMd 为真源） */
+    private String calendarType;
+    /** F253 农历月日 MMDD（LUNAR 时有效） */
+    private String lunarMd;
     private String createdBy;
     private Long created;
 
@@ -43,6 +50,8 @@ public class CoupleAnniversary {
         row.eventDate = date;
         row.yearly = yearly ? 1 : 0;
         row.kind = KIND_NORMAL;
+        row.calendarType = CALENDAR_SOLAR;
+        row.lunarMd = "";
         row.createdBy = createdBy;
         row.created = System.currentTimeMillis();
         return row;
