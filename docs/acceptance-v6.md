@@ -37,3 +37,10 @@
 - agent 施工被截断（skill 备忘未写、遗留 tests/unit/_fy23.tmp.ts、两用例中间 mock 整板替换丢 wake/groceries 字段）；主线程收拾：删临时文件、修两处 mock 链、补 skill 批次二十三备忘段与 shared 表行/快照。
 - **当场修复（测试基建）**：整页挂载用例（CoupleView 全组件树 + tab 切换）成本随批次累积越过 vitest 默认 5s——F205 折叠恢复用例超时。vite.config.ts test 块全局 `testTimeout: 20000` 根治；单跑文件复现须用 --fileParallelism=false（--reporter=basic 在 vitest5 不存在，别再用）。
 - 门禁：`pnpm test` 129/129、`pnpm build` 绿（a718563/a31e954）。registry 73→78。
+
+## 批次二十五（F290-F299 明日邮局）
+
+- 后端：V38 十一表 + post 25 文件（11 实体/11 Mapper/Bank/Service/Controller）+ 10 用例，全量 441 绿。
+- **当场修复**：初版 Mapper 用 `.ne(getFromUser)` 条件——H2 对 ne+字符串列兼容性存疑，预防性改 findAll+服务层内存过滤 / findDue 收信方判定移到服务层；relay 在途限三与愿望盖章年份判定均读时结算，零 Job。
+- 设计口径：所有「到期」类玩法（新年卡/拍卖逾期/承诺逾期）统一 today() 惰性结算幂等推送；dreamRead 一案一断（readBy 非空即锁）。
+- 前端：待派单（CouplePost，建议挂 letters「信与胶囊」子页签，等批次二十四前端落地后串行）。
