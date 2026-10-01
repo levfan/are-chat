@@ -308,6 +308,8 @@ CREATE TABLE `couple_anniversary` (
     `event_date` varchar(10) NOT NULL COMMENT '纪念日日期（yyyy-MM-dd）',
     `yearly` tinyint(4) DEFAULT 1 COMMENT '是否每年重复：1 每年 / 0 仅当年',
     `kind` varchar(20) NOT NULL DEFAULT 'NORMAL' COMMENT '日子类型：NORMAL 普通 / LOVE 恋爱 / FAMILY 家人 / FRIEND 朋友 / WORK 工作',
+    `calendar_type` varchar(10) NOT NULL DEFAULT 'SOLAR' COMMENT '历法：SOLAR 公历 / LUNAR 农历',
+    `lunar_md` varchar(5) NOT NULL DEFAULT '' COMMENT '农历月日 MMDD（LUNAR 时有效，闰月按正月计）',
     `created_by` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin COMMENT '创建人用户名',
     `created` bigint(20) NOT NULL COMMENT '创建时间（毫秒时间戳）',
     PRIMARY KEY (`id`),
@@ -2605,3 +2607,105 @@ CREATE TABLE `couple_board_attend` (
     PRIMARY KEY (`id`),
     UNIQUE KEY `uk_attend` (`space_id`, `day`, `from_user`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='F247 会议签到：10s 窗口内双签到才算开了会';
+
+-- smart_collections.couple_term_check definition
+CREATE TABLE `couple_term_check` (
+    `id` varchar(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '主键UUID',
+    `space_id` varchar(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '情侣空间ID（关联 couple_space.id）',
+    `term` varchar(8) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '节气名（两字）',
+    `year` varchar(4) NOT NULL COMMENT '年份 yyyy',
+    `from_user` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '跟上的人（区分大小写）',
+    `note` varchar(140) NOT NULL DEFAULT '' COMMENT '晒的一句话',
+    `created` bigint(20) NOT NULL COMMENT '时间（毫秒时间戳）',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_term_check` (`space_id`, `term`, `year`, `from_user`),
+    KEY `idx_term_check_space` (`space_id`, `year`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='F250 节气跟风：每人每节气每年一记';
+
+-- smart_collections.couple_term_ritual definition
+CREATE TABLE `couple_term_ritual` (
+    `id` varchar(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '主键UUID',
+    `space_id` varchar(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '情侣空间ID（关联 couple_space.id）',
+    `term` varchar(8) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '节气名（两字）',
+    `content` varchar(80) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '过法一句话',
+    `from_user` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '提议人（区分大小写）',
+    `last_done_year` varchar(4) NOT NULL DEFAULT '' COMMENT '最近打卡年份，空=没打过',
+    `created` bigint(20) NOT NULL COMMENT '时间（毫秒时间戳）',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_term_ritual` (`space_id`, `term`, `content`),
+    KEY `idx_term_ritual_space` (`space_id`, `term`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='F251 节气过法：每节气最多 2 条，年年可重复打卡';
+
+-- smart_collections.couple_lucky_day definition
+CREATE TABLE `couple_lucky_day` (
+    `id` varchar(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '主键UUID',
+    `space_id` varchar(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '情侣空间ID（关联 couple_space.id）',
+    `day` varchar(10) NOT NULL COMMENT '吉日 yyyy-MM-dd',
+    `matter` varchar(60) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '要办的大事（文本）',
+    `from_user` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '择日人（区分大小写）',
+    `confirmed` tinyint(4) NOT NULL DEFAULT 0 COMMENT '1=对方已双盖章',
+    `confirmed_by` varchar(50) NOT NULL DEFAULT '' COMMENT '确认人（可空位不写 charset）',
+    `comment` varchar(140) NOT NULL DEFAULT '' COMMENT '黄历点评（Bank 生成存档）',
+    `created` bigint(20) NOT NULL COMMENT '时间（毫秒时间戳）',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_lucky_day` (`space_id`, `day`, `matter`),
+    KEY `idx_lucky_space` (`space_id`, `day`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='F252 择吉日：同一天同一事唯一';
+
+-- smart_collections.couple_festival_plan definition
+CREATE TABLE `couple_festival_plan` (
+    `id` varchar(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '主键UUID',
+    `space_id` varchar(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '情侣空间ID（关联 couple_space.id）',
+    `festival` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '节日键（NEWYEAR/CHUXI/VALENTINE/L520/QIXI/MIDAUTUMN/NATIONAL/ANNIV-M）',
+    `year` varchar(4) NOT NULL COMMENT '年份 yyyy',
+    `from_user` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '写方案的人（区分大小写）',
+    `plan` varchar(200) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '今年怎么过',
+    `created` bigint(20) NOT NULL COMMENT '时间（毫秒时间戳）',
+    `updated_at` bigint(20) NOT NULL COMMENT '更新时间（毫秒时间戳）',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_festival_plan` (`space_id`, `festival`, `year`, `from_user`),
+    KEY `idx_festival_space` (`space_id`, `year`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='F254 节日家档：一人一年一案，双案对照';
+
+-- smart_collections.couple_term_note definition
+CREATE TABLE `couple_term_note` (
+    `id` varchar(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '主键UUID',
+    `space_id` varchar(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '情侣空间ID（关联 couple_space.id）',
+    `term` varchar(8) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '节气名（两字）',
+    `year` varchar(4) NOT NULL COMMENT '年份 yyyy',
+    `from_user` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '执笔人（区分大小写）',
+    `text` varchar(140) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '这个节气的一件小事',
+    `created` bigint(20) NOT NULL COMMENT '时间（毫秒时间戳）',
+    `updated_at` bigint(20) NOT NULL COMMENT '更新时间（毫秒时间戳）',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_term_note` (`space_id`, `term`, `year`, `from_user`),
+    KEY `idx_term_note_space` (`space_id`, `year`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='F255 节气手账：本人可改写';
+
+-- smart_collections.couple_holiday_wish definition
+CREATE TABLE `couple_holiday_wish` (
+    `id` varchar(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '主键UUID',
+    `space_id` varchar(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '情侣空间ID（关联 couple_space.id）',
+    `holiday` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '假期键（如 2026-SPRING）',
+    `day` varchar(10) NOT NULL COMMENT '假期首日 yyyy-MM-dd',
+    `wish` varchar(200) NOT NULL DEFAULT '' COMMENT '干什么（两人共写一段）',
+    `wished_by` varchar(50) NOT NULL DEFAULT '' COMMENT '首写人（可空位不写 charset）',
+    `appended_by` varchar(50) NOT NULL DEFAULT '' COMMENT '补写人（可空位不写 charset）',
+    `created` bigint(20) NOT NULL COMMENT '时间（毫秒时间戳）',
+    `updated_at` bigint(20) NOT NULL COMMENT '更新时间（毫秒时间戳）',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_holiday_wish` (`space_id`, `holiday`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='F257 长假愿望：首写+补写两段合一';
+
+-- smart_collections.couple_normal_day definition
+CREATE TABLE `couple_normal_day` (
+    `id` varchar(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '主键UUID',
+    `space_id` varchar(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '情侣空间ID（关联 couple_space.id）',
+    `year` varchar(4) NOT NULL COMMENT '年份 yyyy',
+    `day` varchar(10) NOT NULL COMMENT '放空日 yyyy-MM-dd',
+    `from_user` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '提报人（区分大小写）',
+    `created` bigint(20) NOT NULL COMMENT '时间（毫秒时间戳）',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_normal_day` (`space_id`, `year`, `day`),
+    KEY `idx_normal_space` (`space_id`, `year`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='F258 反仪式感日：每年最多 3 天，双方提报合并';
