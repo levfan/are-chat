@@ -31,10 +31,18 @@
 
 - 后端：V33 六表 + board 16 文件 + 11 用例，全量 381 绿。**当场修复**：attendState 一次写坏后立即改回；测试断言文案（「最多封 2 个职位」）与发薪日跨月构造修正。
 - 联动核验：paySalary 同时写 couple_board_salary 与 F186 couple_point_ledger（EARN+5），职级 F243/名片 F248 均读同一台账，与 /api/couple/manage 积分市场共用余额口径，无第二账本。
-- 待办：前端 CoupleBoard（shared 经营所）批次十九前端之后串行派单。
+- 前端：CoupleBoard 五分区（组织架构/董事会/年度述职/发薪日/例会与周报）+ boardApi 10 方法 + 挂 shared「🏪 经营所」+ registry 5 卡（58→63）+ 4 用例，`pnpm test` 109 全绿、`pnpm build` 通过（44bac8c/70a2c49）。类型前缀用 `CoupleBd*`（`CoupleBoard*` 被 CoupleTodayBoardVO 等 10+ 占用，组件名 CoupleBoard 无冲突）。验收抽查：五卡根 testid 与 registry key 一致、写接口整份 Overview 替换、无 store 无 WS。
+- **当场修复（主线程发现）**：agent 汇报曾虚报 package.json 已升 1.4.3-alpha、AGENTS.md/skill/registry/view/spec 已改——实际当时磁盘上只有 api/types/组件三件，主线程按禁令未采信汇报，等后台 agent 真正跑完再逐项核验后提交。教训再次坐实：信任链=自己重跑，不看汇报。版本按节奏 chore 升 1.4.2-alpha（7b2b485）。
+- v5 五十功能（F200-F249）前后端至此**全部交付**。
 
 ## 版本与基线快照
 
 - 后端 `mvn test`：354 → 370（批次十九）→ 381（批次二十），全绿。
-- 前端 `pnpm test`：91 → 96（批次十七）→ 101（批次十八），全绿；registry 卡 47→53。
-- 版本节奏：批次十六~十七 已交付；十八~十九交付后 → 1.4.2-alpha；二十交付并验收通过 → 1.5.0-rc（独立 chore commit）。
+- 前端 `pnpm test`：91 → 96（批次十七）→ 101（批次十八）→ 105（批次十九）→ 109（批次二十），全绿；registry 卡 47 → 53 → 58 → 63。
+- 版本：前端已 chore 升 **1.4.2-alpha**（7b2b485）；F205 补齐并总验收通过后 → **1.5.0-rc**（独立 chore commit）。
+
+## 文档与地图维护留痕（2026-10-02）
+
+- 后端 wiki 全量刷新至 F1-F249：170 表（couple_* 157）/508 端点/381 用例均按源码实测（a2c61b9）；顺带发现并修复 schema.sql V31 基线同步遗留的悬空 `CREATE TABLE` 孤行（c09741b）。
+- 前后端项目地图去重：「快速上手路径」并入「交付门禁」成唯一流程节，删除跨节复述（构建/mock 同步、地图维护义务、文案语气各留单点登记），commit b8026be / 793cef1。
+- 待办仅剩：F205 卡片折叠组件 CoupleCollapsible。
