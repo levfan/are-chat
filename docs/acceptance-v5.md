@@ -24,7 +24,8 @@
 
 - 后端：V32 七表 + ceremony 17 文件 + 16 用例，全量 370 绿。**当场修复**：RecapVO 误传实体改 getFromUser；mark 全勾判定条件（单条才算全勾）改 done==size；all-done 改推 both ceremony-all-done；nextRenewAnchor 起点当天会误报 0 天已修；almanac 对坏日期数据加 try-skip。
 - 已知边界：续约日按「整 100 天/周年当日」精确判定，无宽限日（产品口径：错过就等下一档，前端把 daysToNext 亮出来）。
-- 前端：进行中（CoupleCeremony 六分区，timeline 时光流），完成后验收记本文件。
+- **当场修复（补提交）**：nextRenewAnchor 周年日当天不早判的修正此前只在工作区，本轮发现后跑 CoupleCeremonyServiceTest 16 绿再以 fix commit e260f82 单独入库。教训：断言「已修」必须核对 git 里真有。
+- 前端：CoupleCeremony 五分区分批交付（almanac/founded/vault/coupon/feel，评估后不设独立 chronicle 分区，史册懒加载并入小日子卡）+ ceremonyApi 12 方法 + 挂 timeline「⏳ 时光流」+ registry 5 卡（53→58）+ 4 用例，`pnpm test` 105 全绿、`pnpm build` 通过（fabaacf/b390520）。验收抽查：端点与 Controller 13 mapping 逐一对齐、testid 前缀 `couple-cere-*` 与 registry key 一致、组件自持数据 safeLoad 模式合规、类型 `CoupleCer*VO` 前缀防撞名。
 
 ## 批次二十（F240-F249 我们公司）
 
