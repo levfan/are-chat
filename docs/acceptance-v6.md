@@ -52,3 +52,10 @@
 - **当场修复（Service）**：`ensureFamily(space, LocalDate)` 与 `(space, String)` 重载混用编译不过；Mapper 里 `getCreatedAt` 应为 `getCreated`（两处，编译被 Lombok 报错淹没，需按首个错误定位）；RefVO 的 canQuiz 早期用「对方是否已答」判定，导致答完题的人仍显示可答——改为按「本人是否已作答」（`!mine && !iAnswered`），canJudge 另加「未判过」门槛。
 - **当场修复（测试）**：超长文案用例误用 `" ".repeat(301)`，被 trim() 判成「没写」而非「太长」→ 改 `"字".repeat(301)`；角色日记上限用例按 200 字三条追加实际 602 已越界 → 改 190 字累积 572 后再验 600 上限。
 - 设计口径：电话亭 FUTURE 一年封存 / PAST 当场接通，到点接通仍走 today() 惰性结算（零 Job）；师徒归属与身份/家长题均按 `stableHash(space|周|日)` 存卷，保证两人刷新同题；客服 30 分钟窗口用写入时刻判定 on_time，读时只算 waitMinutes 不推「超时」，避免每次刷新都骚扰。
+
+## 批次二十四前端（CoupleCodex，2026-10-02 交付）
+
+- agent 交付（未提交，主线程验收）：CoupleCodex 五卡（词条书架/默契综艺/TOP10 互猜/考据卷宗/灵魂与人格）+ codexApi 16 方法 + CoupleCx* 11 类型 + 挂 timeline「⏳ 时光流」+ registry 78→83 + 6 用例，基线 129→135。
+- 主线程独立复跑门禁：`pnpm test` 135/135（7 files）、`pnpm build`（vite build + vue-tsc --noEmit）绿；端点与后端 CoupleCodexController 16 个 mapping 逐一对齐（前端恰 16 条路径，无多余无缺失）；五卡均 CoupleCollapsible 包、主色 #2c7a7b 只走 `--collapse-title-color`、无 scoped `.title`；stores/couple.ts 零改动（组件自持数据合规）。
+- **以后端为准的取舍（agent 提出、主线程认可）**：F284 友情测验归入考据卷宗卡（overview 下发 exams，故该卡不传 `:empty`）；FirstLookVO 不下发 tries，前端用本地 myTries 计数仅供展示、拦截仍由后端 400 直透；答错补考 7 天由 `lastTryDay+7` 前端推算显示；人格八题题面按 CoupleCodexBank.TYPE_QUESTIONS 原样抄录（题序即轴序）。
+- 主线程订正：skill 规模快照「v7」笔误改回 v6、后端配套计数订正为 618 映射/228 表基线（agent 写的是旧值 532/208）。分组提交 e8c4c00/bfd3f19/dfbc3c0 已推。
