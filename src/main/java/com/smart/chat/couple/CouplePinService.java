@@ -62,7 +62,7 @@ public class CouplePinService {
             row.setUpdatedAt(System.currentTimeMillis());
             pinMapper.updateById(row);
         }
-        return vo(space, me);
+        return new PinVO(List.copyOf(keys), parse(pinMapper.find(space.getId(), space.partnerOf(me))));
     }
 
     private PinVO vo(CoupleSpace space, String me) {

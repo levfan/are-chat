@@ -18,6 +18,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -70,20 +71,22 @@ class CouplePinServiceTest {
     @Test
     void savePinsUpsertsInsertThenUpdate() {
         stubSpace("alice");
-        when(pinMapper.find("s1", "alice")).thenReturn(null);
         lenient().when(pinMapper.find("s1", "bob")).thenReturn(null);
-        service.savePins("alice", List.of("dining"));
+        CoupleUserPin existing = CoupleUserPin.of("s1", "alice", "dining");
+        when(pinMapper.find("s1", "alice")).thenReturn(null, existing);
+
+        var first = service.savePins("alice", List.of("dining"));
+        assertThat(first.mine()).containsExactly("dining");
         ArgumentCaptor<CoupleUserPin> cap = ArgumentCaptor.forClass(CoupleUserPin.class);
         verify(pinMapper).insert(cap.capture());
         assertThat(cap.getValue().getPins()).isEqualTo("dining");
         assertThat(cap.getValue().getFromUser()).isEqualTo("alice");
 
-        CoupleUserPin existing = cap.getValue();
-        when(pinMapper.find("s1", "alice")).thenReturn(existing);
-        service.savePins("alice", List.of("dining", "cozy"));
-        verify(pinMapper, never()).insert(any(CoupleUserPin.class));
+        var second = service.savePins("alice", List.of("dining", "cozy"));
+        verify(pinMapper, times(1)).insert(any(CoupleUserPin.class));
         verify(pinMapper).updateById(existing);
         assertThat(existing.getPins()).isEqualTo("dining,cozy");
+        assertThat(second.mine()).containsExactly("dining", "cozy");
     }
 
     @Test
