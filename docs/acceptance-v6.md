@@ -44,3 +44,11 @@
 - **当场修复**：初版 Mapper 用 `.ne(getFromUser)` 条件——H2 对 ne+字符串列兼容性存疑，预防性改 findAll+服务层内存过滤 / findDue 收信方判定移到服务层；relay 在途限三与愿望盖章年份判定均读时结算，零 Job。
 - 设计口径：所有「到期」类玩法（新年卡/拍卖逾期/承诺逾期）统一 today() 惰性结算幂等推送；dreamRead 一案一断（readBy 非空即锁）。
 - 前端：待派单（CouplePost，建议挂 letters「信与胶囊」子页签，等批次二十四前端落地后串行）。
+
+## 批次二十六（F300-F309 扮演剧场）
+
+- 后端：V39 九表 + theater 20 文件（9 实体/9 Mapper/Bank/Service/Controller）+ 14 用例，全量 455 绿（228 表基线，couple_* 215）。
+- **当场修复（数据层）**：`idx_ticket_space` 与 V18 keepsake 票根表索引重名，H2 报 42S11「Index already exists」→ V39 改 `idx_svc_ticket_space`（schema.sql 同步；注意只改本次追加块，别把 V18 基线里的原名一起替换）。教训：新增索引名必须跨全部 V*.sql 查重，表名唯一不代表索引名唯一。
+- **当场修复（Service）**：`ensureFamily(space, LocalDate)` 与 `(space, String)` 重载混用编译不过；Mapper 里 `getCreatedAt` 应为 `getCreated`（两处，编译被 Lombok 报错淹没，需按首个错误定位）；RefVO 的 canQuiz 早期用「对方是否已答」判定，导致答完题的人仍显示可答——改为按「本人是否已作答」（`!mine && !iAnswered`），canJudge 另加「未判过」门槛。
+- **当场修复（测试）**：超长文案用例误用 `" ".repeat(301)`，被 trim() 判成「没写」而非「太长」→ 改 `"字".repeat(301)`；角色日记上限用例按 200 字三条追加实际 602 已越界 → 改 190 字累积 572 后再验 600 上限。
+- 设计口径：电话亭 FUTURE 一年封存 / PAST 当场接通，到点接通仍走 today() 惰性结算（零 Job）；师徒归属与身份/家长题均按 `stableHash(space|周|日)` 存卷，保证两人刷新同题；客服 30 分钟窗口用写入时刻判定 on_time，读时只算 waitMinutes 不推「超时」，避免每次刷新都骚扰。
