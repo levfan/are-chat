@@ -30,6 +30,7 @@ public class CoupleWorldService {
     static final int CITY_MAX = 30;
     static final int ITINERARY_ITEM_MAX = 60;
     static final int ITINERARY_LIMIT = 8;
+    static final int PACK_TOTAL_MAX = 296;
     static final int TERM_MAX = 20;
     static final int QNA_MAX = 140;
     static final int VOW_MAX = 140;
@@ -367,7 +368,7 @@ public class CoupleWorldService {
         String ad = arriveDay == null || arriveDay.isBlank() ? "" : validDay(arriveDay, "到访日");
         List<String> items = splitItems(itinerary, ITINERARY_LIMIT, ITINERARY_ITEM_MAX);
         String tr = capped(transport, QNA_MAX, "交通");
-        List<String> packs = splitOptional(packList, 12, ITINERARY_ITEM_MAX);
+        List<String> packs = splitOptional(packList, 12, ITINERARY_ITEM_MAX, PACK_TOTAL_MAX);
         CoupleWorldCityPlan row = cityMapper.findByCity(space.getId(), c);
         boolean fresh = row == null;
         if (fresh) {
@@ -716,7 +717,10 @@ public class CoupleWorldService {
         }
 
         List<RelativeVO> relatives = new ArrayList<>();
-        for (CoupleWorldRelativesQ q : relativeMapper.findBySpace(space.getId())) {
+        List<CoupleWorldRelativesQ> ordered = new ArrayList<>(relativeMapper.findBySpace(space.getId()));
+        ordered.sort((a, b) -> a.getWrongCount() != b.getWrongCount()
+                ? b.getWrongCount() - a.getWrongCount() : a.getTerm().compareTo(b.getTerm()));
+        for (CoupleWorldRelativesQ q : ordered) {
             relatives.add(new RelativeVO(q.getId(), q.getTerm(), q.getQuestion(), q.getAnswer(),
                     me.equals(q.getFromUser()), q.getWrongCount(), q.getLastWrongDay(),
                     !me.equals(q.getFromUser())));
@@ -875,7 +879,7 @@ public class CoupleWorldService {
     }
 
     /** 小包清单可以为空（没备齐就不写），但仍受条数与字长约束。 */
-    private List<String> splitOptional(String raw, int limit, int eachMax) {
+    private List<String> splitOptional(String raw, int limit, int eachMax, int totalMax) {
         List<String> out = new ArrayList<>();
         for (String r : (raw == null ? "" : raw).split("[,、\n]")) {
             String t = r.trim();
@@ -889,6 +893,9 @@ public class CoupleWorldService {
         }
         if (out.size() > limit) {
             throw new BusinessException(400, "小包清单最多 " + limit + " 项，带不动");
+        }
+        if (String.join(",", out).length() > totalMax) {
+            throw new BusinessException(400, "小包清单整单最多 " + totalMax + " 字，删几条再存");
         }
         return out;
     }
