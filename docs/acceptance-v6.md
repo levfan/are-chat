@@ -31,3 +31,9 @@
 - **当场修复**：TYPE_AXES 第四轴初版 {P,J} 与题序「提前计划=选项1」矛盾（全 1 误出 ESTP）——改 {J,P} 并同步测试锚点（全1=ESTJ、全2=INFP、0/4 轴相同）。教训：测评卷字母对必须逐题核对选项语义再定轴序。
 - 设计口径：综艺题目 shuffle 用 stableHash 做种子（双方同日同题集）；第一眼对视互见后行内 revealed 双写；测验答案存明文（对方自证用，非隐私域）。
 - 前端：待派单（CoupleCodex 挂 timeline/flow，等批次二十三前端落地后串行）。
+
+## 批次二十三前端（CoupleFactory，2026-10-02 交付）
+
+- agent 施工被截断（skill 备忘未写、遗留 tests/unit/_fy23.tmp.ts、两用例中间 mock 整板替换丢 wake/groceries 字段）；主线程收拾：删临时文件、修两处 mock 链、补 skill 批次二十三备忘段与 shared 表行/快照。
+- **当场修复（测试基建）**：整页挂载用例（CoupleView 全组件树 + tab 切换）成本随批次累积越过 vitest 默认 5s——F205 折叠恢复用例超时。vite.config.ts test 块全局 `testTimeout: 20000` 根治；单跑文件复现须用 --fileParallelism=false（--reporter=basic 在 vitest5 不存在，别再用）。
+- 门禁：`pnpm test` 129/129、`pnpm build` 绿（a718563/a31e954）。registry 73→78。
