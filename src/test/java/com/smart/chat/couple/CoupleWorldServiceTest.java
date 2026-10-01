@@ -56,6 +56,8 @@ class CoupleWorldServiceTest {
     @Mock
     private CoupleWorldApologyMapper apologyMapper;
     @Mock
+    private CouplePointLedgerMapper ledgerMapper;
+    @Mock
     private ImPushService push;
 
     @InjectMocks
@@ -363,9 +365,19 @@ class CoupleWorldServiceTest {
                 .isInstanceOf(BusinessException.class).hasMessageContaining("写一句事实");
 
         // 到期自动解除（已见证）
+        List<CouplePointLedger> earned = new ArrayList<>();
+        lenient().when(ledgerMapper.insert(any(CouplePointLedger.class))).thenAnswer(inv -> {
+            earned.add(inv.getArgument(0));
+            return 1;
+        });
         vows.get(0).setDueDay(LocalDate.now().minusDays(1).toString());
         service.world("alice");
         assertThat(vows.get(0).getStatus()).isEqualTo(CoupleWorldVow.STATUS_KEPT);
+        // 到期解除自动记一笔心动（立保证的人拿分）
+        assertThat(earned).hasSize(1);
+        assertThat(earned.get(0).getItem()).startsWith("说到做到").contains("熬夜打游戏");
+        assertThat(earned.get(0).getPoints()).isEqualTo(10);
+        assertThat(earned.get(0).getFromUser()).isEqualTo("alice");
         verify(push).pushCoupleEventBoth(eq("world-vow-kept"), eq("alice"), eq("alice"), eq("bob"), any());
         assertThatThrownBy(() -> service.vowBreak("bob", id, "迟来的举报"))
                 .isInstanceOf(BusinessException.class).hasMessageContaining("收尾了");

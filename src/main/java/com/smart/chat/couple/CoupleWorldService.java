@@ -40,6 +40,7 @@ public class CoupleWorldService {
     static final int APOLOGY_REASON_MAX = 200;
     static final int APOLOGY_DRAFT_MAX = 300;
     static final int REVIEW_NOTE_MAX = 140;
+    static final int VOW_KEPT_POINTS = 10;
 
     private final CoupleSpaceMapper spaceMapper;
     private final CoupleWorldVisitMapper visitMapper;
@@ -52,6 +53,7 @@ public class CoupleWorldService {
     private final CoupleWorldVowMapper vowMapper;
     private final CoupleWorldGroupReportMapper groupMapper;
     private final CoupleWorldApologyMapper apologyMapper;
+    private final CouplePointLedgerMapper ledgerMapper;
     private final ImPushService push;
 
     public CoupleWorldService(CoupleSpaceMapper spaceMapper, CoupleWorldVisitMapper visitMapper,
@@ -59,7 +61,8 @@ public class CoupleWorldService {
                               CoupleWorldDeclareMapper declareMapper, CoupleWorldCaptionMapper captionMapper,
                               CoupleWorldCityPlanMapper cityMapper, CoupleWorldRelativesQMapper relativeMapper,
                               CoupleWorldVowMapper vowMapper, CoupleWorldGroupReportMapper groupMapper,
-                              CoupleWorldApologyMapper apologyMapper, ImPushService push) {
+                              CoupleWorldApologyMapper apologyMapper, CouplePointLedgerMapper ledgerMapper,
+                              ImPushService push) {
         this.spaceMapper = spaceMapper;
         this.visitMapper = visitMapper;
         this.giftMapper = giftMapper;
@@ -71,6 +74,7 @@ public class CoupleWorldService {
         this.vowMapper = vowMapper;
         this.groupMapper = groupMapper;
         this.apologyMapper = apologyMapper;
+        this.ledgerMapper = ledgerMapper;
         this.push = push;
     }
 
@@ -652,6 +656,9 @@ public class CoupleWorldService {
                 v.setStatus(CoupleWorldVow.STATUS_KEPT);
                 v.setUpdatedAt(System.currentTimeMillis());
                 vowMapper.updateById(v);
+                // 说到做到是要被奖励的：到期解除自动记一笔心动
+                ledgerMapper.insert(CouplePointLedger.of(space.getId(), v.getOwnerUser(),
+                        CouplePointLedger.TYPE_EARN, "说到做到：" + v.getContent(), VOW_KEPT_POINTS));
                 push.pushCoupleEventBoth("world-vow-kept", v.getOwnerUser(), space.getUserA(), space.getUserB(),
                         CoupleWorldBank.vowKeptLine() + "（" + v.getContent() + "）");
             }

@@ -55,6 +55,8 @@ class CoupleRepairServiceTest {
     @Mock
     private CouplePeaceLineMapper peaceMapper;
     @Mock
+    private CouplePointLedgerMapper ledgerMapper;
+    @Mock
     private ImPushService push;
 
     @InjectMocks
@@ -207,6 +209,8 @@ class CoupleRepairServiceTest {
         service.freezeSign("bob", id);
         assertThat(freezes.get(0).getStatus()).isEqualTo(CoupleRepairFreeze.STATUS_THAWED);
         verify(push).pushCoupleEventBoth(eq("repair-thawed"), eq("bob"), eq("alice"), eq("bob"), any());
+        // 复温成功给答三问的人记一笔心动
+        verify(ledgerMapper).insert(any(CouplePointLedger.class));
         // 解冻掉两盒（每人一盒）
         assertThat(boxes).hasSize(2);
         assertThat(boxes.get(0).getTask()).isNotBlank();

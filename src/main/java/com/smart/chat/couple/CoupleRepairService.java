@@ -43,6 +43,7 @@ public class CoupleRepairService {
     static final int PEACE_NOTE_MAX = 80;
     /** 档位限 14/30：signed_days 存 MMdd:A/MMdd:B 记号，30 天双签正好落在列宽内。 */
     static final List<Integer> TARGET_DAYS = List.of(14, 30);
+    static final int THAW_EARN_POINTS = 8;
 
     private final CoupleSpaceMapper spaceMapper;
     private final CoupleRepairFreezeMapper freezeMapper;
@@ -54,6 +55,7 @@ public class CoupleRepairService {
     private final CoupleAdmitLogMapper admitMapper;
     private final CoupleRepairBoxMapper boxMapper;
     private final CouplePeaceLineMapper peaceMapper;
+    private final CouplePointLedgerMapper ledgerMapper;
     private final ImPushService push;
 
     public CoupleRepairService(CoupleSpaceMapper spaceMapper, CoupleRepairFreezeMapper freezeMapper,
@@ -61,7 +63,7 @@ public class CoupleRepairService {
                                CoupleRebuildPlanMapper rebuildMapper, CoupleRepairMakeupMapper makeupMapper,
                                CoupleBottomLineMapper bottomMapper, CoupleAdmitLogMapper admitMapper,
                                CoupleRepairBoxMapper boxMapper, CouplePeaceLineMapper peaceMapper,
-                               ImPushService push) {
+                               CouplePointLedgerMapper ledgerMapper, ImPushService push) {
         this.spaceMapper = spaceMapper;
         this.freezeMapper = freezeMapper;
         this.sorryMapper = sorryMapper;
@@ -72,6 +74,7 @@ public class CoupleRepairService {
         this.admitMapper = admitMapper;
         this.boxMapper = boxMapper;
         this.peaceMapper = peaceMapper;
+        this.ledgerMapper = ledgerMapper;
         this.push = push;
     }
 
@@ -224,6 +227,9 @@ public class CoupleRepairService {
             freezeMapper.updateById(row);
             dropBox(space, now.toString(), row.getFromUser(), row.getId(), ts);
             dropBox(space, now.toString(), space.partnerOf(row.getFromUser()), row.getId(), ts);
+            // 复温是这套系统里最难的一步：给答完三问的人记一笔心动，让「回来」有回报
+            ledgerMapper.insert(CouplePointLedger.of(space.getId(), row.getFromUser(),
+                    CouplePointLedger.TYPE_EARN, "复温成功：三问答完了", THAW_EARN_POINTS));
             push.pushCoupleEventBoth("repair-thawed", me, space.getUserA(), space.getUserB(),
                     CoupleRepairBank.thawedLine(CoupleRitualBank.stableHash(space.getId() + "|thaw|" + row.getId())));
         } else if (!row.isBothSigned()) {
