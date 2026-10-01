@@ -68,3 +68,12 @@
 - **当场修复（测试）**：忌口两条断言按记忆写文案（"已经在红线上" vs 实际"已经在红线本上"、"ALLERGY 和 AVOID" vs 实际"过敏 ALLERGY 和忌口 AVOID"）→ 对齐源码文案；清掉误留的 `CoupleTheaterHelpers` 内部类与 `unused` 占位断言。
 - **协作教训（派单契约要写死签名）**：实体/Mapper 派单给后台 agent 时，我把 `CoupleBodyOath` 的 helper 命名写成「isSignedA()/isSignedB() 两个方法」却没写返回类型，agent 理解成 boolean 版并在中途汇报里称「已改主线程的 Service 以自圆其说」，终报又改口「未改」。主线程按落盘文件核对：Service 的 `isSigned()` 由本人改为委托实体 boolean helper，调用点全在预期内，467 测试全绿，未见外来破坏；但这份不确定性本可避免。规矩补一条：**跨线程派单时，实体方法要写全「签名+返回类型」，并在任务书里明确「Service/Controller 归主线程，发现契约不自洽只报告不动手」**。
 - 其它备忘：`couple_body_cycle.phase` 的枚举串沿用 `OWULARE`（拼写应为 OVULARE），实体常量/Service 校验/Bank 展示三处自洽且用户只见中文「排卵期」，为不动已推送 V40 校验和，本轮不改；agent 指出 `CoupleBodyOath.signedA + isSignedA()` 同字段双 getter 若把实体直接当响应体会撞 Jackson——本项目一律转 record VO，不触发。
+
+## 批次二十八（F320-F329 修复车间）
+
+- 后端：V41 九表 + repair 21 文件（9 实体/9 Mapper/Bank/Service/Controller，23 个 mapping）+ 10 用例，全量 477 绿（247 表基线）。F325 冲突年报无表读时聚合。
+- 产品口径：这一部是「吵架之后怎么回来」的全链路——冷冻（时长自设、到点才能签）→ 三问 → 双签解冻 → 掉礼盒 → 纪念碑留句；道歉信有质检（六要素自评下限 + 对方验货 + 打回重写）；重来卡限季；信任重建按天双签。全部文案不评判谁对谁错。
+- **当场修复（数据层）**：`couple_repair_freeze.signed_days` 初版 varchar(240) 装不下 30 天×2 人的 `yyyy-MM-dd:A` 记号（约 420 字节）→ 与 V41/schema.sql 同步加宽到 600（V41 尚未推远端，改校验和无风险）。索引与唯一键名本轮一律带模块前缀，`idx/uk` 跨迁移查重脚本在开工前先跑一遍，零重名。
+- **当场修复（Service）**：`makeupEnd` 先把 status 置 ENDED 再判 RUNNING（判不到，台阶卡漏递）→ 调整为先补递台阶再置 ENDED；`report()` 里把聚合入参 `SorryVO` 列表当实体遍历（`s.status()` 找不到符号）→ 改 `for (SorryVO s : sorries)`；`signedCount` 双 set 冗余实现简化为「seen 含 `day:A` 且含 `day:B`」单趟计数。
+- **当场修复（测试）**：`bottomSet` 少传 sinceDay（编译 arity 错）；`bottomMapper.findBySlot(…, int slot)` 用 `any()` 匹配基本类型 int 触发 Mockito `InvalidUseOfMatchers`/NPE → 改 `anyInt()`；一处 python 按 1-based 行号误替换导致断言行被截半，Read+Edit 修回。**教训重申**：改测试文件别用行号硬替换，改完必须立刻 `mvn test` 单类验证。
+- 协作：本批实体/Mapper 派单时在任务书里写死了每个 helper 的**签名与返回类型**，并禁止 agent 碰 Service/Controller/SQL/schema——agent 全程零越界，报告还主动列出了 5 处「无人调用的 Mapper 方法」与 `OWULARE` 拼写疑点待主线程拍板（比批次二十七的派单质量明显改善，该做法已固化进后续任务书）。
