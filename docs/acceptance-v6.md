@@ -99,3 +99,17 @@
 - 产品口径：见家长、送礼、外人怎么看我们——把「一个人慌」的事拆成双确认的任务卡；赔礼信必须经 TA 审阅才送得出去，社会信用到期日必须未来、到期未见证不自动判达标（防误伤），只有对方能举报塌房。
 - **当场修复（Service）**：接待手册的小包清单被 `splitItems` 当必填项，导致 `packList=""` 直接 400「至少写一条」→ 拆出 `splitOptional`（可留空但仍限 12 条/每条 60 字），行程保持必填；`GroupVO` 初版带一个语义混乱的 `mine` 字段（整行是当日共享，不该有 mine）→ 改为 `iLaughed / partnerLaughed / bothLaughed` 三态；python 写正则以 `\n` 误嵌成真实换行使 Java 源码字符串断行编译失败 → 改回 `\n`。
 - **协作（派单质量已固化）**：本批实体/Mapper 任务书写全每个 helper 的签名与返回类型、并列出禁改文件清单（Service/Controller/Bank/V42/schema.sql），agent 零越界；agent 逐列脚本对账（V42 95 列 missing/extra 双空）并主动报出 `uk` 是否背书 selectOne、CSV 列宽是否够用这类只有看列才能发现的疑点。
+
+## 批次二十九补记（agent 列宽对账带来的两处修复）
+
+- agent 报告点出：`couple_world_city_plan.pack_list varchar(300)` 与 Service 的「≤12 条 × 每条 ≤60 字」（最坏 720+）不匹配，严格模式会 `Data too long`；另 `couple_world_relatives_q.findBySpace` 只按 `wrong_count DESC` 排序，绝大多数行 0 错 → 平票，MariaDB 与 H2 返回顺序可能不同。
+- 修复：`splitOptional` 增加整单总长上限 `PACK_TOTAL_MAX=296`（在条数与单条字长之外再卡一道，超了 400「删几条再存」，比截断诚实）；称呼册改为服务层内存二次排序（错题数倒序 → 同数按称谓字典序），保证两端读到的顺序一致。
+- 采纳为观察项未改：`day/year/month/text/slot` 等列名在 H2 2.x 关键字表内，但 V27-V42 同模式已长期跑通（MODE=MySQL），退路是 `@TableField("`text`")`；`couple_world_apology` 无 uk，去重责任在 Service（本就允许多封）。
+
+## 批次三十（F340-F349 传世系统 · v6 后端收官）
+
+- 后端：V43 八表 + legacy 19 文件（8 实体/8 Mapper/Bank/Service/Controller，1 GET + 12 POST）+ 10 用例，全量 **499 绿**（265 表基线）。**v6 一百个功能（F250-F349）后端全部落地。**
+- 设计取舍：F348 的「周年 Job 提醒」按 v6 既定口径改为读时惰性结算（`notified` 标记幂等，零新增定时任务）；F343 里程碑倒推与 F349 空间等级都不建表，前者按近 30 天台账速率外推、后者按「台账数 + 传世系行数」查 Bank 门槛表定档；F346 年度盘点的每个数字都取自真实表（台账/十问/年审/发言/清单），拒绝套话模板。
+- **当场修复（Service）**：`composeReview` 里清单计数写成了 `|| y.equals(now年份)` 的伪条件（等于没过滤）→ 抽 `yearOf(ts)` 统一按年归属；`MilestoneVO` 初版带一个算了没用的 `daysPerRound` → 删；`build()` 里一段 `fxes.replaceAll(...)` 是自我说服的空操作 → 删；`brand(..., Boolean publish)` 参数从头到尾没用过 → 去掉参数，发布只走 `brandConfirm` 双确认；`ANSWER_MAX` 写成 `QUESTION_COUNT*0 + …` 的凑数表达式 → 直接用常量。
+- **当场修复（测试）**：`tenAnswer(me, year, slot, answer)` 的 slot 是 `Integer`，用例误传 `""` 触发编译错（顺带证明签名对齐有价值）；十问跨年 diff 用例改为「今/去两期恒定双行」断言。
+- 协作：本批实体/Mapper 任务书延续「签名写死 + 禁改清单 + 只报告不动手」，agent 再次零越界并交付 95 列双向对账脚本证据；它按规格给 `vow.findDue` 没加 ORDER BY、`caption/declare` 无 `updated_at`（改稿无审计痕迹）两条属设计取舍，记录不改。
