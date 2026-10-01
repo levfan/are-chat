@@ -1,12 +1,12 @@
 ---
 name: are-chat-map
-description: are-chat 后端项目地图（Spring Boot 4 + MyBatis-Plus + Flyway + MariaDB）。凡在 are-chat 中开发新功能、修复缺陷、评审改动，开工前必须先加载本 skill——它提供模块地图、代码惯例、数据层规范、开发规范硬性流程（第八节交付门禁）与产品红线（不做照片/视频上传、情绪价值优先），避免重新通读项目。完成功能后若新增模块/表/接口，须同步更新本文件。
-whenToUse: 在 are-chat 后端开发新功能、修复缺陷或评审改动，开工前加载本 skill；功能完成后若新增/删除模块、表、接口、定时任务，也要回来更新它
+description: are-chat 后端项目地图（Spring Boot 4 + MyBatis-Plus + Flyway + MariaDB）。提供模块地图、情侣空间分层模板、数据层规范与交付门禁（第六节）。凡在 are-chat 中开发新功能、修复缺陷、评审改动，开工前必须先加载本 skill，避免重新通读项目。
+whenToUse: are-chat 后端开工前加载；新增/删除模块、表、接口、定时任务后回来更新本文件
 ---
 
 # are-chat 后端项目地图
 
-> 本文件是给 AI agent 看的项目速查地图。**每次改完代码，若模块/表/接口有增删，必须同步更新本 skill**（与功能同批提交，commit type 用 `docs`）。
+> 本文件是给 AI agent 看的项目速查地图。维护义务见第六节「收尾」。
 
 ## 一、技术栈与运行
 
@@ -15,7 +15,7 @@ whenToUse: 在 are-chat 后端开发新功能、修复缺陷或评审改动，�
 - 数据库：生产 MariaDB 10.11 / 测试 H2 MODE=MySQL；结构由 Flyway 管理（`spring.flyway.locations=classpath:db`，禁用 spring.sql.init）
 - 鉴权：登录态在 HttpSession；`com.smart.chat.common.Sessions.requireUser(session)` 取当前用户名
 - 统一返回：`ApiResponse.ok(data)` / 业务异常 `BusinessException(code, message)`
-- 构建：`mvn -q compile`（提交前必跑）；测试 `mvn test`
+- 构建：`mvn -q compile`；测试 `mvn test`（何时必跑见第六节）
 
 ## 二、包结构（com.smart.chat）
 
@@ -32,7 +32,7 @@ whenToUse: 在 are-chat 后端开发新功能、修复缺陷或评审改动，�
 | `common` | ApiResponse/BusinessException/Sessions | — |
 | `config` | 配置类 | FileStorageProperties 等 |
 
-推送机制（重要）：`ImPushService.pushCoupleEvent(event, actor, toUser, detail)` 给单人推 WS 事件（type=couple），`pushCoupleEventBoth(...)` 推双方；每次情侣事件推送同时落库 `couple_notify`（F41 通知中心，`CoupleNotifyRecorder` 启动时经 `ImPushService.setNotifySink` 挂接，im 包不反向依赖 couple 包）；`isOnline(username)` 查在线。前端 store 把 `arechat:couple` 自定义事件按 event 分发刷新。
+推送机制（重要）：`ImPushService.pushCoupleEvent(event, actor, toUser, detail)` 给单人推 WS 事件（type=couple），`pushCoupleEventBoth(...)` 推双方；每次情侣事件推送同时落库 `couple_notify`（F41 通知中心，`CoupleNotifyRecorder` 启动时经 `ImPushService.setNotifySink` 挂接，im 包不反向依赖 couple 包）；`isOnline(username)` 查在线。
 
 ## 三、情侣空间模块全景（couple 包）
 
@@ -43,7 +43,6 @@ whenToUse: 在 are-chat 后端开发新功能、修复缺陷或评审改动，�
 2. Mapper：`@Mapper interface extends BaseMapperCompat<T>`，常用查询写成 default 方法
 3. Service：构造注入（final 字段 + 构造器），VO 用嵌套 `record`，`requireSpace(me)` 取有效空间（无效抛 404）
 4. Controller：`@RestController @RequestMapping("/api/couple/...")`，请求体用 record，每个方法一句 javadoc
-5. 前端联动：`pushCoupleEvent(Both)` 的事件名需在前端 `stores/couple.ts` 的 `handleCoupleEvent` 中注册 case
 
 现有 Controller 与路由前缀：
 - `CoupleController` `/api/couple`：总览/邀请/纪念日/解除/约定/打卡/一问(+F48 互评 reactions)/清单/纪念日历/心情/时光轴/心动值/信箱/一问历史/条约/城市/基金/个性化(profile: 宣言/主题/贴纸)/恋爱状态徽章(relationship-of)
@@ -107,34 +106,21 @@ whenToUse: 在 are-chat 后端开发新功能、修复缺陷或评审改动，�
 - 现有迁移：V1 couple 基础表 → V2 存量基线 → V3 心情 → V4 信箱 → V5 条约/城市/基金 → V6 贴贴动作/心情回应/爱称 → V7 任务卡/默契 → V8 和好卡/夸夸/生理期 → V9 胶囊/倒数日 → V10 记账/家务/约会/习惯/暗号 → V11 空间个性化 → V12 私信心动时刻 → V13 通知中心/生日 → V14 第一次清单/一问互评 → V15 惊喜与期待（刮刮乐/盲盒/闹钟/思念/花园/玫瑰/幸运签/告白/藏宝图）→ V16 懂我与被接住（求抱抱/矛盾复盘/道歉券/真心话/树洞/心灵感应/情话储蓄罐）→ V17 共同养成（挑战赛/恋爱存折/百日之约/心愿互换/共读/旅行心愿/追剧/词典/下次一定）→ V18 回忆资产（语录册/电影票根/我们的歌单；F80-F82/F85-F87 为现有数据聚合与放宽常量，无新表）→ V19 沟通增强（安静小屋/情绪接力/比划猜/故事接龙/道歉三部曲/心情词汇）→ V20 异地恋（牵手/想念/作息/见面信/云约会/平安卡/见面日记）→ V21 确定感（安全感账户/十年之约/愿景板/承诺博物馆/信任存折/双人契约/守护兽 + couple_anniversary.kind 列）→ V22 趣味游戏（一百问/出题考TA/情话课/周末盲选/情话Battle/参赛句子/抽象画廊）→ V23 深度陪伴（梦境/美食地图/TA手册/情绪SOS/每日三问/自定义成就）→ V24 成长系（习惯搭子 couple_habit_streak/感恩便签/情绪颗粒度/每周高光/共读一分钟/拖延互助/优点存折）→ V25 文字浪漫（情诗接龙/三行情书/醒来第一条/漂流瓶/密码情书/灵魂提问/贴纸手账）→ V26 默契亲密（爱语测评/心动闪光/如果问答/动作暗语/同频共振/心动日历）→ V27 生活经营（家庭会议/主理人/技能交换/月度互评/应急卡/存档点/家务积分/五年计划/策划案）→ V28 时光博物馆（纪录片分镜/博物馆展品/隐藏成就/家规宪法/免打扰设置）→ V29 常用收藏（couple_user_pin 每人一行 pins 逗号分隔） → V30 两个人的饭桌（饭票/星评/踩雷/本周菜单/拿手菜/搭伙车/话题标记 7 表） → V31 体温同步（熄灯/睡眠单/数羊/喝水/冷暖/熬夜卡/慢生活/对策本/抱抱 9 表） → V32 小日子仪式感（建国纪念日/过法卡/打卡/保险柜保费/续约签字/愿望券/当日体感 7 表） → V33 我们公司（头衔/决议/述职/发薪/金点子/签到 6 表）
 - H2 兼容注意：`CHARACTER SET utf8mb4 COLLATE utf8mb4_bin` 列必须 `NOT NULL`，可空用户名列用普通 `varchar(50) DEFAULT NULL`（V17/V22 踩过坑）
 
-## 五、代码惯例
-
-- Java 数据类（Lombok）规范：见 `.agents/skills/lombok-data/SKILL.md`
-- Git 提交与推送规范：见 `.agents/skills/git-commit/SKILL.md`
-- 新增用户可见文案的语气：情侣场景要可爱、口语化、带 emoji（参考现有 Service 里的推送文案）
-
-## 六、测试
+## 五、测试
 
 - 测试在 `src/test/java`（H2 自动配置），已有 auth/im/room/upload 各模块测试；新 Service 的核心算法（判定/统计/轮换）建议补单测
 - 测试资源：`src/test/resources/application.yml`
 
-## 七、给 agent 的快速上手路径
+## 六、交付门禁（硬性流程，给 agent 的快速上手路径）
 
-1. 开工先读本 skill + 对应专项 skill（db-migration / lombok-data / git-commit）
-2. 改后端：找同类功能照抄分层模式（如加"XX卡"→ 参考 CoupleLetter/CoupleCapsule 全链路）
-3. 涉及新事件：后端 push + 前端 store case + 前端 api/types 同步（见 are-chat-web-map skill）
-4. 提交前：`mvn -q compile`；改了表：跑 `mvn test` 验证 Flyway 脚本在 H2 可执行
+规范全集在各专项 skill 里（db-migration / lombok-data / git-commit），本节只做流程串联与红线登记，不复述细节：
 
-## 八、开发规范硬性流程（交付门禁）
-
-规范全集在各专项 skill 里，本节只做流程串联与红线登记，不复述细节：
-
-1. **开工**：必读本 skill（项目地图）；任务触及表结构/初始化数据 → db-migration；新建 Java 数据类 → lombok-data；提交推送 → git-commit
-2. **编码**：照抄第三节分层模板；静态内容库只增不改顺序（第四节）；用户可见文案口语化+emoji（第五节）
+1. **开工**：必读本 skill；任务触及表结构/初始化数据 → db-migration；新建 Java 数据类 → lombok-data；提交推送 → git-commit
+2. **编码**：照抄第三节分层模板（加"XX卡"类功能可参考 CoupleLetter/CoupleCapsule 全链路）；静态内容库只增不改顺序（第四节）；用户可见文案要可爱、口语化、带 emoji（模仿现有推送文案）；新增 WS 事件须同步前端 `stores/couple.ts` 注册 case + api/types（见 are-chat-web-map skill）
 3. **自检**：git-commit skill 的「架构师 Code Review 五项」清单全过
-4. **构建**：`mvn -q compile`；涉测试改动 `mvn test` 全绿
+4. **构建**：提交前必跑 `mvn -q compile`；改了表跑 `mvn test` 验证 Flyway 脚本 H2 可执行；涉测试改动 `mvn test` 全绿
 5. **提交**：按改动性质分组，一类一 commit；数据库脚本（V*.sql+schema.sql）永远独立成 commit；信息 `type(scope): 中文描述`
 6. **推送**：commit → `git pull --no-rebase` → push；失败保留本地 commit 并报告，不 force push
-7. **收尾**：新增/删除模块、表、接口、定时任务 → 更新本 skill 对应小节，与功能同批提交（不单独成 docs commit 时随 feat 一起提）
+7. **收尾**：新增/删除模块、表、接口、定时任务 → 更新本 skill 对应小节，与功能同批提交（commit type `docs`）
 
 **产品红线（用户长期约束，各批次均适用）**：情侣空间功能注重情绪价值；**不做照片/视频上传类功能**（服务器部署要求高）；迁移脚本必须幂等且 H2/MariaDB 双兼容（见第四节）。
