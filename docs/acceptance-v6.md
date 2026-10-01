@@ -18,3 +18,9 @@
 - 设计口径：时段在途唯一、双评/双答/双封齐才推 both；换位信作者拆不到自己的（拆的是 TA 写给你的那封）；三行里程碑「恰好跨 21 天」才推，避免每日骚扰；休战旗超 24h 未双方表态自动收旗。
 - 前端：待批次二十一前端落地后串行派单（CoupleListen 挂 care「情绪急救」）。
 - 前端（批次二十一，2026-10-02 交付）：CoupleAlmanac 五卡全接 CoupleCollapsible + almanacApi 13 方法 + 挂 shared「🧾 过日子」+ registry 5 卡（63→68）+ 6 用例，`pnpm test` 118 全绿、`pnpm build` 通过（5607319/986975c）。主线程抽查：前端 types 与后端 ZodiacVO/YearVO/FestivalVO record 逐字段核对一致（agent 汇报文字有噪声——声称 ZodiacVO.year:String、normalDays:日期数组，实际代码正确；再次验证「信代码不信汇报」）。
+
+## 批次二十三（F270-F279 二人制造厂）
+
+- 后端：V36 十表 + factory 23 文件（10 实体/10 Mapper/Bank/Service/Controller）+ 11 用例，全量 420 绿。红线执行情况：枚举/status 全部普通 varchar DEFAULT；可空用户名位（done_by/grabber/guess_by/given_by 等）普通 varchar；utf8mb4_bin 列零 DEFAULT，一次通过 H2。
+- 联动核验：parcelDone 向 F186 couple_point_ledger 插 EARN2（与 F244 发薪同账本，无第二账本）；homecheck/standup/owed 均读时聚合无 Job。
+- 前端：待派单（CoupleFactory 挂 shared/daily「过日子」，等批次二十二前端落地后串行）。
