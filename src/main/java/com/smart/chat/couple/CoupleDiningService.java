@@ -33,13 +33,14 @@ public class CoupleDiningService {
     private final CoupleDineHomecookMapper homecookMapper;
     private final CoupleDineCartMapper cartMapper;
     private final CoupleDineTopicMapper topicMapper;
+    private final CoupleBodyRedlineMapper redlineMapper;
     private final ImPushService push;
 
     public CoupleDiningService(CoupleSpaceMapper spaceMapper, CoupleDineTicketMapper ticketMapper,
                                CoupleDineRateMapper rateMapper, CoupleDineNogoMapper nogoMapper,
                                CoupleDineWeekplanMapper planMapper, CoupleDineHomecookMapper homecookMapper,
                                CoupleDineCartMapper cartMapper, CoupleDineTopicMapper topicMapper,
-                               ImPushService push) {
+                               CoupleBodyRedlineMapper redlineMapper, ImPushService push) {
         this.spaceMapper = spaceMapper;
         this.ticketMapper = ticketMapper;
         this.rateMapper = rateMapper;
@@ -48,12 +49,14 @@ public class CoupleDiningService {
         this.homecookMapper = homecookMapper;
         this.cartMapper = cartMapper;
         this.topicMapper = topicMapper;
+        this.redlineMapper = redlineMapper;
         this.push = push;
     }
 
     // ========== VO ==========
 
-    public record TicketVO(String fromUser, boolean mine, String dish, String reason) {
+    public record TicketVO(String fromUser, boolean mine, String dish, String reason,
+                            List<String> redlines) {
     }
 
     public record TodayVO(String day, TicketVO mine, TicketVO partner, boolean hit,
@@ -99,7 +102,7 @@ public class CoupleDiningService {
         CoupleDineTicket mineRow = ticketMapper.find(space.getId(), day, me);
         CoupleDineTicket partnerRow = ticketMapper.find(space.getId(), day, space.partnerOf(me));
         boolean hit = sameDish(mineRow, partnerRow);
-        return new TodayVO(day, ticketVO(mineRow, me), ticketVO(partnerRow, me), hit,
+        return new TodayVO(day, ticketVO(mineRow, me, space), ticketVO(partnerRow, me, space), hit,
                 verdictOf(space, day), CoupleDiningBank.topicOf(space.getId(), day),
                 topicMapper.find(space.getId(), day) != null);
     }
@@ -367,11 +370,26 @@ public class CoupleDiningService {
 
     // ========== 内部工具 ==========
 
-    private TicketVO ticketVO(CoupleDineTicket row, String me) {
+    private TicketVO ticketVO(CoupleDineTicket row, String me, CoupleSpace space) {
         if (row == null) {
             return null;
         }
-        return new TicketVO(row.getFromUser(), me.equals(row.getFromUser()), row.getDish(), row.getReason());
+        return new TicketVO(row.getFromUser(), me.equals(row.getFromUser()), row.getDish(), row.getReason(),
+                hitRedlines(space, row.getDish()));
+    }
+
+    /** F316 联动：今晚饭票里含忌口红线项的菜名，标出来但不拦（点不点由两个人决定）。 */
+    private List<String> hitRedlines(CoupleSpace space, String dish) {
+        if (dish == null || dish.isBlank()) {
+            return List.of();
+        }
+        List<String> out = new ArrayList<>();
+        for (CoupleBodyRedline r : redlineMapper.findBySpace(space.getId())) {
+            if (dish.contains(r.getItem()) && !out.contains(r.getItem())) {
+                out.add(r.getItem());
+            }
+        }
+        return out;
     }
 
     private PlanVO planVO(CoupleDineWeekplan row, String me) {

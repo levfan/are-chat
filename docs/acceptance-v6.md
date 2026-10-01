@@ -113,3 +113,10 @@
 - **当场修复（Service）**：`composeReview` 里清单计数写成了 `|| y.equals(now年份)` 的伪条件（等于没过滤）→ 抽 `yearOf(ts)` 统一按年归属；`MilestoneVO` 初版带一个算了没用的 `daysPerRound` → 删；`build()` 里一段 `fxes.replaceAll(...)` 是自我说服的空操作 → 删；`brand(..., Boolean publish)` 参数从头到尾没用过 → 去掉参数，发布只走 `brandConfirm` 双确认；`ANSWER_MAX` 写成 `QUESTION_COUNT*0 + …` 的凑数表达式 → 直接用常量。
 - **当场修复（测试）**：`tenAnswer(me, year, slot, answer)` 的 slot 是 `Integer`，用例误传 `""` 触发编译错（顺带证明签名对齐有价值）；十问跨年 diff 用例改为「今/去两期恒定双行」断言。
 - 协作：本批实体/Mapper 任务书延续「签名写死 + 禁改清单 + 只报告不动手」，agent 再次零越界并交付 95 列双向对账脚本证据；它按规格给 `vow.findDue` 没加 ORDER BY、`caption/declare` 无 `updated_at`（改稿无审计痕迹）两条属设计取舍，记录不改。
+
+## 产品经理走查（v6 后端收官后第一轮，2026-10-02）
+
+- **跨模块断点修复（F316 忌口红线 → 饭桌）**：规格要求「饭桌 F210 饭票池自动标红含忌口菜」，此前只在 `/api/couple/body` 总览里算 hit，点菜的现场（今晚饭桌）拿不到——等于联动没落地。已给 `CoupleDiningService.TicketVO` 增加 `redlines`（命中项列表），读 `couple_body_redline` 做只读拼标，**只标不拦**（点不点由两个人决定，产品口径）。新增用例断言「我的饭票含香菜标出、TA 的清炒不标」，全量 **500 绿**。前端 `CoupleDining` 的标红展示排进前端队列（字段是新增项，旧前端不受影响）。
+- **口径确认（三处刻意放宽，非漏实现）**：① F340 年度十问不做「只能 12-31 答」的硬门槛，全年可逐格填、跨年两期并排对比（把日期卡死会把年度仪式变成打卡焦虑源）；② F342 续约发布会同理不按周年日锁，随时可发、对方评分即作废于重发；③ F348 周年抽奖的「Job 提醒」按 v6 既定架构改为读时惰性结算（`notified` 幂等），零新增定时任务。三条都写进地图与验收，避免后续被当成 bug 反复改。
+- **文档一致性已知偏差**：`couple_legacy_ten.answers` 列注释仍写「十答 CSV」，实现是**换行分隔**（用户答案里可能有逗号，CSV 会破）。V43 已推远端，改注释会造成 Flyway 校验和漂移，故不改 DDL，改以地图/验收为准记载；实体 `CoupleLegacyTen.SEP` 是唯一事实源。
+- **代码走查顺手收掉的异味**：`CoupleLegacyService` 里 `ANSWER_MAX = size()*0 + …` 的伪表达式、算了不用的 `daysPerRound`、`fxSettleLine` 空操作 `replaceAll`、从未被使用的 `brand(..., Boolean publish)` 形参、`composeReview` 里 `|| y.equals(now年份)` 的假过滤（等于没过滤，已改 `yearOf(ts)` 按年归属）；年审单条 60 字硬编码提为 `AUDIT_ITEM_MAX` 常量。

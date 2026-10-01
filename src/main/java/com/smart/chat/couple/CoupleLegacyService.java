@@ -19,6 +19,7 @@ public class CoupleLegacyService {
 
     static final int ANSWER_MAX = CoupleLegacyTen.ANSWER_MAX;
     static final int THREE_MAX = CoupleLegacyAudit.THREE_MAX;
+    static final int AUDIT_ITEM_MAX = 60;
     static final int SPEECH_MAX = 600;
     static final int NOTE_MAX = 140;
     static final int FX_MIN = 1;
@@ -666,8 +667,8 @@ public class CoupleLegacyService {
             throw new BusinessException(400, label + "最多 " + THREE_MAX + " 条，留最想的那几条");
         }
         for (String t : out) {
-            if (t.length() > 60) {
-                throw new BusinessException(400, label + "每条最多 60 字");
+            if (t.length() > AUDIT_ITEM_MAX) {
+                throw new BusinessException(400, label + "每条最多 " + AUDIT_ITEM_MAX + " 字");
             }
         }
         return out;

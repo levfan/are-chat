@@ -10,6 +10,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
@@ -47,6 +48,8 @@ class CoupleDiningServiceTest {
     @Mock
     private CoupleDineTopicMapper topicMapper;
     @Mock
+    private CoupleBodyRedlineMapper redlineMapper;
+    @Mock
     private ImPushService push;
 
     @InjectMocks
@@ -69,6 +72,24 @@ class CoupleDiningServiceTest {
 
     private CoupleDineTicket ticket(String user, String dish) {
         return CoupleDineTicket.of("s1", DAY, user, dish, "");
+    }
+
+    @Test
+    void tonightTicketsCarryRedlineHits() {
+        stubSpace("alice");
+        stubSpace("bob");
+        List<CoupleDineTicket> rows = new ArrayList<>(List.of(
+                CoupleDineTicket.of("s1", DAY, "alice", "香菜牛肉", ""),
+                CoupleDineTicket.of("s1", DAY, "bob", "番茄炒蛋", "")));
+        lenient().when(ticketMapper.find(eq("s1"), any(), any())).thenAnswer(inv -> rows.stream()
+                .filter(r -> r.getFromUser().equals(inv.getArgument(2))).findFirst().orElse(null));
+        lenient().when(ticketMapper.findByDay(eq("s1"), any())).thenAnswer(inv -> List.copyOf(rows));
+        lenient().when(redlineMapper.findBySpace("s1")).thenReturn(
+                List.of(CoupleBodyRedline.of("s1", "香菜", CoupleBodyRedline.KIND_ALLERGY, "起疹子", "bob")));
+
+        CoupleDiningService.TodayVO vo = service.today("alice");
+        assertThat(vo.mine().redlines()).containsExactly("香菜");
+        assertThat(vo.partner().redlines()).isEmpty();
     }
 
     // ========== F210 饭票 ==========
