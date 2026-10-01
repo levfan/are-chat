@@ -259,7 +259,7 @@ public class CoupleDistanceService {
             throw new BusinessException(400, "给见面时的 TA 写点什么吧 ✉️");
         }
         letterMapper.insert(CoupleReunionLetter.of(space.getId(), me, text));
-        push.pushCoupleEvent("letter-sealed", me, space.partnerOf(me),
+        push.pushCoupleEvent("reunion-letter-sealed", me, space.partnerOf(me),
                 "✉️ TA 写了一封「下次见面信」，封存好了——等见面那天一起拆。");
         return reunionLetters(me);
     }
@@ -276,7 +276,7 @@ public class CoupleDistanceService {
             row.setStatus(CoupleReunionLetter.STATUS_OPENED);
             row.setOpenedAt(System.currentTimeMillis());
             letterMapper.updateById(row);
-            push.pushCoupleEventBoth("letter-opened", me, space.getUserA(), space.getUserB(),
+            push.pushCoupleEventBoth("reunion-letter-opened", me, space.getUserA(), space.getUserB(),
                     "💌 「下次见面信」被拆开啦！去看看里面写了什么。");
         }
         return reunionLetters(me);
