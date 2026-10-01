@@ -66,6 +66,11 @@ whenToUse: 在 are-chat 后端开发新功能、修复缺陷或评审改动，�
 - `CoupleNotifyController` `/api/couple/notify`：空间动态通知中心（F41 列表/全部已读）
 - `CoupleAdminController` `/api/couple/admin`：情侣空间运营看板（F45 仅管理员）
 - `ProfileController` `/api/profile`：资料卡含生日（F42 本人填写 + friends-birthdays 好友生日列表）
+- `CoupleCommController` `/api/couple/comm`：F100-F109 沟通增强——安静小屋（冷静角）、情绪接力（双方接力续写）、比划猜词（静态词库）、故事接龙、道歉三部曲、心情词汇量
+- `CoupleDistanceController` `/api/couple/distance`：F110-F119 异地恋——隔空牵手（doubleHold 同拍才算）、双城想念计量（双向奔赴）、作息重合表、下次见面信（写/拆信，事件 reunion-letter-*）、云约会清单、异地平安卡、见面日记、异地恋能量（30 天周期充能）、异地恋报告
+- `CoupleSecureController` `/api/couple/secure`：F120-F129 确定感与安全感——安全感账户（存/收下）、恋爱体检（5 项聚合）、十年之约（凑齐推双方）、愿景板（同词共鸣）、承诺博物馆（双章展出）、信任存折（每日 1 币）、恋爱年轮（按年聚合）、纪念日大日子分类（CoupleService.AnniversaryCreateRequest.kind）、双人契约打卡、守护兽（惰性心情衰减）
+- `CouplePlayController` `/api/couple/play`：F130-F139 趣味游戏——一百问（答一题解锁同题）、出题考TA（判分权在出题人，作答判分前对对方隐藏）、心动概率、今日塔罗、世界情话课（静态库今日一课+收藏）、周末盲选（周卡双方提交 stableHash 配对开奖）、情话Battle（OPEN→FULL→DONE 互投结算）、恋爱天气、抽象画（seed 前端生成 SVG）
+- `CoupleDailyLifeController` `/api/couple/daily-life`：F140-F149 深度陪伴——今日主题曲、梦境手账、美食地图（WANT→EATEN 打卡评分）、TA 使用手册（TASTE/NOGO/FAV/QUIRK）、情绪 SOS（SENT→HELD 抱住接住，在途 1 条）、每日三问（双答触发 both 推送）、夸夸生成器+接头暗号（无表按日抽）、自定义成就（OPEN→ISSUED 颁发）、恋爱仪表盘（F149 聚合：待办=三问/SOS/想吃/挑战中成就，回忆=梦境/主题曲/暗号/SOS）
 
 内容库（静态，只增不改顺序）：
 - `CoupleQuestions`：今日一问题库（105 题 11 主题，按 epochDay 轮换）
@@ -73,6 +78,9 @@ whenToUse: 在 are-chat 后端开发新功能、修复缺陷或评审改动，�
 - `CoupleSurpriseBank`：惊喜内容库（刮刮乐券面 24 种/盲盒任务灵感 16 条/花语 8 种/幸运签 20 支）+ stableHash 按周稳定抽券
 - `CoupleTalkBank`：懂我与被接住内容库（安慰话术卡按感受 5 类×5 条/陪聊话题 20 条/真心话题 30 道/心灵感应选题 24 道+选项/深夜关怀文案）+ stableHash 按天稳定取真心话题
 - `CoupleGrowthBank`：共同养成内容库（每日挑战 40 条按空间+天稳定一题/存款里程碑 5 档/星座 12 座元素相性+配对评语 12 条）+ stableHash
+- `CoupleCommBank`：沟通增强内容库（比划猜词/故事接龙开头/情绪词汇）
+- `CouplePlayBank`：趣味游戏内容库（一百问题库 100 题/塔罗大阿尔卡那 22 张/恋爱天气 5 种/世界情话课 16 课/心动概率文案 5 档）+ stableHash 按天稳定
+- `CoupleDailyLifeBank`：深度陪伴内容库（主题曲 30 首/夸夸 100 条/接头暗号 20 句）+ stableHash 按天稳定（夸夸取 3 条 hash>>16 分段）
 
 定时任务 `CoupleReminderJob`（Asia/Shanghai）：09:00 约定逾期提醒；09:30 纪念日倒数（7/1/0 天）；09:45 倒数日提醒（7/3/1/0 天）；10:00 情绪急救箱（连续 2 天低落提醒对方）。
 定时任务 `CoupleSurpriseJob`（Asia/Shanghai）：每分钟送达心动闹钟与思念速递（alarm-fired/miss-delivered）；09:15 告白重现；09:20 生日彩蛋（读 im 包 UserProfile.birthday）；10:15 花园缺水巡检（garden-withered）。
@@ -81,8 +89,8 @@ whenToUse: 在 are-chat 后端开发新功能、修复缺陷或评审改动，�
 ## 四、数据层规范（硬性）
 
 - 凡改表结构或初始化数据，必须产出 Flyway 增量脚本并同步 schema.sql——触发条件、命名、幂等/双兼容写法、种子数据等完整规范见 `.agents/skills/db-migration/SKILL.md`
-- 现有迁移：V1 couple 基础表 → V2 存量基线 → V3 心情 → V4 信箱 → V5 条约/城市/基金 → V6 贴贴动作/心情回应/爱称 → V7 任务卡/默契 → V8 和好卡/夸夸/生理期 → V9 胶囊/倒数日 → V10 记账/家务/约会/习惯/暗号 → V11 空间个性化 → V12 私信心动时刻 → V13 通知中心/生日 → V14 第一次清单/一问互评 → V15 惊喜与期待（刮刮乐/盲盒/闹钟/思念/花园/玫瑰/幸运签/告白/藏宝图）→ V16 懂我与被接住（求抱抱/矛盾复盘/道歉券/真心话/树洞/心灵感应/情话储蓄罐）→ V17 共同养成（挑战赛/恋爱存折/百日之约/心愿互换/共读/旅行心愿/追剧/词典/下次一定）→ V18 回忆资产（语录册/电影票根/我们的歌单；F80-F82/F85-F87 为现有数据聚合与放宽常量，无新表）
-- H2 兼容注意：`CHARACTER SET utf8mb4 COLLATE utf8mb4_bin` 列必须 `NOT NULL`，可空用户名列用普通 `varchar(50) DEFAULT NULL`（V17 踩过坑）
+- 现有迁移：V1 couple 基础表 → V2 存量基线 → V3 心情 → V4 信箱 → V5 条约/城市/基金 → V6 贴贴动作/心情回应/爱称 → V7 任务卡/默契 → V8 和好卡/夸夸/生理期 → V9 胶囊/倒数日 → V10 记账/家务/约会/习惯/暗号 → V11 空间个性化 → V12 私信心动时刻 → V13 通知中心/生日 → V14 第一次清单/一问互评 → V15 惊喜与期待（刮刮乐/盲盒/闹钟/思念/花园/玫瑰/幸运签/告白/藏宝图）→ V16 懂我与被接住（求抱抱/矛盾复盘/道歉券/真心话/树洞/心灵感应/情话储蓄罐）→ V17 共同养成（挑战赛/恋爱存折/百日之约/心愿互换/共读/旅行心愿/追剧/词典/下次一定）→ V18 回忆资产（语录册/电影票根/我们的歌单；F80-F82/F85-F87 为现有数据聚合与放宽常量，无新表）→ V19 沟通增强（安静小屋/情绪接力/比划猜/故事接龙/道歉三部曲/心情词汇）→ V20 异地恋（牵手/想念/作息/见面信/云约会/平安卡/见面日记）→ V21 确定感（安全感账户/十年之约/愿景板/承诺博物馆/信任存折/双人契约/守护兽 + couple_anniversary.kind 列）→ V22 趣味游戏（一百问/出题考TA/情话课/周末盲选/情话Battle/参赛句子/抽象画廊）→ V23 深度陪伴（梦境/美食地图/TA手册/情绪SOS/每日三问/自定义成就）
+- H2 兼容注意：`CHARACTER SET utf8mb4 COLLATE utf8mb4_bin` 列必须 `NOT NULL`，可空用户名列用普通 `varchar(50) DEFAULT NULL`（V17/V22 踩过坑）
 
 ## 五、代码惯例
 
