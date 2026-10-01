@@ -16,6 +16,59 @@ whenToUse: are-chat 后端开工前加载；新增/删除模块、表、接口�
 - 鉴权：登录态在 HttpSession；`com.smart.chat.common.Sessions.requireUser(session)` 取当前用户名
 - 统一返回：`ApiResponse.ok(data)` / 业务异常 `BusinessException(code, message)`
 - 构建：`mvn -q compile`；测试 `mvn test`（何时必跑见第六节）
+- 规模快照（v5 交付后）：42 个 Controller / 508 REST 端点 / 187 张表（`couple_*` 174）/ 409 用例基线 / 情侣 WS 事件约 200 个；逐端点与逐表清单见 `wiki/api.md`、`wiki/database.md`
+
+### 目录与关键文件
+
+```
+are-chat/                             # 单模块 Maven（无多 module），坐标见 pom.xml
+├── pom.xml                           # Java 25 / Spring Boot 4.1.1 / MyBatis-Plus 3.5.17 / Flyway
+├── src/main/java/com/smart/chat/     # 11 个包，见第二节
+│   ├── SmartChatApplication.java     # 主启动类
+│   └── ...
+├── src/main/resources/
+│   ├── application.yml               # 端口 8080、数据源、Flyway、上传 20MB 限制（改配置先读这里的注释）
+│   ├── application-mysql.yml         # MySQL 变体数据源
+│   ├── db/V*.sql                     # Flyway 增量脚本 = 运行时唯一建表路径（当前链至 V35）
+│   └── schema.sql                    # 全量结构文档（基线 187 表；不被运行时执行，改表必须同步）
+├── src/test/java/                    # Service 单测（Mockito）+ 少量 SpringBootTest 集成（H2 跑 Flyway）
+├── src/test/resources/application.yml# 测试库 H2 MODE=MySQL
+├── wiki/                             # Repo wiki：Home/architecture/modules/couple-space/database/api/scheduled-jobs/dev-guide
+├── docs/                             # couple-features-v1~v6.md 功能规格 + acceptance-v5/v6.md 验收留痕
+├── deploy/  Dockerfile  are-chat-1.0.0.tar   # 私有化部署产物与脚本
+├── uploads/                          # 本地文件存储根（FileStorageProperties.base-dir=./uploads，随 cwd）
+└── AGENTS.md                         # 仓库级 agent 约束（优先级高于个人记忆，如绿后必推）
+```
+
+### 端口与联调速查
+
+| 项 | 值/说明 |
+|---|---|
+| 后端 HTTP | `server.port=8080`；REST 统一前缀 `/api`；健康检查 `/api/health`；HTTPS 由 nginx 终结，`forward-headers-strategy=framework` 使 Cookie 自动带 Secure |
+| WebSocket 聊天室 | `@ServerEndpoint("/ws/chat/{name}")`（room/ChatEndpoint；@ServerEndpoint 实例由容器创建，经 ChatWebSocketBridge 桥接静态 Spring 引用） |
+| 前端 dev | 5173；vite 代理 `/api`→8080、`/ws`→8080（ws:true） |
+| 开发库（默认） | MariaDB `117.72.73.149:3307/smart_collections`；`DB_CONNECT_URL/DB_CONNECT_USER/DB_CONNECT_PASSWORD/DB_CONNECT_DRIVER` 环境变量可整体覆盖（真实口令不落仓库文档） |
+| 测试库 | H2 内存 `MODE=MySQL;DATABASE_TO_LOWER=TRUE;CASE_INSENSITIVE_IDENTIFIERS=TRUE`，与生产跑同一批 V 脚本 |
+| 登录态 | HttpSession Cookie；后端 `Sessions.requireUser(session)`，除 `/api/auth/**`、`/api/health` 外全部需会话 |
+| Flyway | `baseline-on-migrate` + `baseline-version=0`：存量老库自动打 0 基线后从 V1 全量执行——所以每个 V 脚本都必须幂等；`clean-disabled=true` |
+
+### 请求与推送链路（一图）
+
+```
+Vue 组件 → api/<域>Api → http.ts(get/postJson/putJson/delete，withCredentials)
+  → Controller(/api/**) → Sessions.requireUser → Service(requireSpace / partnerOf)
+  → Mapper(BaseMapperCompat default 方法 + LambdaQueryWrapper) → MariaDB(生产)/H2(测试)
+Service → ImPushService.pushCoupleEvent(Both) ─┬→ WS 帧 {type:'couple', event, detail}
+                                                └→ couple_notify 落库（CoupleNotifyRecorder，F41 通知中心）
+前端 im store 收 WS → 派发 `arechat:couple` 自定义事件 → couple store handleCoupleEvent 按 event 刷新 + 通知铃铛
+```
+
+### 命令速查
+
+- 编译门禁：`mvn -q compile`（提交前必跑）
+- 全量测试：`mvn test`（当前基线 409 用例）；单类：`mvn test -Dtest=CoupleListenServiceTest`
+- 运行：`mvn spring-boot:run`（8080）；打包 `mvn -q -B package` 后按 Dockerfile/deploy 部署
+- 数表：`grep -c "^CREATE TABLE" src/main/resources/schema.sql`
 
 ## 二、包结构（com.smart.chat）
 

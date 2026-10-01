@@ -17,3 +17,4 @@
 - 后端：V35 十表 + listen 22 文件（10 实体/10 Mapper/Bank/Service/Controller）+ 11 用例，全量 409 绿。枚举/status 列吸取 V34 教训全部普通 varchar 不带 charset；早想说放行与休战过期均为 today() 读时惰性结算，不新增定时任务。
 - 设计口径：时段在途唯一、双评/双答/双封齐才推 both；换位信作者拆不到自己的（拆的是 TA 写给你的那封）；三行里程碑「恰好跨 21 天」才推，避免每日骚扰；休战旗超 24h 未双方表态自动收旗。
 - 前端：待批次二十一前端落地后串行派单（CoupleListen 挂 care「情绪急救」）。
+- 前端（批次二十一，2026-10-02 交付）：CoupleAlmanac 五卡全接 CoupleCollapsible + almanacApi 13 方法 + 挂 shared「🧾 过日子」+ registry 5 卡（63→68）+ 6 用例，`pnpm test` 118 全绿、`pnpm build` 通过（5607319/986975c）。主线程抽查：前端 types 与后端 ZodiacVO/YearVO/FestivalVO record 逐字段核对一致（agent 汇报文字有噪声——声称 ZodiacVO.year:String、normalDays:日期数组，实际代码正确；再次验证「信代码不信汇报」）。
