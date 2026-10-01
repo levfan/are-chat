@@ -78,11 +78,11 @@ public class CouplePostService {
                          boolean sent, String partnerContent) {
     }
 
-    public record StepVO(int seq, String text, boolean done, String doneBy) {
+    public record StepVO(String id, int seq, String text, boolean done, String doneBy) {
     }
 
     public record BucketVO(String id, String name, String targetDay, String note, boolean mine,
-                           String status, int doneSteps, int totalSteps) {
+                           String status, int doneSteps, int totalSteps, List<StepVO> steps) {
     }
 
     public record SomedayVO(String id, String thing, boolean mine, String status, String takenBy,
@@ -99,7 +99,8 @@ public class CouplePostService {
     public record WellVO(String week, String question, String myAnswer, String partnerAnswer, boolean bothIn) {
     }
 
-    public record RelayVO(String id, boolean mine, String openDay, String status, boolean due) {
+    public record RelayVO(String id, boolean mine, String openDay, String status, boolean due,
+                          String content) {
     }
 
     public record DreamVO(String id, String day, String dream, boolean mine, String reading,
@@ -644,8 +645,12 @@ public class CouplePostService {
         for (CoupleBucket b : bucketMapper.findOpen(space.getId())) {
             List<CoupleBucketStep> steps = stepMapper.findByBucket(b.getId());
             int done = (int) steps.stream().filter(CoupleBucketStep::isDone).count();
+            List<StepVO> stepVOs = new ArrayList<>();
+            for (CoupleBucketStep st : steps) {
+                stepVOs.add(new StepVO(st.getId(), st.getSeq(), st.getText(), st.isDone(), st.getDoneBy()));
+            }
             buckets.add(new BucketVO(b.getId(), b.getName(), b.getTargetDay(), b.getNote(),
-                    b.getOwnerUser().equals(me), b.getStatus(), done, steps.size()));
+                    b.getOwnerUser().equals(me), b.getStatus(), done, steps.size(), stepVOs));
         }
 
         List<SomedayVO> somedays = new ArrayList<>();
@@ -697,9 +702,10 @@ public class CouplePostService {
 
         List<RelayVO> relays = new ArrayList<>();
         for (CoupleRelayCapsule r : relayMapper.findBySpace(space.getId())) {
-            relays.add(new RelayVO(r.getId(), r.getFromUser().equals(me), r.getOpenDay(), r.getStatus(),
-                    "SEALED".equals(r.getStatus()) && !r.getFromUser().equals(me)
-                            && r.getOpenDay().compareTo(today) <= 0));
+            boolean relayMine = r.getFromUser().equals(me);
+            relays.add(new RelayVO(r.getId(), relayMine, r.getOpenDay(), r.getStatus(),
+                    "SEALED".equals(r.getStatus()) && !relayMine && r.getOpenDay().compareTo(today) <= 0,
+                    relayMine || "OPENED".equals(r.getStatus()) ? r.getContent() : ""));
         }
 
         List<DreamVO> dreams = new ArrayList<>();

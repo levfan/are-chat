@@ -144,6 +144,11 @@ class CouplePostServiceTest {
         service.bucketStepAdd("alice", buckets.get(0).getId(), "凑首付");
         service.bucketStepDone("alice", steps.get(0).getId());
         verify(push).pushCoupleEvent(eq("post-step-done"), eq("alice"), eq("bob"), any());
+        CouplePostService.BucketVO openBucket = service.post("alice").buckets().get(0);
+        assertThat(openBucket.steps()).hasSize(2);
+        assertThat(openBucket.steps().get(0).id()).isNotBlank();
+        assertThat(openBucket.steps().get(0).done()).isTrue();
+        assertThat(openBucket.steps().get(1).doneBy()).isEmpty();
         service.bucketStepDone("bob", steps.get(1).getId());
         verify(push).pushCoupleEventBoth(eq("post-bucket-done"), eq("bob"), eq("alice"), eq("bob"), any());
         assertThat(buckets.get(0).getStatus()).isEqualTo(CoupleBucket.STATUS_DONE);
@@ -270,6 +275,11 @@ class CouplePostServiceTest {
                 .isInstanceOf(BusinessException.class).hasMessageContaining("1 / 2 / 3 年");
         service.relaySeal("alice", "给明年的你", 1);
         service.relaySeal("bob", "给明年的你", 1);
+        assertThat(service.post("alice").relays()).hasSize(2);
+        assertThat(service.post("alice").relays().stream().filter(CouplePostService.RelayVO::mine)
+                .allMatch(r -> "给明年的你".equals(r.content()))).isTrue();
+        assertThat(service.post("alice").relays().stream().filter(r -> !r.mine())
+                .allMatch(r -> r.content().isEmpty())).isTrue();
         CoupleRelayCapsule toOpen = rows.get(1);
         assertThatThrownBy(() -> service.relayOpen("alice", toOpen.getId()))
                 .isInstanceOf(BusinessException.class).hasMessageContaining("还没到开启日");
