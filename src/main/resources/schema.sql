@@ -1580,3 +1580,95 @@ CREATE TABLE `couple_art_gallery` (
     PRIMARY KEY (`id`),
     KEY `idx_art_gallery` (`space_id`,`created`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='抽象画画廊表：我看不懂，但我大受震撼，而且很喜欢';
+
+
+-- smart_collections.couple_dream definition
+
+CREATE TABLE `couple_dream` (
+    `id` varchar(36) NOT NULL COMMENT '主键UUID',
+    `space_id` varchar(36) NOT NULL COMMENT '情侣空间ID（关联 couple_space.id）',
+    `from_user` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '记梦人用户名（区分大小写）',
+    `content` varchar(500) NOT NULL COMMENT '梦境内容',
+    `created` bigint(20) NOT NULL COMMENT '时间（毫秒时间戳）',
+    PRIMARY KEY (`id`),
+    KEY `idx_dream` (`space_id`,`created`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='梦境手账表：昨晚又梦到 TA，醒来第一时间写下来';
+
+
+-- smart_collections.couple_food_note definition
+
+CREATE TABLE `couple_food_note` (
+    `id` varchar(36) NOT NULL COMMENT '主键UUID',
+    `space_id` varchar(36) NOT NULL COMMENT '情侣空间ID（关联 couple_space.id）',
+    `from_user` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '记录人用户名（区分大小写）',
+    `shop` varchar(60) NOT NULL COMMENT '店名',
+    `dish` varchar(60) NOT NULL COMMENT '招牌菜',
+    `status` varchar(10) NOT NULL DEFAULT 'WANT' COMMENT '状态：WANT 想吃 / EATEN 已打卡',
+    `rating` int(11) DEFAULT NULL COMMENT '评分 0-5 星（打卡时填写）',
+    `comment` varchar(200) DEFAULT NULL COMMENT '吃后感（打卡时填写）',
+    `created` bigint(20) NOT NULL COMMENT '时间（毫秒时间戳）',
+    PRIMARY KEY (`id`),
+    KEY `idx_food_note` (`space_id`,`status`,`created`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='美食地图表：把「改天一起吃」变成一张张打卡票根';
+
+
+-- smart_collections.couple_partner_fact definition
+
+CREATE TABLE `couple_partner_fact` (
+    `id` varchar(36) NOT NULL COMMENT '主键UUID',
+    `space_id` varchar(36) NOT NULL COMMENT '情侣空间ID（关联 couple_space.id）',
+    `from_user` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '撰写人用户名（区分大小写）',
+    `kind` varchar(10) NOT NULL DEFAULT 'TASTE' COMMENT '条目类型：TASTE 口味 / NOGO 雷区 / FAV 心头好 / QUIRK 小怪癖',
+    `content` varchar(200) NOT NULL COMMENT '条目内容',
+    `created` bigint(20) NOT NULL COMMENT '时间（毫秒时间戳）',
+    PRIMARY KEY (`id`),
+    KEY `idx_partner_fact` (`space_id`,`kind`,`created`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='TA 使用手册表：把彼此的说明书一页页补全';
+
+
+-- smart_collections.couple_sos_ping definition
+
+CREATE TABLE `couple_sos_ping` (
+    `id` varchar(36) NOT NULL COMMENT '主键UUID',
+    `space_id` varchar(36) NOT NULL COMMENT '情侣空间ID（关联 couple_space.id）',
+    `from_user` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '求抱抱人用户名（区分大小写）',
+    `message` varchar(100) DEFAULT NULL COMMENT '想多说的一句（可空）',
+    `status` varchar(10) NOT NULL DEFAULT 'SENT' COMMENT '状态：SENT 等接住 / HELD 已抱住',
+    `held_at` bigint(20) DEFAULT NULL COMMENT '被抱住时间（毫秒）',
+    `created` bigint(20) NOT NULL COMMENT '时间（毫秒时间戳）',
+    PRIMARY KEY (`id`),
+    KEY `idx_sos_ping` (`space_id`,`status`,`created`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='情绪SOS表：成年人的崩溃需要快捷键，抱抱是最好的响应';
+
+
+-- smart_collections.couple_daily_three definition
+
+CREATE TABLE `couple_daily_three` (
+    `id` varchar(36) NOT NULL COMMENT '主键UUID',
+    `space_id` varchar(36) NOT NULL COMMENT '情侣空间ID（关联 couple_space.id）',
+    `from_user` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '答题人用户名（区分大小写）',
+    `day` varchar(10) NOT NULL COMMENT '所属日期（yyyy-MM-dd）',
+    `joy` varchar(200) DEFAULT NULL COMMENT '今天最开心的事',
+    `touched` varchar(200) DEFAULT NULL COMMENT '今天最被感动的瞬间',
+    `want_to_say` varchar(200) DEFAULT NULL COMMENT '最想对 TA 说的一句话',
+    `updated_at` bigint(20) NOT NULL COMMENT '更新时间（毫秒）',
+    `created` bigint(20) NOT NULL COMMENT '时间（毫秒时间戳）',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_three_day_user` (`space_id`,`day`,`from_user`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='每日三问表：睡前三分钟，把一天过成值得纪念的样子';
+
+
+-- smart_collections.couple_custom_badge definition
+
+CREATE TABLE `couple_custom_badge` (
+    `id` varchar(36) NOT NULL COMMENT '主键UUID',
+    `space_id` varchar(36) NOT NULL COMMENT '情侣空间ID（关联 couple_space.id）',
+    `from_user` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '立成就人用户名（区分大小写）',
+    `title` varchar(50) NOT NULL COMMENT '成就名（连吃七天早餐）',
+    `condition` varchar(200) DEFAULT NULL COMMENT '达成条件说明（可空）',
+    `status` varchar(10) NOT NULL DEFAULT 'OPEN' COMMENT '状态：OPEN 挑战中 / ISSUED 已颁发',
+    `issued_at` bigint(20) DEFAULT NULL COMMENT '颁发时间（毫秒）',
+    `created` bigint(20) NOT NULL COMMENT '时间（毫秒时间戳）',
+    PRIMARY KEY (`id`),
+    KEY `idx_custom_badge` (`space_id`,`status`,`created`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='自定义成就表：我们自己定义什么值得庆祝';
