@@ -1266,3 +1266,112 @@ CREATE TABLE `couple_feeling_word` (
     PRIMARY KEY (`id`),
     UNIQUE KEY `uk_feeling_day` (`space_id`,`day`,`from_user`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='情绪词汇足迹表：一天一个词，攒成我们的情绪星图';
+
+
+-- smart_collections.couple_handhold definition
+
+CREATE TABLE `couple_handhold` (
+    `id` varchar(36) NOT NULL COMMENT '主键UUID',
+    `space_id` varchar(36) NOT NULL COMMENT '情侣空间ID（关联 couple_space.id）',
+    `day` varchar(10) NOT NULL COMMENT '牵手日期（yyyy-MM-dd，每天一签）',
+    `hold_a` tinyint(1) NOT NULL DEFAULT 0 COMMENT '用户 A 是否点亮：0 否 1 已点亮',
+    `hold_b` tinyint(1) NOT NULL DEFAULT 0 COMMENT '用户 B 是否点亮：0 否 1 已点亮',
+    `hold_at_a` bigint(20) DEFAULT NULL COMMENT '用户 A 点亮时间（毫秒）',
+    `hold_at_b` bigint(20) DEFAULT NULL COMMENT '用户 B 点亮时间（毫秒）',
+    `created` bigint(20) NOT NULL COMMENT '时间（毫秒时间戳）',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_handhold_day` (`space_id`,`day`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='隔空牵手表：隔着屏幕也牵手，一天一握，握紧不放';
+
+
+-- smart_collections.couple_miss_daily definition
+
+CREATE TABLE `couple_miss_daily` (
+    `id` varchar(36) NOT NULL COMMENT '主键UUID',
+    `space_id` varchar(36) NOT NULL COMMENT '情侣空间ID（关联 couple_space.id）',
+    `day` varchar(10) NOT NULL COMMENT '想念日期（yyyy-MM-dd，每天一签）',
+    `miss_a` tinyint(1) NOT NULL DEFAULT 0 COMMENT '用户 A 是否点亮：0 否 1 已点亮',
+    `miss_b` tinyint(1) NOT NULL DEFAULT 0 COMMENT '用户 B 是否点亮：0 否 1 已点亮',
+    `miss_at_a` bigint(20) DEFAULT NULL COMMENT '用户 A 点亮时间（毫秒）',
+    `miss_at_b` bigint(20) DEFAULT NULL COMMENT '用户 B 点亮时间（毫秒）',
+    `both_at` bigint(20) DEFAULT NULL COMMENT '双向奔赴达成时间（毫秒）',
+    `created` bigint(20) NOT NULL COMMENT '时间（毫秒时间戳）',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_miss_daily` (`space_id`,`day`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='想念计量所表：今天想你了，想被同样想我的人看见';
+
+
+-- smart_collections.couple_routine definition
+
+CREATE TABLE `couple_routine` (
+    `id` varchar(36) NOT NULL COMMENT '主键UUID',
+    `space_id` varchar(36) NOT NULL COMMENT '情侣空间ID（关联 couple_space.id）',
+    `owner_user` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '作息主人用户名（区分大小写）',
+    `wake_time` varchar(5) NOT NULL COMMENT '起床时间（HH:mm）',
+    `work_start` varchar(5) NOT NULL COMMENT '上班/上课开始（HH:mm）',
+    `work_end` varchar(5) NOT NULL COMMENT '下班/下课（HH:mm）',
+    `sleep_time` varchar(5) NOT NULL COMMENT '睡觉时间（HH:mm）',
+    `updated_at` bigint(20) NOT NULL COMMENT '更新时间（毫秒）',
+    `created` bigint(20) NOT NULL COMMENT '时间（毫秒时间戳）',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_routine_owner` (`space_id`,`owner_user`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='我们的作息表：把两个人的时间摆在一起，重叠的就是我们的时间';
+
+
+-- smart_collections.couple_reunion_letter definition
+
+CREATE TABLE `couple_reunion_letter` (
+    `id` varchar(36) NOT NULL COMMENT '主键UUID',
+    `space_id` varchar(36) NOT NULL COMMENT '情侣空间ID（关联 couple_space.id）',
+    `from_user` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '写信人用户名（区分大小写）',
+    `content` varchar(300) NOT NULL COMMENT '信的内容（见面时再拆）',
+    `status` varchar(10) NOT NULL DEFAULT 'SEELED' COMMENT '状态：SEELED 已封存 / OPENED 已拆开',
+    `opened_at` bigint(20) DEFAULT NULL COMMENT '拆信时间（毫秒）',
+    `created` bigint(20) NOT NULL COMMENT '时间（毫秒时间戳）',
+    PRIMARY KEY (`id`),
+    KEY `idx_reunion_letter` (`space_id`,`status`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='下次见面信表：把想说的存进信封，见面那天再拆';
+
+
+-- smart_collections.couple_cloud_date definition
+
+CREATE TABLE `couple_cloud_date` (
+    `id` varchar(36) NOT NULL COMMENT '主键UUID',
+    `space_id` varchar(36) NOT NULL COMMENT '情侣空间ID（关联 couple_space.id）',
+    `from_user` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '发起人用户名（区分大小写）',
+    `item` varchar(100) NOT NULL COMMENT '云约会内容（静态库可点选/自定义）',
+    `status` varchar(10) NOT NULL DEFAULT 'OPEN' COMMENT '状态：OPEN 待完成 / DONE 已完成',
+    `done_note` varchar(100) DEFAULT NULL COMMENT '完成时想说的一句（可空）',
+    `done_at` bigint(20) DEFAULT NULL COMMENT '完成时间（毫秒）',
+    `created` bigint(20) NOT NULL COMMENT '时间（毫秒时间戳）',
+    PRIMARY KEY (`id`),
+    KEY `idx_cloud_date` (`space_id`,`status`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='云约会清单表：距离隔开的是城市，隔不开的是一起做事';
+
+
+-- smart_collections.couple_safety_ping definition
+
+CREATE TABLE `couple_safety_ping` (
+    `id` varchar(36) NOT NULL COMMENT '主键UUID',
+    `space_id` varchar(36) NOT NULL COMMENT '情侣空间ID（关联 couple_space.id）',
+    `from_user` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '报平安人用户名（区分大小写）',
+    `kind` varchar(10) NOT NULL COMMENT '类型：GO_OUT 出发了 / ARRIVE 到家啦',
+    `note` varchar(100) DEFAULT NULL COMMENT '附带一句话（可空，比如 车上人多慢慢开）',
+    `created` bigint(20) NOT NULL COMMENT '时间（毫秒时间戳）',
+    PRIMARY KEY (`id`),
+    KEY `idx_safety_ping` (`space_id`,`created`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='平安卡表：每一次出发与到达，都有人惦记';
+
+
+-- smart_collections.couple_reunion_log definition
+
+CREATE TABLE `couple_reunion_log` (
+    `id` varchar(36) NOT NULL COMMENT '主键UUID',
+    `space_id` varchar(36) NOT NULL COMMENT '情侣空间ID（关联 couple_space.id）',
+    `by_user` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '记录人用户名（区分大小写）',
+    `meet_day` varchar(10) NOT NULL COMMENT '见面日期（yyyy-MM-dd，同天只记一条）',
+    `note` varchar(200) DEFAULT NULL COMMENT '这次见面做了什么/最难忘的瞬间（可空）',
+    `created` bigint(20) NOT NULL COMMENT '时间（毫秒时间戳）',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_reunion_day` (`space_id`,`meet_day`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='见面日记表：每一次见面都值得记账，间隔的天数都在攒想念';
