@@ -16,6 +16,12 @@ import java.util.UUID;
 public class CoupleAnniversary {
 
     public static final int TITLE_MAX = 60;
+    /** F127 大日子类型：NORMAL 普通 / LOVE 恋爱 / FAMILY 家人 / FRIEND 朋友 / WORK 工作 */
+    public static final String KIND_NORMAL = "NORMAL";
+    public static final String KIND_LOVE = "LOVE";
+    public static final String KIND_FAMILY = "FAMILY";
+    public static final String KIND_FRIEND = "FRIEND";
+    public static final String KIND_WORK = "WORK";
 
     @TableId(value = "id", type = IdType.INPUT)
     private String id;
@@ -24,6 +30,8 @@ public class CoupleAnniversary {
     /** 日期 yyyy-MM-dd */
     private String eventDate;
     private Integer yearly;
+    /** 日子类型（F127），默认 NORMAL */
+    private String kind;
     private String createdBy;
     private Long created;
 
@@ -34,6 +42,7 @@ public class CoupleAnniversary {
         row.title = title;
         row.eventDate = date;
         row.yearly = yearly ? 1 : 0;
+        row.kind = KIND_NORMAL;
         row.createdBy = createdBy;
         row.created = System.currentTimeMillis();
         return row;

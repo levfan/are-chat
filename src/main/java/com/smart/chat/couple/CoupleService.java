@@ -67,7 +67,8 @@ public class CoupleService {
                          String doneBy, Long doneAt, String createdBy, Long created) {
     }
 
-    public record AnniversaryVO(String id, String title, String date, boolean yearly, String createdBy, Long created) {
+    public record AnniversaryVO(String id, String title, String date, boolean yearly, String kind,
+                                String createdBy, Long created) {
     }
 
     public record MoodVO(String id, String username, String moodDay, String mood, String note,
@@ -611,15 +612,28 @@ public class CoupleService {
         return anniversaryMapper.findBySpace(space.getId()).stream().map(CoupleService::toAnniversaryVO).toList();
     }
 
-    public AnniversaryVO createAnniversary(String me, String title, String date, Boolean yearly) {
+    public AnniversaryVO createAnniversary(String me, String title, String date, Boolean yearly, String kind) {
         CoupleSpace space = requireSpace(me);
         String normalized = normalizeDate(date, "日期格式应为 yyyy-MM-dd");
         CoupleAnniversary row = CoupleAnniversary.of(space.getId(),
                 requireText(title, "纪念日名称不能为空（最多 60 字）", CoupleAnniversary.TITLE_MAX),
                 normalized, yearly == null || yearly, me);
+        row.setKind(normalizeAnniversaryKind(kind));
         anniversaryMapper.insert(row);
         push.pushCoupleEvent("anniversaries-changed", me, space.partnerOf(me), "共同日历有更新 📅：" + row.getTitle());
         return toAnniversaryVO(row);
+    }
+
+    /** F127 大日子类型校验，空或非法时回退 NORMAL。 */
+    private String normalizeAnniversaryKind(String kind) {
+        if (kind == null || kind.isBlank()) {
+            return CoupleAnniversary.KIND_NORMAL;
+        }
+        return switch (kind) {
+            case CoupleAnniversary.KIND_LOVE, CoupleAnniversary.KIND_FAMILY,
+                 CoupleAnniversary.KIND_FRIEND, CoupleAnniversary.KIND_WORK -> kind;
+            default -> CoupleAnniversary.KIND_NORMAL;
+        };
     }
 
     public void deleteAnniversary(String me, String anniversaryId) {
@@ -1319,6 +1333,7 @@ public class CoupleService {
 
     private static AnniversaryVO toAnniversaryVO(CoupleAnniversary row) {
         return new AnniversaryVO(row.getId(), row.getTitle(), row.getEventDate(), row.isYearly(),
+                row.getKind() == null ? CoupleAnniversary.KIND_NORMAL : row.getKind(),
                 row.getCreatedBy(), row.getCreated());
     }
 

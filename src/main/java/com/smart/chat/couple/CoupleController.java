@@ -43,7 +43,7 @@ public class CoupleController {
     public record ItemSaveRequest(String kind, String title, String note, String dueDate, Boolean done) {
     }
 
-    public record AnniversaryCreateRequest(String title, String date, Boolean yearly) {
+    public record AnniversaryCreateRequest(String title, String date, Boolean yearly, String kind) {
     }
 
     public record MoodSaveRequest(String mood, String note) {
@@ -231,7 +231,7 @@ public class CoupleController {
     public ApiResponse<CoupleService.AnniversaryVO> createAnniversary(@RequestBody AnniversaryCreateRequest req,
                                                                       HttpSession session) {
         return ApiResponse.ok(coupleService.createAnniversary(Sessions.requireUser(session),
-                req.title(), req.date(), req.yearly()));
+                req.title(), req.date(), req.yearly(), req.kind()));
     }
 
     @DeleteMapping("/anniversaries/{id}")
