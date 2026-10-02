@@ -160,8 +160,8 @@ public class CoupleCatchService {
         if (wishMapper.find(space.getId(), owner, c) != null) {
             throw new BusinessException(400, "这条心愿已经悄悄记过了 🤫");
         }
-        if (wishMapper.findByOwner(space.getId(), owner).size() >= CoupleCatchWish.PER_OWNER_MAX) {
-            throw new BusinessException(400, "TA 的心愿本最多记 " + CoupleCatchWish.PER_OWNER_MAX + " 条，先兑现几条");
+        if (secretWishes(space, owner).size() >= CoupleCatchWish.PER_OWNER_MAX) {
+            throw new BusinessException(400, "TA 的心愿本最多藏 " + CoupleCatchWish.PER_OWNER_MAX + " 条，兑现一条就腾出一格");
         }
         wishMapper.insert(CoupleCatchWish.of(space.getId(), owner, me, c, sd, sc));
         return build(space, me, now);
@@ -549,8 +549,7 @@ public class CoupleCatchService {
                 .limit(LIST_WISH)
                 .map(w -> toWish(w, me))
                 .toList();
-        int wishQuotaLeft = Math.max(0, CoupleCatchWish.PER_OWNER_MAX
-                - wishMapper.findByOwner(space.getId(), space.partnerOf(me)).size());
+        int wishQuotaLeft = Math.max(0, CoupleCatchWish.PER_OWNER_MAX - secretWishes(space, space.partnerOf(me)).size());
 
         List<MineVO> mines = mineMapper.findBySpace(space.getId()).stream()
                 .limit(LIST_MINE)
@@ -825,5 +824,15 @@ public class CoupleCatchService {
     private CoupleSpace requireSpace(String me) {
         return spaceMapper.findActiveByUser(me)
                 .orElseThrow(() -> new BusinessException(404, "还没有建立情侣空间，先邀请一位好友吧"));
+    }
+
+    /**
+     * 还在藏着的心愿（revealedAt 为 null）——容量按这个数算：兑现即揭晓就不再占格。
+     * 原先按全部行数算，于是 400 叫用户「先兑现几条」而兑现根本腾不出格子，建议本身无效。
+     */
+    private List<CoupleCatchWish> secretWishes(CoupleSpace space, String owner) {
+        return wishMapper.findByOwner(space.getId(), owner).stream()
+                .filter(CoupleCatchWish::secret)
+                .toList();
     }
 }

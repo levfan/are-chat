@@ -240,6 +240,23 @@ class CoupleCatchServiceTest {
         verify(push, times(1)).pushCoupleEvent(eq("catch-wish-fulfilled"), any(), any(), any());
     }
 
+    @Test
+    void fulfillingAWishFreesASlotInTheSecretBook() {
+        for (int i = 0; i < CoupleCatchWish.PER_OWNER_MAX; i++) {
+            service.addWish("alice", "第 " + i + " 条心愿", YESTERDAY, null);
+        }
+        assertThat(service.board("alice").wishQuotaLeft()).isZero();
+        assertThatThrownBy(() -> service.addWish("alice", "记不下的那条", YESTERDAY, null))
+                .isInstanceOf(BusinessException.class).hasMessageContaining("兑现一条就腾出一格");
+
+        // 兑现即揭晓：这条不再占「还藏着」的格子，所以真能记新的（原先按全部行数算，
+        // 400 叫用户「先兑现几条」而兑现根本腾不出格——建议本身无效）
+        service.fulfillWish("alice", wishes.get(0).getId());
+        assertThat(service.board("alice").wishQuotaLeft()).isEqualTo(1);
+        service.addWish("alice", "腾出来记的那条", YESTERDAY, null);
+        assertThat(service.board("alice").wishQuotaLeft()).isZero();
+    }
+
     // ========== F381 雷区探测器 ==========
 
     @Test
