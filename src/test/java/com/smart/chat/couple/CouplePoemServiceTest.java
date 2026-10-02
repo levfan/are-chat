@@ -229,8 +229,19 @@ class CouplePoemServiceTest {
     @Test
     void quoteContainsDaysAndPartner() {
         stubSpace("alice");
+        String day = LocalDate.now().toString();
+        List<String> templates = CouplePoemBank.quoteTemplates();
+        String template = templates.get(Math.floorMod(
+                CoupleRitualBank.stableHash("s1|quote|" + day), templates.size()));
         String quote = poemService.quote("alice");
-        assertThat(quote).contains("11"); // 10 天 + 1
+
+        // 模板按天轮换，含 {days} 的那几条才渲染天数（10 天 + 1）；任何一条都不许留下占位符
+        if (template.contains("{days}")) {
+            assertThat(quote).contains("11");
+        }
+        if (template.contains("{partner}")) {
+            assertThat(quote).contains("bob");
+        }
         assertThat(quote).doesNotContain("{days}").doesNotContain("{partner}");
     }
 
