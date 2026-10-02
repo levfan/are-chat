@@ -780,9 +780,12 @@ public class CoupleWorldService {
         CoupleWorldGroupReport g = ensureGroup(space, today);
         String myLine = isA ? g.getLineA() : g.getLineB();
         String partnerLine = isA ? g.getLineB() : g.getLineA();
-        boolean iLaughed = isA ? g.isLaughB() : g.isLaughA();
+        // laugh_a 记的是「A 笑过」，所以读自己那一列；早先这里是反的（A 读到 laugh_b），
+        // 结果我笑过后还能再笑一次、TA 笑过却把我锁死，partnerLaughed 也跟着错
+        boolean iLaughed = isA ? g.isLaughA() : g.isLaughB();
+        boolean partnerLaughed = isA ? g.isLaughB() : g.isLaughA();
         boolean both = g.isLaughA() && g.isLaughB();
-        GroupVO groupVO = new GroupVO(today, myLine, partnerLine, iLaughed, !iLaughed && !partnerLine.isEmpty(), both,
+        GroupVO groupVO = new GroupVO(today, myLine, partnerLine, iLaughed, partnerLaughed, both,
                 CoupleWorldBank.groupLaughLine(
                         CoupleRitualBank.stableHash(space.getId() + "|group|" + today), both),
                 myLine.isEmpty(), !myLine.isEmpty() && !partnerLine.isEmpty() && !iLaughed);

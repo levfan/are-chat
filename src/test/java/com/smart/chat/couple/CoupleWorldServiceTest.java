@@ -425,6 +425,12 @@ class CoupleWorldServiceTest {
         service.groupLaugh("alice");
         verify(push).pushCoupleEvent(eq("world-group-laugh"), eq("alice"), eq("bob"), any());
         assertThat(service.world("bob").group().bothLaughed()).isFalse();
+        // 笑过的那一方（alice）自己那格置真、不再给二次笑的机会；没笑的 bob 才还能笑
+        assertThat(service.world("alice").group().iLaughed()).isTrue();
+        assertThat(service.world("alice").group().canLaugh()).isFalse();
+        assertThat(service.world("bob").group().iLaughed()).isFalse();
+        assertThat(service.world("bob").group().partnerLaughed()).isTrue();
+        assertThat(service.world("bob").group().canLaugh()).isTrue();
         service.groupLaugh("bob");
         verify(push).pushCoupleEventBoth(eq("world-group-both"), eq("bob"), eq("alice"), eq("bob"), any());
         assertThat(service.world("alice").group().bothLaughed()).isTrue();
