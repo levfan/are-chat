@@ -376,12 +376,30 @@ class PrivateMessageServiceTest {
 
         MessageStar star = MessageStar.of("alice", message.getId());
         when(starMapper.findByUsername("alice")).thenReturn(List.of(star));
-        when(messageMapper.selectById(message.getId())).thenReturn(message);
+        // 收藏夹一次批量取消息：原先每条收藏 selectById 一次（N+1），改成 selectBatchIds 一趟
+        when(messageMapper.selectBatchIds(List.of(message.getId()))).thenReturn(List.of(message));
 
         List<PrivateMessageService.StarVO> stars = service.listStars("alice");
         assertThat(stars).hasSize(1);
         assertThat(stars.get(0).peer()).isEqualTo("bob");
         assertThat(stars.get(0).content()).isEqualTo("这句要收藏");
+        verify(messageMapper).selectBatchIds(List.of(message.getId()));
+    }
+
+    @Test
+    void listStarsSkipsDeletedMessagesWithoutPerStarQuery() {
+        PrivateMessage alive = PrivateMessage.of("bob", "alice", "还在的", PrivateMessage.TYPE_TEXT);
+        when(starMapper.findByUsername("alice")).thenReturn(List.of(
+                MessageStar.of("alice", alive.getId()), MessageStar.of("alice", "已删除的消息")));
+        when(messageMapper.selectBatchIds(any())).thenReturn(List.of(alive));
+
+        List<PrivateMessageService.StarVO> stars = service.listStars("alice");
+
+        // 收藏指向已删消息时静默跳过，且全程只有 1 次批量查询
+        assertThat(stars).hasSize(1);
+        assertThat(stars.get(0).content()).isEqualTo("还在的");
+        verify(messageMapper, never()).selectById(any(java.io.Serializable.class));
+        verify(messageMapper).selectBatchIds(any());
     }
 
     @Test
