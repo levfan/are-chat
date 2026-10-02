@@ -564,8 +564,13 @@ public class CoupleEchoService {
                 nz(b.getWant()), hint);
     }
 
+    /**
+     * F358 未拆读（SEALED）时不下发正文：规格写的是「只在本人点开补给时可读」，
+     * 聚合接口提前把信抄给前端就等于没锁（前端不渲染也照样能在网络面板里看到）。
+     */
     private SelfLetterVO toSelf(CoupleEchoSelfLetter s) {
-        return new SelfLetterVO(s.getId(), nz(s.getContent()), nz(s.getStatus()),
+        boolean sealed = CoupleEchoSelfLetter.STATUS_SEALED.equals(s.getStatus());
+        return new SelfLetterVO(s.getId(), sealed ? "" : nz(s.getContent()), nz(s.getStatus()),
                 s.getCreated() == null ? 0 : s.getCreated());
     }
 
