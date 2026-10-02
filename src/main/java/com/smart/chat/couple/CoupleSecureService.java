@@ -322,11 +322,14 @@ public class CoupleSecureService {
     /** 给对方存一枚信任币（每人每天最多一枚）。 */
     public TrustBoardVO depositTrust(String me, String reason) {
         CoupleSpace space = requireSpace(me);
-        String today = LocalDate.now().toString();
+        // 日界用毫秒区间而不是 DATE_FORMAT：后者是 MySQL 方言，H2(MODE=MySQL) 没有这个函数
+        long dayStart = LocalDate.now().atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli();
+        long nextDayStart = LocalDate.now().plusDays(1).atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli();
         long todayCount = trustMapper.selectCount(new LambdaQueryWrapper<CoupleTrustCoin>()
                 .eq(CoupleTrustCoin::getSpaceId, space.getId())
                 .eq(CoupleTrustCoin::getFromUser, me)
-                .apply("DATE_FORMAT(FROM_UNIXTIME(created/1000), '%Y-%m-%d') = {0}", today));
+                .ge(CoupleTrustCoin::getCreated, dayStart)
+                .lt(CoupleTrustCoin::getCreated, nextDayStart));
         if (todayCount >= TRUST_COIN_DAILY_LIMIT) {
             throw new BusinessException(400, "今天的信任币已经送出啦，明天再来 🪙");
         }
