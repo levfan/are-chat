@@ -18,7 +18,8 @@
    - 系统页另开一路：`/chat`（44 个按钮 + 发一条私信验 WS 与落库）、`/contacts`、`/admin`（admin 账号）
    - **护栏**：`/api/couple/dissolve`、`/api/auth/logout`、`/api/auth/deactivate`、`/api/admin/users/*/status` 在路由层直接挡掉；确认框一律点「取消」——第一版误点「确定」把情侣空间解散过一次，已修
 3. **实体反射守卫** `src/test/java/com/smart/chat/EntityReflectionGuardTest`
-   把所有 `@TableName` 实体过一遍 MyBatis `Reflector`，把「 getter 歧义导致运行时随机 500」变成构建期确定性失败（缺陷账 1 的回归保护）
+   把所有 `@TableName` 实体过一遍 MyBatis `Reflector`，把「 getter 歧义导致运行时随机 500」变成构建期确定性失败（缺陷账 1 的回归保护）。
+   ⚠️ 第一版写成「实例化一次即触发建 Reflector」是**无效的**：歧义 getter 会被包成 `AmbiguousMethodInvoker`，只有真正读属性（MyBatis 给 `#{et.xxx}` 取值时）才抛。改为逐字段 `reflector.getGetInvoker(field.getName()).invoke(instance)` 后当场跑红，点名出 `CoupleLaughJoke.frozen`、`CoupleWorldVow.witnessed` 两处漏网的真歧义（缺陷账 11）
 
 ## 缺陷账（全部已修、已复验、已提交推送）
 
@@ -35,8 +36,12 @@
 9. **恋爱语录机日期脆断言**：`CouplePoemServiceTest` 断言语录含「11」，但模板按 `stableHash(space|quote|day)` 轮换，其中一条不含 `{days}` → 约 1/8 的日子必红。改为按当天实际命中的模板断言（含 `{days}` 才查数字、含 `{partner}` 才查用户名、任何一条都不许留占位符）。
 10. **巡检 harness 自身两处**（不是产品缺陷，但记录以免重踩）：确认框收尾点 `.last()` 等于替人按「确定」→ 曾把测试情侣空间解散；页签选择器写成 `[aria-controls$="-pane-x"]`（实际值 `pane-x`，无先导横杠）导致整轮空跑却只报「0 卡片」——补了首屏加载期错误单独记账，避免「整页 500」被误判成正常（缺陷 1 就是这么漏过一次）。
 
-## 误报账（查过、确认不是缺陷）
+11. **P1｜实体反射守卫是恒绿的假守卫**：第一版只做 `SystemMetaObject.forObject(new 实体())`，从不读取任何属性，而 MyBatis 把歧义 getter 包成 `AmbiguousMethodInvoker`、**取值时才抛**——于是缺陷 1 那两处漏网歧义（`frozen`、`witnessed`）守卫一次都没报过。改成 `findForClass(clazz)` 后对每个非静态字段 `getGetInvoker(name).invoke(instance)`，跑红精确点名两处，改名 `frozenFlag()`/`witnessedFlag()` 后转绿。**教训：守卫自己也要有「它能变红」的证据**，否则等于没有。
+12. **P2｜欢笑年报 guessTwin 没过滤年份**：`couple_laugh_guess` 表没有 `day` 列，年报里「两人预判一致」直接对全历史分组计数 → 切 2025 还是 2026 数字一样。改为借「考的是哪条冷笑话」的发出日归年（与周报同一口径），补一条 400 天前的条目 + 双人一致预测断言今年归零。
+13. **P2｜服务层查重与库的排序规则不同口径**：`couple_laugh_moment`/`couple_laugh_joke` 的 uk 里 title/content 没写 `COLLATE`，MariaDB 默认 `*_ci` 把「Bo」和「bo」视为同一行，而服务层用 `find(space,user,title)` 精确匹配放行 → 用户看到的是「服务说没重复、insert 撞唯一键 500」。改为在已加载的当日/全空间列表上 `equalsIgnoreCase` 比对（语义与库一致，还省一次查询）。
+14. **P2｜F348 周年抽奖奖池跟规格无关**：规格写的是「奖池=当年攒的迷你愿望（积分位）」，实现成了固定 8 条 Bank 静态愿望位——抽到的奖跟你们这一年实际做的事毫无关系。改为取本年 `couple_point_ledger` 里 `EARN` 的条目（去重、按 `PRIZE_MAX` 截断）作奖池，本年一条都没攒过才回落静态位。
 
+## 误报账（查过、确认不是缺陷）
 - 心情卡「😍 恋爱中」点了没反应：`selected` 默认值就是 `LOVE`，再点是同一值，无变化属正常
 - `POST /api/couple/dict-quiz`、`/api/couple/chronicle/birthday-look`、`/api/couple/chronicle/archaeology` 的 404：后端 `BusinessException(404, …)` 的空态业务提示（词典还没收录 / TA 没填生日 / 考古层还空），前端 `onError` 直透成 ElMessage，不是路径写错
 - `/api/couple/daily-life/soses` 的 400「上一条抱抱还在路上」：同一测试会话内重复点，属正常限流
@@ -85,9 +90,18 @@
   5. `CoupleWorldBank.VISIT_TIPS` 与 `RELATIVES_SAMPLE` 两块静态内容没有任何 VO 下发，前端拿不到「带什么/聊什么/雷区」建议池与考前卷样例 —— **待裁决的后端补口**
 - 落位说明：v6 规格未规定挂载页签，故新增 `shared` 页签下子页签 `world`「👪 两家与朋友」（与批次二十八把 repair 追加进既有子页签的做法一致）。v7 规格已写死五批落位：echo→care/rescue、focus→growth、quest→promises、catch→letters/send、laugh→rituals/fun，后续各批照此
 
+## 前端批次三十 F340-F349 传世系统
+
+- 交付（分 3）：`feat 契约层 types+legacyApi 13 方法` → `feat CoupleLegacy.vue 十卡 + timeline 新增子页签 legacy + registry 114→124` → `test 11 用例（166→177）`
+- 主线程复核（不全信 agent 报的绿）：`npx vue-tsc --noEmit` 零错、`npx vitest run` 177 全绿、`npx vite build` 成功；另用脚本把后端 `CoupleLegacyService` 的 11 个 record 与前端 11 个 interface **逐字段比对，0 处不一致**（字段名对不上只会表现为界面空白，编译和单测都照不出）
+- 组件口径：闸门不过一律 `ElMessage.warning` 配场景文案，不留静默按钮；后端 400 的中文 message 直透 `ElMessage.error`；写接口一律返回整份 `LegacyVO`，`refresh()` 整体替换后回填「本人当年可改写」的输入口（十问逐格 / 年审 / 发言 / 汇率 / 品牌），行内草稿（评分评语、清单说明）清空重填；主色墨玉绿 `#065f46`，全仓 grep 确认零占用
+- 与后端口径的三处裁决：
+  1. **F343 写接口回落 `goal=300`**：`build()` 里所有写操作都按 `DEFAULT_GOAL` 重算倒推，只有 `GET /vault?goal=` 认目标值——所以任何一次写操作后倒推卡会跳回默认目标。前端选择「跟着服务端返回的 goal 回填输入框」，宁可让显示的数与实际算的数一致，也不留一个「写着 1000 却按 300 算」的假输入框。**接受后端现状**
+  2. **F348 奖池**：**不规格**，已按缺陷账 14 改后端
+  3. **F347 清单条目不能删**：规格只写「双签封存」，未要求删除；已封存条目留在清单上不再显示「可封存」，符合规格。**接受**
+
 ## 尚未完成（接续点）
 
-- 前端批次三十 传世系统 CoupleLegacy（进行中，落位 `timeline` 新增子页签 `legacy`）
 - 前端批次 回音壁 / 注意力保护区 / 人生关卡 / 聆听者 / 欢笑银行（五批 50 个功能的界面，后端与 api 契约已就绪）
 - 后端补口：`VISIT_TIPS`/`RELATIVES_SAMPLE` 是否下发；`profileApi.friendsBirthdays`、`coupleApi.relationshipOf` 要不要做入口
 - 收官：全绿后升 `1.6.0-rc.1`（独立 commit）、双仓地图终稿、全量验收总结
