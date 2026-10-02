@@ -391,6 +391,26 @@ class CoupleLegacyServiceTest {
         assertThat(vo.year()).isEqualTo(YEAR);
         assertThat(vo.drawnMine()).isTrue();
         assertThat(vo.prizeMine()).isNotBlank();
+        // 今年一条愿望都没攒过，才回落 Bank 的固定迷你愿望位
+        assertThat(vo.prizeMine()).isIn(CoupleLegacyBank.PRIZES.toArray());
+    }
+
+    @Test
+    void drawPoolEatsOnlyThisYearsEarnedWishes() {
+        ledger.add(CouplePointLedger.of("s1", "alice", "EARN", "陪看一部老片", 5));
+        ledger.add(CouplePointLedger.of("s1", "bob", "EARN", "一次不挑餐厅", 5));
+        // SPEND 是花掉的花销、去年 EARN 是去年的愿望，都不该进今年的箱子
+        ledger.add(CouplePointLedger.of("s1", "alice", "SPEND", "已经换掉的花销", 3));
+        CouplePointLedger lastYear = CouplePointLedger.of("s1", "alice", "EARN", "去年的愿望", 5);
+        lastYear.setCreated(LocalDate.of(LocalDate.now().getYear() - 1, 6, 1)
+                .atStartOfDay(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli());
+        ledger.add(lastYear);
+
+        service.draw("alice");
+        service.draw("bob");
+
+        assertThat(draws.get(0).getPrizeA()).isIn("陪看一部老片", "一次不挑餐厅");
+        assertThat(draws.get(0).getPrizeB()).isIn("陪看一部老片", "一次不挑餐厅");
     }
 
     // ========== F343 里程碑倒推 + F349 空间等级 ==========
