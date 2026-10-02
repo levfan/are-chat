@@ -348,9 +348,8 @@ public class PrivateMessageService {
         if (stars.isEmpty()) {
             return List.of();
         }
-        Map<String, PrivateMessage> messages = stars.stream()
-                .map(s -> messageMapper.selectById(s.getMsgId()))
-                .filter(java.util.Objects::nonNull)
+        Map<String, PrivateMessage> messages = messageMapper
+                .selectBatchIds(stars.stream().map(MessageStar::getMsgId).distinct().toList()).stream()
                 .collect(Collectors.toMap(PrivateMessage::getId, Function.identity()));
         return stars.stream()
                 .filter(s -> messages.containsKey(s.getMsgId()))

@@ -16,7 +16,9 @@ import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * 个人资料：预设 emoji 头像 + 昵称 + 个性签名 + 生日；好友资料卡仅好友可见。
@@ -122,8 +124,14 @@ public class ProfileController {
         String me = Sessions.requireUser(session);
         List<FriendBirthdayVO> list = new ArrayList<>();
         LocalDate today = LocalDate.now();
-        for (var friend : friendMapper.findAllByOwner(me)) {
-            UserProfile profile = profileMapper.selectById(friend.getFriendUsername());
+        var friends = friendMapper.findAllByOwner(me);
+        // 资料一次批量取：原先每个好友 selectById 一次，好友越多这个接口越慢（N+1）
+        List<String> peers = friends.stream().map(f -> f.getFriendUsername()).toList();
+        Map<String, UserProfile> profileMap = peers.isEmpty() ? Map.of()
+                : profileMapper.selectBatchIds(peers).stream()
+                        .collect(Collectors.toMap(UserProfile::getUsername, p -> p));
+        for (var friend : friends) {
+            UserProfile profile = profileMap.get(friend.getFriendUsername());
             String birthday = profile == null ? null : profile.getBirthday();
             if (birthday == null || birthday.isBlank()) {
                 continue;
