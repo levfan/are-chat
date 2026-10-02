@@ -4160,3 +4160,114 @@ CREATE TABLE `couple_echo_self_letter` (
     PRIMARY KEY (`id`),
     KEY `idx_echo_self_letter` (`space_id`, `from_user`, `status`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='F358 写给低落的自己（一人同时一封在途）';
+
+-- smart_collections.couple_focus_night definition
+CREATE TABLE `couple_focus_night` (
+    `id` varchar(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '主键UUID',
+    `space_id` varchar(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '情侣空间ID（关联 couple_space.id）',
+    `day` varchar(10) NOT NULL COMMENT '打卡日 yyyy-MM-dd',
+    `minutes_a` int(11) DEFAULT NULL COMMENT 'userA 报的专注分钟 0-180（服务层钳制；NULL=还没报）',
+    `minutes_b` int(11) DEFAULT NULL COMMENT 'userB 报的专注分钟 0-180（服务层钳制；NULL=还没报）',
+    `note_a` varchar(80) NOT NULL DEFAULT '' COMMENT 'userA 的一句话（≤40 字，宽度放宽）',
+    `note_b` varchar(80) NOT NULL DEFAULT '' COMMENT 'userB 的一句话（≤40 字，宽度放宽）',
+    `created` bigint(20) NOT NULL COMMENT '时间（毫秒时间戳）',
+    `updated_at` bigint(20) NOT NULL COMMENT '更新时间（毫秒时间戳）',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_focus_night` (`space_id`, `day`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='F360 专注打卡（双方都报当夜点亮）';
+
+-- smart_collections.couple_focus_slot definition
+CREATE TABLE `couple_focus_slot` (
+    `id` varchar(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '主键UUID',
+    `space_id` varchar(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '情侣空间ID（关联 couple_space.id）',
+    `week` varchar(10) NOT NULL COMMENT '周锚=该周周一 yyyy-MM-dd（uk 占位，每周一格）',
+    `day` varchar(10) NOT NULL COMMENT '时段落在周内哪一天 yyyy-MM-dd（服务层校验必须在本周内）',
+    `title` varchar(180) NOT NULL DEFAULT '' COMMENT '这段时间想做什么（≤60 字，宽度放宽）',
+    `hours` int(11) NOT NULL DEFAULT 2 COMMENT '时长 1-6 小时（服务层钳制，默认 2）',
+    `proposed_by` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '提议人（区分大小写）',
+    `confirmer` varchar(50) DEFAULT NULL COMMENT '确认人=对方（不能自确认；NULL=还没确认）',
+    `created` bigint(20) NOT NULL COMMENT '时间（毫秒时间戳）',
+    `updated_at` bigint(20) NOT NULL COMMENT '更新时间（毫秒时间戳）',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_focus_slot` (`space_id`, `week`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='F361 专属时段（每周一格，对方确认生效）';
+
+-- smart_collections.couple_focus_queue definition
+CREATE TABLE `couple_focus_queue` (
+    `id` varchar(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '主键UUID',
+    `space_id` varchar(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '情侣空间ID（关联 couple_space.id）',
+    `from_user` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '留言的人（区分大小写）',
+    `to_user` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '收留言的人=对方（区分大小写）',
+    `content` varchar(240) NOT NULL DEFAULT '' COMMENT '攒下来的那句话（≤80 字，宽度放宽）',
+    `read_at` bigint(20) DEFAULT NULL COMMENT '已读时间毫秒（NULL=还在排队）',
+    `created` bigint(20) NOT NULL COMMENT '时间（毫秒时间戳）',
+    `updated_at` bigint(20) NOT NULL COMMENT '更新时间（毫秒时间戳）',
+    PRIMARY KEY (`id`),
+    KEY `idx_focus_queue` (`space_id`, `to_user`, `read_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='F362 攒一句话（在途每人 ≤5）';
+
+-- smart_collections.couple_focus_meal definition
+CREATE TABLE `couple_focus_meal` (
+    `id` varchar(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '主键UUID',
+    `space_id` varchar(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '情侣空间ID（关联 couple_space.id）',
+    `day` varchar(10) NOT NULL COMMENT '打卡日 yyyy-MM-dd',
+    `tick_a` tinyint(4) NOT NULL DEFAULT 0 COMMENT 'userA 是否点过（1=点了，各点各的）',
+    `tick_b` tinyint(4) NOT NULL DEFAULT 0 COMMENT 'userB 是否点过（1=点了，各点各的）',
+    `created` bigint(20) NOT NULL COMMENT '时间（毫秒时间戳）',
+    `updated_at` bigint(20) NOT NULL COMMENT '更新时间（毫秒时间戳）',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_focus_meal` (`space_id`, `day`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='F363 饭桌不低头（双点=同桌成功）';
+
+-- smart_collections.couple_focus_gaze definition
+CREATE TABLE `couple_focus_gaze` (
+    `id` varchar(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '主键UUID',
+    `space_id` varchar(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '情侣空间ID（关联 couple_space.id）',
+    `day` varchar(10) NOT NULL COMMENT '打卡日 yyyy-MM-dd',
+    `tick_a` tinyint(4) NOT NULL DEFAULT 0 COMMENT 'userA 是否点过（1=点了）',
+    `tick_b` tinyint(4) NOT NULL DEFAULT 0 COMMENT 'userB 是否点过（1=点了）',
+    `created` bigint(20) NOT NULL COMMENT '时间（毫秒时间戳）',
+    `updated_at` bigint(20) NOT NULL COMMENT '更新时间（毫秒时间戳）',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_focus_gaze` (`space_id`, `day`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='F364 对视十秒（双点点亮）';
+
+-- smart_collections.couple_focus_unplug definition
+CREATE TABLE `couple_focus_unplug` (
+    `id` varchar(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '主键UUID',
+    `space_id` varchar(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '情侣空间ID（关联 couple_space.id）',
+    `day` varchar(10) NOT NULL COMMENT '打卡日 yyyy-MM-dd',
+    `tick_a` tinyint(4) NOT NULL DEFAULT 0 COMMENT 'userA 是否点过（1=点了）',
+    `tick_b` tinyint(4) NOT NULL DEFAULT 0 COMMENT 'userB 是否点过（1=点了）',
+    `created` bigint(20) NOT NULL COMMENT '时间（毫秒时间戳）',
+    `updated_at` bigint(20) NOT NULL COMMENT '更新时间（毫秒时间戳）',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_focus_unplug` (`space_id`, `day`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='F365 不插电半小时（双点成功，周连击读时算）';
+
+-- smart_collections.couple_focus_nudge definition
+CREATE TABLE `couple_focus_nudge` (
+    `id` varchar(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '主键UUID',
+    `space_id` varchar(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '情侣空间ID（关联 couple_space.id）',
+    `day` varchar(10) NOT NULL COMMENT '递卡日 yyyy-MM-dd',
+    `from_user` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '递卡的人（区分大小写，每人每天 ≤2 张）',
+    `note` varchar(80) NOT NULL DEFAULT '' COMMENT '一句话，可空（≤40 字，宽度放宽）',
+    `created` bigint(20) NOT NULL COMMENT '时间（毫秒时间戳）',
+    PRIMARY KEY (`id`),
+    KEY `idx_focus_nudge` (`space_id`, `day`, `from_user`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='F366 走神温柔哨（每人每天 ≤2 张）';
+
+-- smart_collections.couple_focus_detox definition
+CREATE TABLE `couple_focus_detox` (
+    `id` varchar(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '主键UUID',
+    `space_id` varchar(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '情侣空间ID（关联 couple_space.id）',
+    `day` varchar(10) NOT NULL COMMENT '挑战日 yyyy-MM-dd',
+    `kind` varchar(2) NOT NULL COMMENT 'AM=上半天 / PM=下半天（服务层校验，只此两种）',
+    `tick_a` tinyint(4) NOT NULL DEFAULT 0 COMMENT 'userA 是否应战（1=应了）',
+    `tick_b` tinyint(4) NOT NULL DEFAULT 0 COMMENT 'userB 是否应战（1=应了）',
+    `confirmed_by` varchar(50) DEFAULT NULL COMMENT '最先应战的人（区分大小写，NULL=还没人应战）',
+    `created` bigint(20) NOT NULL COMMENT '时间（毫秒时间戳）',
+    `updated_at` bigint(20) NOT NULL COMMENT '更新时间（毫秒时间戳）',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_focus_detox` (`space_id`, `day`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='F368 数字排毒半天（双方都报=达成）';
