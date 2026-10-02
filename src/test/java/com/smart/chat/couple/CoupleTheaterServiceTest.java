@@ -173,6 +173,9 @@ class CoupleTheaterServiceTest {
 
         service.rateRole("alice", 4);
         verify(push).pushCoupleEvent(eq("theater-role-rated"), eq("alice"), eq("bob"), any());
+        // 盲评：TA 还没打，我也看不到 TA 的分
+        assertThat(service.today("bob").role().partnerRate()).isNull();
+
         service.rateRole("bob", 5);
         verify(push).pushCoupleEventBoth(eq("theater-role-rated"), eq("bob"), eq("alice"), eq("bob"), any());
         assertThat(service.today("alice").role().bothRated()).isTrue();
@@ -364,10 +367,17 @@ class CoupleTheaterServiceTest {
 
         service.movieFinish("alice", "山海之间");
         verify(push).pushCoupleEvent(eq("theater-movie-finish"), eq("alice"), eq("bob"), any());
+        CoupleTheaterService.MovieVO mid = service.today("alice").movies().get(0);
+        assertThat(mid.mineFinished()).isTrue();
+        assertThat(mid.partnerFinished()).isFalse();
+        assertThat(mid.finished()).isFalse();
+
         service.movieFinish("bob", "山海之间");
         verify(push).pushCoupleEventBoth(eq("theater-movie-script"), eq("bob"), eq("alice"), eq("bob"), any());
         CoupleTheaterService.MovieVO done = service.today("alice").movies().get(0);
         assertThat(done.finished()).isTrue();
+        assertThat(done.mineFinished()).isTrue();
+        assertThat(done.partnerFinished()).isTrue();
         assertThat(done.partnerDiary()).contains("骗了");
 
         // 未认领的人不能剧终

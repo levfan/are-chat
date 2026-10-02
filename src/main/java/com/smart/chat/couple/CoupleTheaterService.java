@@ -23,6 +23,12 @@ public class CoupleTheaterService {
 
     static final int DIARY_MAX = 300;
     static final int BOOTH_MAX = 300;
+    static final int LIST_DIARY_MAX = 14;
+    static final int LIST_AWARD_MAX = 30;
+    static final int LIST_REF_MAX = 60;
+    static final int LIST_BOOTH_MAX = 30;
+    static final int LIST_MOVIE_MAX = 12;
+    static final int LIST_TICKET_MAX = 20;
     static final int TERM_MAX = 40;
     static final int REF_FIELD_MAX = 200;
     static final int EVIDENCE_MAX = 140;
@@ -95,7 +101,8 @@ public class CoupleTheaterService {
     }
 
     public record MovieVO(String work, String myRole, String myDiary, String partnerRole, String partnerDiary,
-                          String status, boolean bothClaimed, boolean finished) {
+                          String status, boolean bothClaimed, boolean mineFinished, boolean partnerFinished,
+                          boolean finished) {
     }
 
     public record TicketVO(String id, String note, String status, String customerUser, boolean mineCustomer,
@@ -602,7 +609,8 @@ public class CoupleTheaterService {
 
         CoupleRoleDay role = ensureRole(space, today);
         Integer myRate = isA ? role.getRateA() : role.getRateB();
-        Integer partnerRate = isA ? role.getRateB() : role.getRateA();
+        // 演技分是「盲评」：自己没打之前不看 TA 那一份，免得变成先验价
+        Integer partnerRate = myRate == null ? null : (isA ? role.getRateB() : role.getRateA());
         RoleVO roleVO = new RoleVO(today, role.getRoleName(), role.getGuide(), myRate != null,
                 myRate, partnerRate, role.getRateA() != null && role.getRateB() != null);
 
@@ -617,7 +625,12 @@ public class CoupleTheaterService {
                 pair[1] = d;
             }
         }
+        int diaryTotal = byDay.size();
+        int diaryKept = 0;
         for (Map.Entry<String, CoupleSwapDiary[]> e : byDay.entrySet()) {
+            if (diaryKept++ >= LIST_DIARY_MAX) {
+                break;
+            }
             CoupleSwapDiary mine = e.getValue()[0];
             CoupleSwapDiary other = e.getValue()[1];
             boolean bothIn = mine != null && other != null;
@@ -633,7 +646,12 @@ public class CoupleTheaterService {
                 master.getReview(), master.getGrade());
 
         List<BoothVO> booths = new ArrayList<>();
+        int boothTotal = boothMapper.findBySpace(space.getId()).size();
+        int boothKept = 0;
         for (CoupleBoothNote n : boothMapper.findBySpace(space.getId())) {
+            if (boothKept++ >= LIST_BOOTH_MAX) {
+                break;
+            }
             boolean mine = me.equals(n.getFromUser());
             boolean sealed = CoupleBoothNote.STATUS_SEALED.equals(n.getStatus());
             long left = sealed ? ChronoUnit.DAYS.between(now, LocalDate.parse(n.getOpenDay())) : 0;
@@ -646,7 +664,12 @@ public class CoupleTheaterService {
         List<RefVO> refs = new ArrayList<>();
         int quizzed = 0;
         int rights = 0;
+        int refTotal = refMapper.findBySpace(space.getId()).size();
+        int refKept = 0;
         for (CouplePrivateRef r : refMapper.findBySpace(space.getId())) {
+            if (refKept++ >= LIST_REF_MAX) {
+                break;
+            }
             boolean mine = me.equals(r.getFromUser());
             boolean iAnswered = me.equals(r.getQuizBy());
             boolean partnerAnswered = r.getQuizBy() != null && !r.getQuizBy().isEmpty() && !iAnswered;
@@ -662,7 +685,12 @@ public class CoupleTheaterService {
         }
 
         List<AwardVO> awards = new ArrayList<>();
+        int awardTotal = awardMapper.findBySpace(space.getId()).size();
+        int awardKept = 0;
         for (CoupleActAward a : awardMapper.findBySpace(space.getId())) {
+            if (awardKept++ >= LIST_AWARD_MAX) {
+                break;
+            }
             awards.add(new AwardVO(a.getDay(), a.getFromUser(), a.getAboutUser(), a.getEvidence(),
                     me.equals(a.getFromUser()), CoupleTheaterBank.actAwardLine(
                             CoupleRitualBank.stableHash(space.getId() + "|act|" + a.getDay() + "|" + a.getFromUser()),
@@ -690,22 +718,27 @@ public class CoupleTheaterService {
         for (Map.Entry<String, CoupleRoleMovie[]> e : moviePairs.entrySet()) {
             CoupleRoleMovie mine = e.getValue()[0];
             CoupleRoleMovie other = e.getValue()[1];
-            boolean finished = mine != null && CoupleRoleMovie.STATUS_FINISHED.equals(mine.getStatus());
-            boolean bothFinished = finished && other != null
-                    && CoupleRoleMovie.STATUS_FINISHED.equals(other.getStatus());
+            boolean mineFinished = mine != null && CoupleRoleMovie.STATUS_FINISHED.equals(mine.getStatus());
+            boolean partnerFinished = other != null && CoupleRoleMovie.STATUS_FINISHED.equals(other.getStatus());
+            boolean bothFinished = mineFinished && partnerFinished;
             movies.add(new MovieVO(e.getKey(),
                     mine == null ? "" : mine.getRoleName(), mine == null ? "" : mine.getDiary(),
                     other == null ? "" : other.getRoleName(),
                     bothFinished && other != null ? other.getDiary() : "",
                     bothFinished ? CoupleRoleMovie.STATUS_FINISHED : CoupleRoleMovie.STATUS_ONGOING,
-                    mine != null && other != null, bothFinished));
+                    mine != null && other != null, mineFinished, partnerFinished, bothFinished));
         }
 
         List<TicketVO> tickets = new ArrayList<>();
         long nowTs = System.currentTimeMillis();
+        int orderTotal = ticketMapper.findBySpace(space.getId()).size();
         int orders = 0;
         int onTimeOrders = 0;
+        int ticketKept = 0;
         for (CoupleServiceTicket t : ticketMapper.findBySpace(space.getId())) {
+            if (ticketKept++ >= LIST_TICKET_MAX) {
+                break;
+            }
             boolean mineCustomer = me.equals(t.getCustomerUser());
             boolean openish = CoupleServiceTicket.STATUS_OPEN.equals(t.getStatus());
             boolean answeredish = CoupleServiceTicket.STATUS_ANSWERED.equals(t.getStatus());
@@ -721,12 +754,12 @@ public class CoupleTheaterService {
             }
         }
 
+        // 计数用全量（列表已钳到最近 N 条），颁奖礼的数字不能因为钳了列表就变小
         int diaryDays = (int) diaries.stream().filter(DiaryVO::bothIn).count();
-        int nominations = awards.size();
         GalaVO galaVO = new GalaVO(today, CoupleTheaterBank.galaPrize(
                         CoupleRitualBank.stableHash(space.getId() + "|gala|" + today)),
-                CoupleTheaterBank.galaLine(CoupleRitualBank.stableHash(space.getId() + "|gala|" + today), nominations),
-                nominations, refs.size(), quizzed, rights, diaryDays, onTimeOrders, orders);
+                CoupleTheaterBank.galaLine(CoupleRitualBank.stableHash(space.getId() + "|gala|" + today), awardTotal),
+                awardTotal, refTotal, quizzed, rights, diaryDays, onTimeOrders, orderTotal);
 
         return new TheaterVO(today, week, roleVO, diaries, masterVO, booths, refs, awards, familyVO,
                 movies, tickets, galaVO);

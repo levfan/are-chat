@@ -130,3 +130,13 @@
 - 修复方式（都不动已推送的 V39/V40，避免 Flyway 校验和漂移）：侍奉记号改为**周几 1-7**（本行就是按周一行，周几在周内唯一，14 字符就能记满七天），`hasServed(token)` 与聚合里的 `servedToday` 同步换成周几口径；破戒记号压成 **MMdd**（5 字 + 逗号）并把单营破戒记录上限设为 25 条，超出 400「先把这一期结掉再开新的」——上限是诚实提示，比截断丢数据好。
 - 顺带把 v6 已知的三处「按天记号」列宽口径统一写进地图：**日期进 CSV 列一律用 MMdd 或周几，不用 ISO**（`couple_repair_plan.signed_days` 上一轮已改 MMdd:A/B）。
 - 全量 500 绿；新增断言：`serves` 里不得出现 `-`（防 ISO 日期回潮）。
+
+## 批次二十六前端（CoupleTheater，2026-10-02 交付）+ 前端反查出的后端三处缺陷
+
+- agent 交付：CoupleTheater 五卡（116 testid）+ theaterApi 17 方法 + CoupleTheater* 11 类型 + 挂 rituals「🎲 玩趣时间」+ registry 88→93 + 7 用例（基线 141→148）。主色选 `#0d9488`，理由是可查证的红线：`#7c3aed` 已被全局聊天气泡渐变与设置页「暗夜紫」占用——这是前端 agent 第一次主动守住跨模块色板冲突。
+- 主线程独立复跑门禁：`pnpm test` 148/148、`pnpm build` 绿；端点与 CoupleTheaterController 17 个 mapping 逐条 diff 完全一致。
+- **agent 报出三处后端缺陷（已修，均补断言）**：
+  1. **演技分不是盲评**：`RoleVO.partnerRate` 不等我打分就下发 TA 的分，等于先偷看答案再评价。改为 `myRate == null` 时钳成 null；断言「bob 打完、alice 未打时 alice 看不到 TA 的分」。
+  2. **追剧拿不到本人剧终态**：`MovieVO.status/finished` 只在双人都剧终才翻转，前端无法显示「我已剧终、等 TA」，只能把剧终钮常驻。补 `mineFinished / partnerFinished` 两个字段；断言中途态（我已完成、TA 未完成、整体未完成）。
+  3. **总览列表无上限**：diaries/booths/refs/awards/tickets/movies 全量历史进 payload，工单簿会越用越肥。钳到最近 14/30/60/30/12/20 条，**但颁奖礼计数改走全量**（`awardTotal/refTotal/orderTotal`），免得钳了列表让「年度 25 单」显示成 20 单；用例塞 25 张工单断言 `tickets=20 && gala.orders=25`。
+- agent 其余 10 条「与描述不一致」均为口径澄清（本批无日期入参、`masterReview` 评语允许空、`SERVE_TARGET=3` 是出师门槛而 7 是打卡上限、六个列表历史上就不过滤等），已按后端为准实现，无需改动。
