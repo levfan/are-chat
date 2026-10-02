@@ -581,11 +581,14 @@ public class CoupleQuestService {
             changed = row.tick(isA);
             moveNightMapper.insert(row);
         } else {
-            if (!n.isEmpty()) {
+            // 「补话」要落库：原先只有 0→1 翻转才 update，于是点过之后再来写一句话会被静默丢弃
+            // （界面给了成功提示，重进却什么都没有）。推送仍只在真翻转时发，不重复打扰。
+            boolean noteChanged = !n.isEmpty() && !n.equals(row.getNote());
+            if (noteChanged) {
                 row.setNote(n);
             }
             changed = row.tick(isA);
-            if (changed) {
+            if (changed || noteChanged) {
                 row.setUpdatedAt(System.currentTimeMillis());
                 moveNightMapper.updateById(row);
             }

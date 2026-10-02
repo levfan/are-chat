@@ -523,6 +523,14 @@ class CoupleQuestServiceTest {
 
         service.moveNight("bob", TOMORROW, null);
         verify(push, times(1)).pushCoupleEventBoth(eq("quest-move-night"), any(), any(), any(), any());
+
+        // 点过之后再补一句话必须真的落库：原先只有 0→1 翻转才 update，补的话只改了内存对象就被丢弃
+        // （界面给成功提示、重进页面什么都没有）。所以锁 update 次数，而不是锁 VO 回显——mock 里对象是同一个实例，
+        // 只断言回显的话坏代码也能过。推送仍然只在翻转那一次发。
+        var late = service.moveNight("bob", TOMORROW, "补一句：半夜下楼跑了个步");
+        assertThat(late.moveNight().note()).isEqualTo("补一句：半夜下楼跑了个步");
+        verify(moveNightMapper, times(2)).updateById(any(CoupleQuestMoveNight.class));
+        verify(push, times(1)).pushCoupleEventBoth(eq("quest-move-night"), any(), any(), any(), any());
     }
 
     // ========== F376 低谷通行证 ==========
