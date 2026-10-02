@@ -1,8 +1,9 @@
 package com.smart.chat;
 
 import com.baomidou.mybatisplus.annotation.TableName;
+import org.apache.ibatis.reflection.DefaultReflectorFactory;
 import org.apache.ibatis.reflection.ReflectionException;
-import org.apache.ibatis.reflection.SystemMetaObject;
+import org.apache.ibatis.reflection.Reflector;
 import org.junit.jupiter.api.Test;
 import org.springframework.core.io.support.PathMatchingResourcePatternResolver;
 import org.springframework.core.type.classreading.CachingMetadataReaderFactory;
@@ -30,21 +31,34 @@ class EntityReflectionGuardTest {
         assertThat(entities).isNotEmpty();
 
         List<String> broken = new ArrayList<>();
+        DefaultReflectorFactory factory = new DefaultReflectorFactory();
         for (Class<?> clazz : entities) {
+            Object instance;
             try {
-                // 实例化一次即可触发 MyBatis 为该实体建 Reflector（歧义在这一步抛）
-                SystemMetaObject.forObject(clazz.getDeclaredConstructor().newInstance());
-            } catch (ReflectionException ex) {
-                String msg = String.valueOf(ex.getMessage());
-                if (msg.contains("ambiguous type for property")) {
-                    broken.add(clazz.getSimpleName() + " → " + msg.replaceAll("\\s+", " ").trim());
-                }
+                instance = clazz.getDeclaredConstructor().newInstance();
             } catch (ReflectiveOperationException ex) {
                 broken.add(clazz.getSimpleName() + " → 无法实例化：" + ex);
+                continue;
+            }
+            // 只建 Reflector 不会抛：歧义 getter 会被包成 AmbiguousMethodInvoker，
+            // 真正读取属性值（MyBatis 给 #{et.xxx} 取值时就是这步）才抛——所以必须逐个 invoke
+            Reflector reflector = factory.findForClass(clazz);
+            for (java.lang.reflect.Field field : clazz.getDeclaredFields()) {
+                if (java.lang.reflect.Modifier.isStatic(field.getModifiers())) {
+                    continue;
+                }
+                try {
+                    reflector.getGetInvoker(field.getName()).invoke(instance, new Object[0]);
+                } catch (ReflectionException ex) {
+                    broken.add(clazz.getSimpleName() + "." + field.getName() + " → "
+                            + String.valueOf(ex.getMessage()).replaceAll("\\s+", " ").trim());
+                } catch (ReflectiveOperationException | RuntimeException ex) {
+                    broken.add(clazz.getSimpleName() + "." + field.getName() + " → 读取失败 " + ex);
+                }
             }
         }
         assertThat(broken)
-                .as("实体里 Integer/Long 字段配 isX() 布尔 getter 会让 MyBatis 反射歧义（改成 xFlag() 命名）")
+                .as("实体里 Integer/Long 字段配 isXxx() 布尔 getter 会让 MyBatis 取值时抛歧义（改成 xxxFlag() 命名）")
                 .isEmpty();
     }
 

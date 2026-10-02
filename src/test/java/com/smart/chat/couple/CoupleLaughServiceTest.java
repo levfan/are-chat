@@ -419,8 +419,15 @@ class CoupleLaughServiceTest {
         assertThat(week.hits()).isEqualTo(1);
         assertThat(week.summary()).contains("周欢乐账");
 
+        // guess 表没有 day 列，归年只能借「考的是哪条冷笑话的发出日」：去年那条的双人一致不算进今年
+        CoupleLaughJoke lastYearJoke = CoupleLaughJoke.of("s1", LocalDate.now().minusDays(400).toString(), "alice", "去年的冷句");
+        jokes.add(lastYearJoke);
+        guesses.add(CoupleLaughGuess.of("s1", lastYearJoke.getId(), "alice", 1));
+        guesses.add(CoupleLaughGuess.of("s1", lastYearJoke.getId(), "bob", 1));
+
         var year = service.board("alice").year();
         assertThat(year.bestLine()).isEqualTo("倒立喝汤");
+        assertThat(year.guessTwin()).isZero();
         assertThat(year.laughs()).isEqualTo(1);
         assertThat(year.rxTaken()).isEqualTo(1);
         // 年报按「社死日」归年：400 天前那条属去年，今年既不计条目也不计转档
