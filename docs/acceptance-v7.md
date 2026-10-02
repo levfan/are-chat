@@ -45,6 +45,7 @@
 17. **P2｜双点打卡卡不给「我这一格按过没」**：`TodayVO` 只有 `unplugMine`，`meal/gaze/detox` 三张卡只有合计与 `both`，前端只能本地记位——刷新/重进后 `meals=1` 无法归因，界面会把「我已经倒扣了」显示成「TA 已经把手机扣了，就差你这一个」，**是在说谎而不是降级**。补 `mealMine/gazeMine/detoxMine` 三个位，前端删掉本地位改吃服务端。
 18. **P2｜F376 新家第一晚「补话」被静默丢弃**：`moveNight()` 只在 `tick()` 真翻转（0→1）时才 `updateById`，所以点过之后再来写那句话只改了内存对象就返回——界面报「补上了」，重进页面什么都没有。改为补话也落库（note 与存库值不同才写），推送仍只在真翻转那一次发。前端跟着放开输入口（原先因此把输入口 `:disabled`，等于让用户永远补不进去）。
 19. **性能观察项（未改）**：`CoupleQuestService.build()` 里调 `wallOf()`，一次花 9 个查询，而 27 个写接口全部返回 `build()` 的整份聚合——用户点个「加油」「代记一笔」这种小动作，后端替他重算了整张年度成就墙。同型问题在 v7 各批聚合接口里普遍存在（批次三十一/三十二的 `build()` 也都是十几到几十个查询）。要治得改契约（把 wall 挪成懒读，前端已有 `GET /wall`），属结构改动，与联系人列表 2N 那条一起等重构口径定了统一处理。
+20. **P2｜F380 心愿本容量算错，400 的建议无效**：`addWish` 与 `wishQuotaLeft` 都按 `findByOwner(...).size()` 计数，把**已兑现（已揭晓）**的行也算进 PER_OWNER_MAX，于是记满后报 400「先兑现几条」，可兑现根本不腾格——用户照做还是记不进去。改为按「还在藏着的条数」（`secret()`，`revealedAt == null`）计，兑现即揭晓就不占保密名额，文案改「兑现一条就腾出一格」，前端显示的剩余格数同步变准。新用例锁住「记满→400→兑现一条→再记成功」这条链，且验证过还原旧写法该用例当场跑红（`expected: 1 but was: 0`）。
 
 ## 误报账（查过、确认不是缺陷）
 - 心情卡「😍 恋爱中」点了没反应：`selected` 默认值就是 `LOVE`，再点是同一值，无变化属正常
@@ -141,8 +142,16 @@
 - 巡检查出缺陷 18（补话静默丢弃），并顺手把探针填错的两次点击变成了闸门有效性的证据
 - 其余 8 条不一致的裁决（agent 编号 1-8）：功能编号与批文错位 → 保留十个 testid、卡内按后端源码口径装功能并在地图记映射表；`myPod/partnerPod` 是「最近一舱」不过滤在舱态 → 判在途只看 `in`；`daysLeft` 出舱/回升后恒 0 → 只在 in/low 时挂倒数；无 `lampMine`、无「本周我已颁」→ 按 `lampBy`/`awardedBy` 与 `auth.username` 比对（沿批次二十/二十三/二十九先例）；F374 加油卡与 F376 不说话卡的话术只在 WS 正文里、无 VO 下发 → 界面只显示张数（**待裁决是否补 VO**）；`wall.pods`/`awards` 是两项合计 → chip 照实写合计名；每次 `build()` 都算 wall → 记性能观察项
 
+## 前端批次三十四 F380-F389 聆听者
+
+- 交付（分 4）：`feat 契约层 types+catchApi 21 方法` → `feat CoupleCatch.vue 十卡（1220 行）` → `feat 落位 letters/send 子页签最末 + registry 154→164` → `test 14 用例（214→228）`
+- 主线程复核：`vue-tsc` 零错、`vitest` 228 全绿、`vite build` 成功（各自取退出码）；后端 12 个 record 共 **104 个字段**与前端 12 个 interface 逐字段（名+顺序+可空）脚本比对 **0 不一致**；handler 定向静默审计 26 处 `return` 全是 `noData()` / `tooLong()` 两个自带 warning 的小工具
+- 实时巡检：`ONLY_TABS=letters ONLY_SUBS=send ONLY_KEY_RE='couple-catch-' FILL=1 MAX_CLICKS=20` → 10 卡 **0 error / 0 dead / 0 4xx**；写入取证 UI 点「悄悄记下」→ `POST /api/couple/catch/wish` 200，回读 `/board` 得 `myWishes=1`、`wishQuotaLeft=11`（容量新口径同时生效）
+- 查出一个后端缺陷（缺陷账 20）：心愿本容量把已兑现的行也算进去，记满后 400 却叫用户「先兑现几条」——**兑现根本不腾格，这条建议是无效的**
+- 其余 11 条不一致的裁决：`CatchVO` 缺 `usedTodayMine` → 前端从服务端 `uses`（day 倒序，今日行必在最前）派生，**不留本地 ref、也不收输入口**，同时记为待补 VO 位；F383「前 1 天提醒」无定时任务且 `sensitiveRemindLine`/`wishSavedLine` 全仓零调用点 → 只渲染 `remindTomorrow`，不谎称已提醒；`monthUses` 是两人合计、`useCount` 是全历史（规格写「月度统计」）→ 照实标注；规格 F384 的 `uk(space,from_user,status)` 与 V47 DDL 的普通索引 `idx_catch_thread` 不符 → 后端早已按索引实现，接受；`ThreadVO.open` 恒 true 使后端一处分支走不到 → 记账不改（无用户可见影响）；同一 `WishVO` 在 `myWishes` 与 `revealedToMe` 里 `mine` 语义相反 → 兑现钮只挂前者；`dailyHint` 是「今天之前最近一句」而非昨天 → 文案照实；`TopicVO` 无 `statusLabel` → 前端只做文案镜像不参与判定；`mine/avoid` 后端无每日上限 → 前端不加闸门；F383 撤除权只允许代标人 → 按钮按 `!mineAsOwner`
+
 ## 尚未完成（接续点）
 
-- 前端批次 聆听者 / 欢笑银行（两批 20 个功能的界面，后端与 api 契约已就绪）
+- 前端批次 欢笑银行（最后一批 10 个功能的界面，后端与 api 契约已就绪）
 - 后端补口：`VISIT_TIPS`/`RELATIVES_SAMPLE` 是否下发；`profileApi.friendsBirthdays`、`coupleApi.relationshipOf` 要不要做入口
 - 收官：全绿后升 `1.6.0-rc.1`（独立 commit）、双仓地图终稿、全量验收总结

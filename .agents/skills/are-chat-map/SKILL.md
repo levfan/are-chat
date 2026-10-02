@@ -16,7 +16,7 @@ whenToUse: are-chat 后端开工前加载；新增/删除模块、表、接口�
 - 鉴权：登录态在 HttpSession；`com.smart.chat.common.Sessions.requireUser(session)` 取当前用户名
 - 统一返回：`ApiResponse.ok(data)` / 业务异常 `BusinessException(code, message)`
 - 构建：`mvn -q compile`；测试 `mvn test`（何时必跑见第六节）
-- 规模快照（v7 批次三十五后）：57 个 Controller / 793 个映射方法 / 310 张表（`couple_*` 297，V1-V48）/ 609 用例基线 / 情侣 WS 事件约 472 个；逐端点与逐表清单见 `wiki/api.md`、`wiki/database.md`
+- 规模快照（v7 批次三十五后）：57 个 Controller / 793 个映射方法 / 310 张表（`couple_*` 297，V1-V48）/ 610 用例基线 / 情侣 WS 事件约 472 个；逐端点与逐表清单见 `wiki/api.md`、`wiki/database.md`
 
 ### 目录与关键文件
 
