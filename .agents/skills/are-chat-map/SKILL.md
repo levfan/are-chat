@@ -16,7 +16,7 @@ whenToUse: are-chat 后端开工前加载；新增/删除模块、表、接口�
 - 鉴权：登录态在 HttpSession；`com.smart.chat.common.Sessions.requireUser(session)` 取当前用户名
 - 统一返回：`ApiResponse.ok(data)` / 业务异常 `BusinessException(code, message)`
 - 构建：`mvn -q compile`；测试 `mvn test`（何时必跑见第六节）
-- 规模快照（v7 批次三十一后）：53 个 Controller / 713 个映射方法 / 273 张表（`couple_*` 260，V1-V44）/ 514 用例基线 / 情侣 WS 事件约 405 个；逐端点与逐表清单见 `wiki/api.md`、`wiki/database.md`
+- 规模快照（v7 批次三十二后）：54 个 Controller / 726 个映射方法 / 281 张表（`couple_*` 268，V1-V45）/ 539 用例基线 / 情侣 WS 事件约 417 个；逐端点与逐表清单见 `wiki/api.md`、`wiki/database.md`
 
 ### 目录与关键文件
 
@@ -29,7 +29,7 @@ are-chat/                             # 单模块 Maven（无多 module），坐
 ├── src/main/resources/
 │   ├── application.yml               # 端口 8080、数据源、Flyway、上传 20MB 限制（改配置先读这里的注释）
 │   ├── application-mysql.yml         # MySQL 变体数据源
-│   ├── db/V*.sql                     # Flyway 增量脚本 = 运行时唯一建表路径（当前链至 V44）
+│   ├── db/V*.sql                     # Flyway 增量脚本 = 运行时唯一建表路径（当前链至 V45）
 │   └── schema.sql                    # 全量结构文档（基线 187 表；不被运行时执行，改表必须同步）
 ├── src/test/java/                    # Service 单测（Mockito）+ 少量 SpringBootTest 集成（H2 跑 Flyway）
 ├── src/test/resources/application.yml# 测试库 H2 MODE=MySQL
@@ -146,6 +146,8 @@ Service → ImPushService.pushCoupleEvent(Both) ─┬→ WS 帧 {type:'couple',
 
 - `CoupleEchoController` `/api/couple/echo`：F350-F359 回音壁（批次三十一，v7 首批）——好事簿（**单记录人口径**：from_user 写下「TA 为我做的事」即 TA 爱我的证据；同日同人同内容 400、加星只归记录人且幂等）、鼓励语罐（每人 ≤5 格，取**最小空槽**复用、第 6 条 400、只能清自己罐里的）、能量补给（**每人每天一次**（uk space+from_user+day，重复 400），随机翻自己 3 条证据+双方鼓励语与高光各 1 条，顺带开读在途自留信，推双方 echo-refilled）、感谢慢递（欲谢的话封存 7 天、**在途每人 ≤3**、到日读时惰性结算推双方 echo-thanks-arrived）、高光重放（三行卡 moment/did/feel，每人 ≤12、本人可整理）、夸夸回执（**跨模块只读 couple_praise** 校验归属，uk(space,quote_id,from_user) 幂等，推夸的人 echo-receipt-given）、电量预报（level 1-5 钳制、每人每天一格可改写，对方 ≤2 格读时给「今晚轻轻的」）、写给低落的自己（**一人同时一封在途**，READ 只有本人开读不给对方推）；GET /vault 总览、GET /calendar?year=、GET /year?year= 为读接口，其余 12 个 POST 写接口（/deed /deed/star /juice /juice/remove /refill /slow /highlight /highlight/remove /receipt /battery /self /self/read）全部返回整份 EchoVO 聚合；读时聚合无表项=F353 被爱日历、F359 年报；共 15 个映射
 
+- `CoupleFocusController` `/api/couple/focus`：F360-F369 注意力保护区（批次三十二）——专注夜报（uk(space,day) 一行两列 `minutes_a/minutes_b`，0-180 钳制、note ≤40 超出 400；**双报当夜点亮**推 both `focus-night-lit`，单报推 both `focus-night-reported`）、专属时段（uk(space,week) 每周一格，`day` 必须落在本周否则 400，hours 1-6 钳制默认 2，**提议人不能自己盖章**「自己写的时段不能自己确认」，对方确认推 both `focus-slot-confirmed` 且重复确认幂等不重推）、攒一句话（≤80 字、在途每人 ≤5 超出 400，写入推 TA `focus-queue-added`；`today()` 读时惰性签收**不推事件**，`queueRead` 才推 both `focus-queue-read`，count 只算本次真置成已读的）、饭桌不低头/对视十秒/不插电半小时（各点自己那列，**只有本次真的 0→1 才 update 并在双点时推 both**，重复点击静默；不插电周连击 `streak` 读时算只扫当年）、走神温柔哨（每人每天 ≤2 张超出 400、note ≤40，只推收卡人 `focus-nudge-sent`，seed 走 `CoupleRitualBank.stableHash`）、数字排毒半天（kind 只收 AM/PM 否则 400，一天一格，首个应战者写进 `confirmed_by`，双报推 both `focus-detox-done`、首次发起推 `focus-detox-started`，重复应战不重推）；GET /today 总览与 12 个写接口一律返回整份 TodayVO 聚合，GET /weekly（周一锚）、GET /year?year= 除外；共 13 个映射
+
 内容库（静态，只增不改顺序）：
 - `CoupleQuestions`：今日一问题库（105 题 11 主题，按 epochDay 轮换）
 - `CoupleRitualBank`：甜蜜任务/默契题/情话/运势/晚安故事库 + `stableHash`（FNV-1a，按天+空间稳定取值）
@@ -173,6 +175,8 @@ Service → ImPushService.pushCoupleEvent(Both) ─┬→ WS 帧 {type:'couple',
 
 - `CoupleEchoBank`：回音壁内容库（好事簿记下/加星话术、补给随机话术与推 TA 话术、慢递送达话术、回执话术、低电量「今晚轻轻的」提示、年报称号与 summary）+ 按 seed 稳定取值，无副作用
 
+- `CoupleFocusBank`：注意力保护区内容库（单报/双报/等 TA 报的夜报话术、时段预约与确认文案、攒话与收讫回执、同桌/对视/不插电双点话术、温柔哨「回来啦」按 seed 稳定随机、排毒发起与达成、AM/PM 中文标签、周报与年报 summary）+ 按 seed 稳定取值，无副作用
+
 定时任务 `CoupleReminderJob`（Asia/Shanghai）：09:00 约定逾期提醒；09:30 纪念日倒数（7/1/0 天）；09:45 倒数日提醒（7/3/1/0 天）；10:00 情绪急救箱（连续 2 天低落提醒对方）。
 定时任务 `CoupleSurpriseJob`（Asia/Shanghai）：每分钟送达心动闹钟与思念速递（alarm-fired/miss-delivered）；09:15 告白重现；09:20 生日彩蛋（读 im 包 UserProfile.birthday）；10:15 花园缺水巡检（garden-withered）。
 定时任务 `CoupleCareTalkJob`（Asia/Shanghai）：21:00 情话储蓄罐利息（每人随机取一句未投递情话送达，love-bank-interest）；23:00 深夜陪伴（当天负面心情且未被求抱抱接住时提醒对方，night-care）。
@@ -180,7 +184,7 @@ Service → ImPushService.pushCoupleEvent(Both) ─┬→ WS 帧 {type:'couple',
 ## 四、数据层规范（硬性）
 
 - 凡改表结构或初始化数据，必须产出 Flyway 增量脚本并同步 schema.sql——触发条件、命名、幂等/双兼容写法、种子数据等完整规范见 `.agents/skills/db-migration/SKILL.md`
-- 现有迁移：V1 couple 基础表 → V2 存量基线 → V3 心情 → V4 信箱 → V5 条约/城市/基金 → V6 贴贴动作/心情回应/爱称 → V7 任务卡/默契 → V8 和好卡/夸夸/生理期 → V9 胶囊/倒数日 → V10 记账/家务/约会/习惯/暗号 → V11 空间个性化 → V12 私信心动时刻 → V13 通知中心/生日 → V14 第一次清单/一问互评 → V15 惊喜与期待（刮刮乐/盲盒/闹钟/思念/花园/玫瑰/幸运签/告白/藏宝图）→ V16 懂我与被接住（求抱抱/矛盾复盘/道歉券/真心话/树洞/心灵感应/情话储蓄罐）→ V17 共同养成（挑战赛/恋爱存折/百日之约/心愿互换/共读/旅行心愿/追剧/词典/下次一定）→ V18 回忆资产（语录册/电影票根/我们的歌单；F80-F82/F85-F87 为现有数据聚合与放宽常量，无新表）→ V19 沟通增强（安静小屋/情绪接力/比划猜/故事接龙/道歉三部曲/心情词汇）→ V20 异地恋（牵手/想念/作息/见面信/云约会/平安卡/见面日记）→ V21 确定感（安全感账户/十年之约/愿景板/承诺博物馆/信任存折/双人契约/守护兽 + couple_anniversary.kind 列）→ V22 趣味游戏（一百问/出题考TA/情话课/周末盲选/情话Battle/参赛句子/抽象画廊）→ V23 深度陪伴（梦境/美食地图/TA手册/情绪SOS/每日三问/自定义成就）→ V24 成长系（习惯搭子 couple_habit_streak/感恩便签/情绪颗粒度/每周高光/共读一分钟/拖延互助/优点存折）→ V25 文字浪漫（情诗接龙/三行情书/醒来第一条/漂流瓶/密码情书/灵魂提问/贴纸手账）→ V26 默契亲密（爱语测评/心动闪光/如果问答/动作暗语/同频共振/心动日历）→ V27 生活经营（家庭会议/主理人/技能交换/月度互评/应急卡/存档点/家务积分/五年计划/策划案）→ V28 时光博物馆（纪录片分镜/博物馆展品/隐藏成就/家规宪法/免打扰设置）→ V29 常用收藏（couple_user_pin 每人一行 pins 逗号分隔） → V30 两个人的饭桌（饭票/星评/踩雷/本周菜单/拿手菜/搭伙车/话题标记 7 表） → V31 体温同步（熄灯/睡眠单/数羊/喝水/冷暖/熬夜卡/慢生活/对策本/抱抱 9 表） → V32 小日子仪式感（建国纪念日/过法卡/打卡/保险柜保费/续约签字/愿望券/当日体感 7 表） → V33 我们公司（头衔/决议/述职/发薪/金点子/签到 6 表） → V34 夫妻老黄历（节气跟风/过法/吉日/节日家档/手账/长假愿望/放空日 7 表 + couple_anniversary 加 calendar_type/lunar_md 列） → V35 倾听与发声（时段/代笔/倒带/卡壳问/换位信/早想说/三行/语气/休战旗/称呼日 10 表） → V36 二人制造厂（轮盘任务/采买/冰箱/快递/叫醒/服药/久坐/垫付/战利品/月检 10 表） → V37 我们百科（词条/默契综艺/TOP榜/互猜/外号考据/友情测验/足迹/第一眼/习惯图鉴/口味变迁/人格年报 11 表） → V38 明日邮局（新年卡/大事+步骤/拍卖/梦想家/退休计划/井答/胶囊接龙/解梦/愿望台账/未来卡 11 表） → V39 扮演剧场（身份签/互换日记/师徒日/电话亭/黑话/奥斯卡/家长题/双角色追剧/客服工单 9 表） → V40 身体通知系统（体征/呼噜/周期/互助营/运动链/不适SOS/忌口红线/体检陪同/情绪药友/早睡军令状 10 表，全部 couple_body_ 前缀） → V41 修复车间（冷冻单/道歉质检/重来卡/重建计划/冷战倒计时/底线卡/认错榜/修复礼盒/纪念碑 9 表，全部 couple_repair_·couple_sorry_review·couple_rebuild_plan·couple_bottom_line·couple_admit_log·couple_peace_line 前缀，F325 年报无表） → V42 两家与朋友（拜访攻略/送礼池/他观问卷/官宣卡/文案候选/接待手册/称呼册/社会信用/群聊素材/代 TA 赔礼 10 表，全部 couple_world_ 前缀） → V43 传世系统（年度十问/记忆库年审/续约发言/恋爱汇率/情侣品牌/年度盘点/传世清单/周年抽奖 8 表，全部 couple_legacy_ 前缀；F343/F349 无表） → V44 回音壁（好事簿/鼓励语罐/补给日志/感谢慢递/高光重放/夸夸回执/电量预报/写给低落的自己 8 表，全部 couple_echo_ 前缀；F353 日历、F359 年报无表）
+- 现有迁移：V1 couple 基础表 → V2 存量基线 → V3 心情 → V4 信箱 → V5 条约/城市/基金 → V6 贴贴动作/心情回应/爱称 → V7 任务卡/默契 → V8 和好卡/夸夸/生理期 → V9 胶囊/倒数日 → V10 记账/家务/约会/习惯/暗号 → V11 空间个性化 → V12 私信心动时刻 → V13 通知中心/生日 → V14 第一次清单/一问互评 → V15 惊喜与期待（刮刮乐/盲盒/闹钟/思念/花园/玫瑰/幸运签/告白/藏宝图）→ V16 懂我与被接住（求抱抱/矛盾复盘/道歉券/真心话/树洞/心灵感应/情话储蓄罐）→ V17 共同养成（挑战赛/恋爱存折/百日之约/心愿互换/共读/旅行心愿/追剧/词典/下次一定）→ V18 回忆资产（语录册/电影票根/我们的歌单；F80-F82/F85-F87 为现有数据聚合与放宽常量，无新表）→ V19 沟通增强（安静小屋/情绪接力/比划猜/故事接龙/道歉三部曲/心情词汇）→ V20 异地恋（牵手/想念/作息/见面信/云约会/平安卡/见面日记）→ V21 确定感（安全感账户/十年之约/愿景板/承诺博物馆/信任存折/双人契约/守护兽 + couple_anniversary.kind 列）→ V22 趣味游戏（一百问/出题考TA/情话课/周末盲选/情话Battle/参赛句子/抽象画廊）→ V23 深度陪伴（梦境/美食地图/TA手册/情绪SOS/每日三问/自定义成就）→ V24 成长系（习惯搭子 couple_habit_streak/感恩便签/情绪颗粒度/每周高光/共读一分钟/拖延互助/优点存折）→ V25 文字浪漫（情诗接龙/三行情书/醒来第一条/漂流瓶/密码情书/灵魂提问/贴纸手账）→ V26 默契亲密（爱语测评/心动闪光/如果问答/动作暗语/同频共振/心动日历）→ V27 生活经营（家庭会议/主理人/技能交换/月度互评/应急卡/存档点/家务积分/五年计划/策划案）→ V28 时光博物馆（纪录片分镜/博物馆展品/隐藏成就/家规宪法/免打扰设置）→ V29 常用收藏（couple_user_pin 每人一行 pins 逗号分隔） → V30 两个人的饭桌（饭票/星评/踩雷/本周菜单/拿手菜/搭伙车/话题标记 7 表） → V31 体温同步（熄灯/睡眠单/数羊/喝水/冷暖/熬夜卡/慢生活/对策本/抱抱 9 表） → V32 小日子仪式感（建国纪念日/过法卡/打卡/保险柜保费/续约签字/愿望券/当日体感 7 表） → V33 我们公司（头衔/决议/述职/发薪/金点子/签到 6 表） → V34 夫妻老黄历（节气跟风/过法/吉日/节日家档/手账/长假愿望/放空日 7 表 + couple_anniversary 加 calendar_type/lunar_md 列） → V35 倾听与发声（时段/代笔/倒带/卡壳问/换位信/早想说/三行/语气/休战旗/称呼日 10 表） → V36 二人制造厂（轮盘任务/采买/冰箱/快递/叫醒/服药/久坐/垫付/战利品/月检 10 表） → V37 我们百科（词条/默契综艺/TOP榜/互猜/外号考据/友情测验/足迹/第一眼/习惯图鉴/口味变迁/人格年报 11 表） → V38 明日邮局（新年卡/大事+步骤/拍卖/梦想家/退休计划/井答/胶囊接龙/解梦/愿望台账/未来卡 11 表） → V39 扮演剧场（身份签/互换日记/师徒日/电话亭/黑话/奥斯卡/家长题/双角色追剧/客服工单 9 表） → V40 身体通知系统（体征/呼噜/周期/互助营/运动链/不适SOS/忌口红线/体检陪同/情绪药友/早睡军令状 10 表，全部 couple_body_ 前缀） → V41 修复车间（冷冻单/道歉质检/重来卡/重建计划/冷战倒计时/底线卡/认错榜/修复礼盒/纪念碑 9 表，全部 couple_repair_·couple_sorry_review·couple_rebuild_plan·couple_bottom_line·couple_admit_log·couple_peace_line 前缀，F325 年报无表） → V42 两家与朋友（拜访攻略/送礼池/他观问卷/官宣卡/文案候选/接待手册/称呼册/社会信用/群聊素材/代 TA 赔礼 10 表，全部 couple_world_ 前缀） → V43 传世系统（年度十问/记忆库年审/续约发言/恋爱汇率/情侣品牌/年度盘点/传世清单/周年抽奖 8 表，全部 couple_legacy_ 前缀；F343/F349 无表） → V44 回音壁（好事簿/鼓励语罐/补给日志/感谢慢递/高光重放/夸夸回执/电量预报/写给低落的自己 8 表，全部 couple_echo_ 前缀；F353 日历、F359 年报无表） → V45 注意力保护区（专注夜报/专属时段/攒一句话/饭桌/对视/不插电/温柔哨/排毒半天 8 表，全部 couple_focus_ 前缀；F367 周报、F369 年报无表）
 - 索引/唯一键名是**全库唯一**（H2 索引不随表隔离，重名报 42S11「Index already exists」）：新增 `uk_*/idx_*` 前先用脚本对全部 `db/V*.sql` 查重，模块前缀（如 `uk_body_*`）是最省事的办法
 - **日期进 CSV 列一律用 `MMdd` 或周几 1-7，不要写 ISO**：`couple_theater_master_day.serves(40)` 存 ISO 三天就满（一周要记七天）、`couple_body_quit.broke_days(160)` 存 ISO 只够 14 条。已统一为周几（师徒侍奉）/`MMdd`（破戒，超 25 条 400）/`MMdd:A|B`（重建双签）；新批次写 CSV 前先按「条数上限 × 记号长度」对一遍列宽
 - H2 兼容注意：`CHARACTER SET utf8mb4 COLLATE utf8mb4_bin` 列必须 `NOT NULL`，可空用户名列用普通 `varchar(50) DEFAULT NULL`（V17/V22 踩过坑）
