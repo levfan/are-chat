@@ -54,6 +54,12 @@ class CoupleLegacyServiceTest {
     @Mock
     private CouplePointLedgerMapper ledgerMapper;
     @Mock
+    private CoupleQuoteMapper quoteMapper;
+    @Mock
+    private CoupleTicketMapper ticketMapper;
+    @Mock
+    private CoupleFirstMapper firstMapper;
+    @Mock
     private ImPushService push;
 
     @InjectMocks
@@ -152,6 +158,15 @@ class CoupleLegacyServiceTest {
         });
 
         lenient().when(ledgerMapper.findBySpace("s1")).thenAnswer(inv -> List.copyOf(ledger));
+        CoupleQuote quote = new CoupleQuote();
+        quote.setSpaceId("s1");
+        quote.setContent("你说「随便」的时候其实已经想好了三家店");
+        lenient().when(quoteMapper.findBySpace("s1")).thenReturn(List.of(quote));
+        CoupleTicket ticket = new CoupleTicket();
+        ticket.setSpaceId("s1");
+        ticket.setTitle("深夜场那部烂片");
+        lenient().when(ticketMapper.findBySpace("s1")).thenReturn(List.of(ticket));
+        lenient().when(firstMapper.findBySpace("s1")).thenReturn(List.of());
     }
 
     // ========== F340 年度十问 ==========
@@ -399,6 +414,9 @@ class CoupleLegacyServiceTest {
 
         // 越界目标回落到默认 300
         assertThat(service.legacy("alice", 5).milestone().goal()).isEqualTo(300);
+
+        List<String> candidates = service.legacy("alice", null).auditCandidates();
+        assertThat(candidates).containsExactly("语录：你说「随便」的时候其实已经想…", "票根：深夜场那部烂片");
 
         CoupleLegacyService.LevelVO lv = service.legacy("alice", null).level();
         assertThat(lv.total()).isEqualTo(12);

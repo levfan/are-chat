@@ -31,6 +31,7 @@ public class CoupleLegacyService {
     static final int ITEM_DETAIL_MAX = 200;
     static final int PRIZE_MAX = 80;
     static final int DEFAULT_GOAL = 300;
+    static final int AUDIT_CANDIDATE_MAX = 12;
     static final int LEVEL_MAX = 99;
 
     private final CoupleSpaceMapper spaceMapper;
@@ -43,6 +44,9 @@ public class CoupleLegacyService {
     private final CoupleLegacyItemMapper itemMapper;
     private final CoupleLegacyDrawMapper drawMapper;
     private final CouplePointLedgerMapper ledgerMapper;
+    private final CoupleQuoteMapper quoteMapper;
+    private final CoupleTicketMapper ticketMapper;
+    private final CoupleFirstMapper firstMapper;
     private final ImPushService push;
 
     public CoupleLegacyService(CoupleSpaceMapper spaceMapper, CoupleLegacyTenMapper tenMapper,
@@ -50,7 +54,8 @@ public class CoupleLegacyService {
                                CoupleLegacyFxMapper fxMapper, CoupleLegacyBrandMapper brandMapper,
                                CoupleLegacyReviewMapper reviewMapper, CoupleLegacyItemMapper itemMapper,
                                CoupleLegacyDrawMapper drawMapper, CouplePointLedgerMapper ledgerMapper,
-                               ImPushService push) {
+                               CoupleQuoteMapper quoteMapper, CoupleTicketMapper ticketMapper,
+                               CoupleFirstMapper firstMapper, ImPushService push) {
         this.spaceMapper = spaceMapper;
         this.tenMapper = tenMapper;
         this.auditMapper = auditMapper;
@@ -61,6 +66,9 @@ public class CoupleLegacyService {
         this.itemMapper = itemMapper;
         this.drawMapper = drawMapper;
         this.ledgerMapper = ledgerMapper;
+        this.quoteMapper = quoteMapper;
+        this.ticketMapper = ticketMapper;
+        this.firstMapper = firstMapper;
         this.push = push;
     }
 
@@ -106,7 +114,8 @@ public class CoupleLegacyService {
 
     public record LegacyVO(String day, String year, List<TenVO> tens, List<AuditVO> audits,
                            List<SpeechVO> speeches, List<FxVO> fxes, BrandVO brand, List<ReviewVO> reviews,
-                           List<ItemVO> items, DrawVO draw, MilestoneVO milestone, LevelVO level) {
+                           List<ItemVO> items, DrawVO draw, MilestoneVO milestone, LevelVO level,
+                           List<String> auditCandidates) {
     }
 
     // ========== 读 ==========
@@ -602,7 +611,29 @@ public class CoupleLegacyService {
         LevelVO level = level(space);
 
         return new LegacyVO(now.toString(), year, tens, audits, speeches, fxes, brand, reviews, items,
-                drawVO, milestone, level);
+                drawVO, milestone, level, auditCandidates(space));
+    }
+
+    /** F341 年审候选：把回忆资产系现有的条目名字列出来，让人能挑而不是凭空想。 */
+    private List<String> auditCandidates(CoupleSpace space) {
+        List<String> out = new ArrayList<>();
+        for (CoupleQuote q : quoteMapper.findBySpace(space.getId())) {
+            String c = q.getContent() == null ? "" : q.getContent().trim();
+            if (!c.isEmpty()) {
+                out.add("语录：" + (c.length() > 14 ? c.substring(0, 14) + "…" : c));
+            }
+        }
+        for (CoupleTicket t : ticketMapper.findBySpace(space.getId())) {
+            if (!t.getTitle().isBlank()) {
+                out.add("票根：" + t.getTitle());
+            }
+        }
+        for (CoupleFirst f : firstMapper.findBySpace(space.getId())) {
+            if (!f.getTitle().isBlank()) {
+                out.add("第一次：" + f.getTitle());
+            }
+        }
+        return out.size() > AUDIT_CANDIDATE_MAX ? out.subList(0, AUDIT_CANDIDATE_MAX) : out;
     }
 
     // ========== F343 里程碑倒推 / F349 空间等级（读时算，无缓存） ==========

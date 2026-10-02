@@ -61,6 +61,7 @@ public class CoupleRepairService {
     private final CoupleAdmitLogMapper admitMapper;
     private final CoupleRepairBoxMapper boxMapper;
     private final CouplePeaceLineMapper peaceMapper;
+    private final CoupleReconcileMapper reconcileMapper;
     private final CouplePointLedgerMapper ledgerMapper;
     private final ImPushService push;
 
@@ -69,7 +70,8 @@ public class CoupleRepairService {
                                CoupleRebuildPlanMapper rebuildMapper, CoupleRepairMakeupMapper makeupMapper,
                                CoupleBottomLineMapper bottomMapper, CoupleAdmitLogMapper admitMapper,
                                CoupleRepairBoxMapper boxMapper, CouplePeaceLineMapper peaceMapper,
-                               CouplePointLedgerMapper ledgerMapper, ImPushService push) {
+                               CoupleReconcileMapper reconcileMapper, CouplePointLedgerMapper ledgerMapper,
+                               ImPushService push) {
         this.spaceMapper = spaceMapper;
         this.freezeMapper = freezeMapper;
         this.sorryMapper = sorryMapper;
@@ -80,6 +82,7 @@ public class CoupleRepairService {
         this.admitMapper = admitMapper;
         this.boxMapper = boxMapper;
         this.peaceMapper = peaceMapper;
+        this.reconcileMapper = reconcileMapper;
         this.ledgerMapper = ledgerMapper;
         this.push = push;
     }
@@ -127,7 +130,8 @@ public class CoupleRepairService {
 
     public record ReportVO(String year, int freezes, int thawed, int sorryIn, int passed, int backed,
                            int admits, int touched, int redos, int boxesDone, int peaceLines,
-                           int avgThawHours, String prize, String summary) {
+                           int reconciles, int reconcileAccepted, int avgThawHours, String prize,
+                           String summary) {
     }
 
     public record RepairVO(String day, String quarter, String year, List<FreezeVO> freezes, FreezeVO current,
@@ -931,12 +935,27 @@ public class CoupleRepairService {
                 .filter(CoupleRepairRedo::isUsed).count();
         int peaceLines = (int) peaceMapper.findBySpace(space.getId()).stream()
                 .filter(p -> p.getDay().startsWith(yearPrefix)).count();
+        int reconciles = 0;
+        int accepted = 0;
+        for (CoupleReconcile r : reconcileMapper.findBySpace(space.getId())) {
+            if (r.getStartAt() == null || java.time.LocalDate.ofInstant(
+                    java.time.Instant.ofEpochMilli(r.getStartAt()), java.time.ZoneId.systemDefault())
+                    .getYear() != now.getYear()) {
+                continue;
+            }
+            reconciles++;
+            if (r.getAcceptedBy() != null && !r.getAcceptedBy().isEmpty()) {
+                accepted++;
+            }
+        }
         long seed = CoupleRitualBank.stableHash(space.getId() + "|report|" + now.getYear());
         return new ReportVO(String.valueOf(now.getYear()), fz, thawed, in, passed, backed, admitCount, touched,
-                redoUsed, boxesDone, peaceLines,
+                redoUsed, boxesDone, peaceLines, reconciles, accepted,
                 fz == 0 ? 0 : Math.round((float) hours / fz),
                 CoupleRepairBank.reportPrize(seed, admitCount, passed),
-                CoupleRepairBank.reportSummary(seed, fz, thawed));
+                reconciles == 0 ? CoupleRepairBank.reportSummary(seed, fz, thawed)
+                        : CoupleRepairBank.reportSummary(seed, fz, thawed)
+                                + "另外写过 " + reconciles + " 份矛盾复盘，" + accepted + " 份被对方接住。");
     }
 
     // ========== 小件 ==========

@@ -55,6 +55,8 @@ class CoupleRepairServiceTest {
     @Mock
     private CouplePeaceLineMapper peaceMapper;
     @Mock
+    private CoupleReconcileMapper reconcileMapper;
+    @Mock
     private CouplePointLedgerMapper ledgerMapper;
     @Mock
     private ImPushService push;
@@ -73,6 +75,7 @@ class CoupleRepairServiceTest {
     private final List<CoupleAdmitLog> admits = new ArrayList<>();
     private final List<CoupleRepairBox> boxes = new ArrayList<>();
     private final List<CouplePeaceLine> peaces = new ArrayList<>();
+    private final List<CoupleReconcile> reconciles = new ArrayList<>();
 
     @BeforeEach
     void setUp() {
@@ -164,6 +167,7 @@ class CoupleRepairServiceTest {
         });
 
         lenient().when(peaceMapper.findBySpace("s1")).thenAnswer(inv -> List.copyOf(peaces));
+        lenient().when(reconcileMapper.findBySpace("s1")).thenAnswer(inv -> reconciles.stream().toList());
         lenient().when(peaceMapper.findRecent(eq("s1"), any())).thenAnswer(inv -> List.copyOf(peaces));
         lenient().when(peaceMapper.insert(any(CouplePeaceLine.class))).thenAnswer(inv -> {
             peaces.add(inv.getArgument(0));
@@ -467,7 +471,21 @@ class CoupleRepairServiceTest {
         service.admitTouch("bob", admits.get(0).getId());
         service.peaceSet("alice", "随你怎么想", "");
 
+        CoupleReconcile rec = new CoupleReconcile();
+        rec.setId("r1");
+        rec.setSpaceId("s1");
+        rec.setFromUser("alice");
+        rec.setMessage("我把「你从不」说成了口头禅");
+        rec.setStartAt(System.currentTimeMillis());
+        rec.setStatus("ACCEPTED");
+        rec.setAcceptedBy("bob");
+        rec.setCreated(System.currentTimeMillis());
+        reconciles.add(rec);
+
         CoupleRepairService.ReportVO r = service.workshop("alice").report();
+        assertThat(r.reconciles()).isEqualTo(1);
+        assertThat(r.reconcileAccepted()).isEqualTo(1);
+        assertThat(r.summary()).contains("写过 1 份矛盾复盘");
         assertThat(r.freezes()).isEqualTo(2);
         assertThat(r.thawed()).isEqualTo(1);
         assertThat(r.avgThawHours()).isEqualTo(9);
