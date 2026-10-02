@@ -33,7 +33,7 @@ public class CoupleHabit {
         return row;
     }
 
-    public boolean isActive() {
+    public boolean activeFlag() {
         return active != null && active == 1;
     }
 }

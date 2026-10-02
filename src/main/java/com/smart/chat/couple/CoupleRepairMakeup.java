@@ -47,7 +47,7 @@ public class CoupleRepairMakeup {
         return row;
     }
 
-    public boolean isPaused() {
+    public boolean pausedFlag() {
         return paused != null && paused == 1;
     }
 

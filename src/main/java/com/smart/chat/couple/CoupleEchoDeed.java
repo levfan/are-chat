@@ -43,7 +43,7 @@ public class CoupleEchoDeed {
         return row;
     }
 
-    public boolean isStarred() {
+    public boolean starredFlag() {
         return starred != null && starred == 1;
     }
 }

@@ -308,7 +308,7 @@ class CoupleLegacyServiceTest {
         verify(push, times(1)).pushCoupleEventBoth(eq("legacy-brand-published"), any(), any(), any(), any());
 
         service.brand("bob", "两个饭桶", "改：一起吃很久", "");
-        assertThat(brands.get(0).isPublished()).isFalse();
+        assertThat(brands.get(0).publishedFlag()).isFalse();
         assertThat(brands.get(0).getByUser()).isEqualTo("bob");
         assertThatThrownBy(() -> service.brandConfirm("bob"))
                 .isInstanceOf(BusinessException.class).hasMessageContaining("自己确认不作数");
@@ -377,13 +377,13 @@ class CoupleLegacyServiceTest {
         assertThatThrownBy(() -> service.draw("alice"))
                 .isInstanceOf(BusinessException.class).hasMessageContaining("抽过了");
         service.draw("bob");
-        assertThat(draws.get(0).isDrawnB()).isTrue();
+        assertThat(draws.get(0).drawnBFlag()).isTrue();
 
         // 周年当天读时提醒（不建定时任务）
         draws.get(0).setNotified(0);
         service.legacy("alice", null);
         verify(push).pushCoupleEventBoth(eq("legacy-draw-remind"), eq("alice"), eq("alice"), eq("bob"), any());
-        assertThat(draws.get(0).isNotified()).isTrue();
+        assertThat(draws.get(0).notifiedFlag()).isTrue();
         service.legacy("alice", null);
         verify(push, times(1)).pushCoupleEventBoth(eq("legacy-draw-remind"), any(), any(), any(), any());
 

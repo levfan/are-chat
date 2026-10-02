@@ -106,7 +106,7 @@ class CoupleBoardServiceTest {
                 .isInstanceOf(BusinessException.class).hasMessage("任命章要本人盖，TA 才能生效");
 
         service.appoint("bob", "r1");
-        assertThat(role.isAppointed()).isTrue();
+        assertThat(role.appointedFlag()).isTrue();
         verify(roleMapper).updateById(role);
         verify(push).pushCoupleEvent(eq("board-appointed"), eq("bob"), eq("alice"), any());
 
@@ -215,7 +215,7 @@ class CoupleBoardServiceTest {
                 .isInstanceOf(BusinessException.class).hasMessage("自己的点子要对方来采纳才算数");
 
         service.adoptIdea("alice", "i1");
-        assertThat(mine.isAdopted()).isTrue();
+        assertThat(mine.adoptedFlag()).isTrue();
         assertThat(mine.getVoteId()).isNotBlank();
         ArgumentCaptor<CoupleBoardVote> captor = ArgumentCaptor.forClass(CoupleBoardVote.class);
         verify(voteMapper).insert(captor.capture());

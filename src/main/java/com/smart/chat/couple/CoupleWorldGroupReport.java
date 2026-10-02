@@ -37,11 +37,11 @@ public class CoupleWorldGroupReport {
         return row;
     }
 
-    public boolean isLaughA() {
+    public boolean laughAFlag() {
         return laughA != null && laughA == 1;
     }
 
-    public boolean isLaughB() {
+    public boolean laughBFlag() {
         return laughB != null && laughB == 1;
     }
 }

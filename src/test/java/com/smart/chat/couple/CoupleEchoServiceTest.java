@@ -147,7 +147,7 @@ class CoupleEchoServiceTest {
                 .filter(s -> s.getFromUser().equals(inv.getArgument(1)))
                 .sorted(Comparator.comparingLong(CoupleEchoSlow::getCreated).reversed()).toList());
         lenient().when(slowMapper.findDue(eq("s1"), any())).thenAnswer(inv -> slows.stream()
-                .filter(s -> !s.isDelivered() && s.getOpenDay().compareTo((String) inv.getArgument(1)) <= 0)
+                .filter(s -> !s.deliveredFlag() && s.getOpenDay().compareTo((String) inv.getArgument(1)) <= 0)
                 .sorted(Comparator.comparing(CoupleEchoSlow::getOpenDay)).toList());
         lenient().when(slowMapper.findBySpace("s1")).thenAnswer(inv -> slows.stream()
                 .sorted(Comparator.comparingLong(CoupleEchoSlow::getCreated).reversed()).toList());
@@ -247,7 +247,7 @@ class CoupleEchoServiceTest {
                 .isInstanceOf(BusinessException.class).hasMessageContaining("不在好事簿里");
         service.starDeed("alice", deedId);
         verify(push).pushCoupleEventBoth(eq("echo-deed-starred"), eq("alice"), eq("alice"), eq("bob"), any());
-        assertThat(deeds.stream().filter(d -> d.getId().equals(deedId)).findFirst().orElseThrow().isStarred())
+        assertThat(deeds.stream().filter(d -> d.getId().equals(deedId)).findFirst().orElseThrow().starredFlag())
                 .isTrue();
         service.starDeed("alice", deedId);
         verify(push, times(1)).pushCoupleEventBoth(eq("echo-deed-starred"), any(), any(), any(), any());
@@ -372,7 +372,7 @@ class CoupleEchoServiceTest {
                 .isInstanceOf(BusinessException.class).hasMessageContaining("路上还有 3 封");
         // 每人独立在途配额
         service.writeSlow("bob", "谢谢你的耳机");
-        assertThat(slows).hasSize(4).allMatch(s -> !s.isDelivered());
+        assertThat(slows).hasSize(4).allMatch(s -> !s.deliveredFlag());
 
         CoupleEchoService.EchoVO vo = service.vault("alice");
         assertThat(vo.slowInFlight()).hasSize(4);
@@ -382,7 +382,7 @@ class CoupleEchoServiceTest {
         CoupleEchoSlow due = slows.stream().filter(s -> s.getFromUser().equals("alice")).findFirst().orElseThrow();
         due.setOpenDay(DAY);
         CoupleEchoService.EchoVO settled = service.vault("bob");
-        assertThat(due.isDelivered()).isTrue();
+        assertThat(due.deliveredFlag()).isTrue();
         verify(push).pushCoupleEventBoth(eq("echo-thanks-arrived"), eq(due.getFromUser()),
                 eq("alice"), eq("bob"), any());
         assertThat(settled.slowArrived()).extracting(CoupleEchoService.SlowVO::content).contains(due.getContent());

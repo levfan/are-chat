@@ -38,7 +38,7 @@ public class CoupleExam {
         return row;
     }
 
-    public boolean isDone() {
+    public boolean doneFlag() {
         return "RIGHT".equals(verdict);
     }
 }

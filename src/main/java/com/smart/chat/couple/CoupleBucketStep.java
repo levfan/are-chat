@@ -36,7 +36,7 @@ public class CoupleBucketStep {
         return row;
     }
 
-    public boolean isDone() {
+    public boolean doneFlag() {
         return Integer.valueOf(1).equals(done);
     }
 }

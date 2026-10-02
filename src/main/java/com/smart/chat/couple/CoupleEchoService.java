@@ -156,7 +156,7 @@ public class CoupleEchoService {
         if (!row.getFromUser().equals(me)) {
             throw new BusinessException(400, "只有记下这条的人能加星");
         }
-        if (row.isStarred()) {
+        if (row.starredFlag()) {
             return build(space, me, now, null, null);
         }
         row.setStarred(1);
@@ -271,7 +271,7 @@ public class CoupleEchoService {
             throw new BusinessException(400, "慢递最多 " + CoupleEchoSlow.CONTENT_MAX + " 字");
         }
         long inFlight = slowMapper.findByUser(space.getId(), me).stream()
-                .filter(s -> !s.isDelivered()).count();
+                .filter(s -> !s.deliveredFlag()).count();
         if (inFlight >= CoupleEchoSlow.IN_FLIGHT_MAX) {
             throw new BusinessException(400, "路上还有 " + CoupleEchoSlow.IN_FLIGHT_MAX + " 封");
         }
@@ -419,7 +419,7 @@ public class CoupleEchoService {
             if (d.getDay() != null && d.getDay().startsWith(y)) {
                 int[] c = deeds.computeIfAbsent(d.getDay(), k -> new int[2]);
                 c[0]++;
-                if (d.isStarred()) {
+                if (d.starredFlag()) {
                     c[1]++;
                 }
             }
@@ -457,7 +457,7 @@ public class CoupleEchoService {
         for (CoupleEchoDeed d : deedMapper.findBySpace(space.getId())) {
             if (d.getDay() != null && d.getDay().startsWith(y)) {
                 deeds++;
-                if (d.isStarred()) {
+                if (d.starredFlag()) {
                     starred++;
                 }
             }
@@ -465,7 +465,7 @@ public class CoupleEchoService {
         int refills = (int) refillLogMapper.findBySpace(space.getId()).stream()
                 .filter(r -> r.getDay() != null && r.getDay().startsWith(y)).count();
         int arrived = (int) slowMapper.findBySpace(space.getId()).stream()
-                .filter(s -> s.isDelivered() && s.getOpenDay() != null && s.getOpenDay().startsWith(y)).count();
+                .filter(s -> s.deliveredFlag() && s.getOpenDay() != null && s.getOpenDay().startsWith(y)).count();
         int receipts = (int) receiptMapper.findBySpace(space.getId()).stream()
                 .filter(r -> r.getCreated() != null && yearOf(r.getCreated()) == Integer.parseInt(y)).count();
         long seed = CoupleRitualBank.stableHash(space.getId() + "|echo-year|" + y);
@@ -494,7 +494,7 @@ public class CoupleEchoService {
         List<SlowVO> inFlight = new ArrayList<>();
         List<SlowVO> arrived = new ArrayList<>();
         for (CoupleEchoSlow s : slowMapper.findBySpace(space.getId())) {
-            if (s.isDelivered()) {
+            if (s.deliveredFlag()) {
                 arrived.add(toSlow(s, me));
             } else {
                 inFlight.add(toSlow(s, me));
@@ -526,7 +526,7 @@ public class CoupleEchoService {
 
     private DeedVO toDeed(CoupleEchoDeed d, String me) {
         return new DeedVO(d.getId(), d.getFromUser(), d.getFromUser().equals(me),
-                nz(d.getContent()), nz(d.getDay()), d.isStarred(), d.getCreated() == null ? 0 : d.getCreated());
+                nz(d.getContent()), nz(d.getDay()), d.starredFlag(), d.getCreated() == null ? 0 : d.getCreated());
     }
 
     private JuiceVO toJuice(CoupleEchoJuice j, String me) {
@@ -537,7 +537,7 @@ public class CoupleEchoService {
 
     private SlowVO toSlow(CoupleEchoSlow s, String me) {
         return new SlowVO(s.getId(), s.getFromUser(), s.getFromUser().equals(me), nz(s.getToUser()),
-                nz(s.getContent()), nz(s.getOpenDay()), s.isDelivered(),
+                nz(s.getContent()), nz(s.getOpenDay()), s.deliveredFlag(),
                 s.getCreated() == null ? 0 : s.getCreated());
     }
 

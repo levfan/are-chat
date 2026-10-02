@@ -123,7 +123,7 @@ public class CoupleBoardService {
         String text = requireText(title, ROLE_TITLE_MAX, "职位叫什么好呢（如财政部长）");
         String partner = space.partnerOf(me);
         long pending = roleMapper.findBySpace(space.getId()).stream()
-                .filter(r -> me.equals(r.getFromUser()) && !r.isAppointed()).count();
+                .filter(r -> me.equals(r.getFromUser()) && !r.appointedFlag()).count();
         if (pending >= ROLE_PROPOSE_MAX) {
             throw new BusinessException(400, "一次最多封 " + ROLE_PROPOSE_MAX + " 个职位，等 TA 盖章后再封");
         }
@@ -139,7 +139,7 @@ public class CoupleBoardService {
         if (!me.equals(role.getToUser())) {
             throw new BusinessException(400, "任命章要本人盖，TA 才能生效");
         }
-        if (role.isAppointed()) {
+        if (role.appointedFlag()) {
             throw new BusinessException(400, "这个职位已经生效啦");
         }
         role.setAppointed(1);
@@ -255,7 +255,7 @@ public class CoupleBoardService {
         if (me.equals(idea.getFromUser())) {
             throw new BusinessException(400, "自己的点子要对方来采纳才算数");
         }
-        if (idea.isAdopted()) {
+        if (idea.adoptedFlag()) {
             throw new BusinessException(400, "这个点子已经转成决议了");
         }
         CoupleBoardVote vote = CoupleBoardVote.of(space.getId(), idea.getFromUser(), "金点子：" + idea.getContent());
@@ -280,13 +280,13 @@ public class CoupleBoardService {
         if (mine == null) {
             mine = CoupleBoardAttend.of(space.getId(), day, me);
             attendMapper.insert(mine);
-        } else if (!mine.isConvened()) {
+        } else if (!mine.convenedFlag()) {
             mine.setAttended(1);
             mine.setUpdatedAt(now);
             attendMapper.updateById(mine);
         }
         CoupleBoardAttend partnerRow = attendMapper.find(space.getId(), day, partner);
-        if (partnerRow != null && !mine.isConvened() && !partnerRow.isConvened()
+        if (partnerRow != null && !mine.convenedFlag() && !partnerRow.convenedFlag()
                 && now - partnerRow.getUpdatedAt() <= ATTEND_WINDOW_MS) {
             mine.setConvened(1);
             partnerRow.setConvened(1);
@@ -304,7 +304,7 @@ public class CoupleBoardService {
         List<RoleVO> list = new ArrayList<>();
         for (CoupleBoardRole role : roles) {
             list.add(new RoleVO(role.getId(), role.getFromUser(), role.getToUser(),
-                    me.equals(role.getFromUser()), role.getTitle(), role.isAppointed()));
+                    me.equals(role.getFromUser()), role.getTitle(), role.appointedFlag()));
         }
         return list;
     }
@@ -357,7 +357,7 @@ public class CoupleBoardService {
         List<IdeaVO> list = new ArrayList<>();
         for (CoupleBoardIdea idea : ideas) {
             list.add(new IdeaVO(idea.getId(), idea.getFromUser(), me.equals(idea.getFromUser()),
-                    idea.getContent(), idea.isAdopted(), idea.getVoteId(), idea.getCreated()));
+                    idea.getContent(), idea.adoptedFlag(), idea.getVoteId(), idea.getCreated()));
         }
         list.sort((a, b) -> Long.compare(b.created(), a.created()));
         return list;
@@ -366,7 +366,7 @@ public class CoupleBoardService {
     private AttendVO attendState(CoupleSpace space, String me, String day) {
         CoupleBoardAttend mine = attendMapper.find(space.getId(), day, me);
         CoupleBoardAttend partner = attendMapper.find(space.getId(), day, space.partnerOf(me));
-        boolean convened = (mine != null && mine.isConvened()) || (partner != null && partner.isConvened());
+        boolean convened = (mine != null && mine.convenedFlag()) || (partner != null && partner.convenedFlag());
         return new AttendVO(day, mine != null, partner != null, convened);
     }
 
@@ -375,7 +375,7 @@ public class CoupleBoardService {
         List<MemberVO> list = new ArrayList<>();
         for (String user : List.of(space.getUserA(), space.getUserB())) {
             List<String> titles = roles.stream()
-                    .filter(r -> user.equals(r.getToUser()) && r.isAppointed())
+                    .filter(r -> user.equals(r.getToUser()) && r.appointedFlag())
                     .map(CoupleBoardRole::getTitle).toList();
             int earned = ledger.stream()
                     .filter(l -> user.equals(l.getFromUser()) && CouplePointLedger.TYPE_EARN.equals(l.getType()))
@@ -395,7 +395,7 @@ public class CoupleBoardService {
             int earned = ledger.stream()
                     .filter(l -> user.equals(l.getFromUser()) && CouplePointLedger.TYPE_EARN.equals(l.getType()))
                     .mapToInt(l -> l.getPoints() == null ? 0 : l.getPoints()).sum();
-            String titles = roles.stream().filter(r -> user.equals(r.getToUser()) && r.isAppointed())
+            String titles = roles.stream().filter(r -> user.equals(r.getToUser()) && r.appointedFlag())
                     .map(CoupleBoardRole::getTitle).reduce((a, b) -> a + "、" + b).orElse("暂无头衔");
             lines.add(user + "：" + CoupleBoardBank.rank(earned) + "｜" + titles);
         }

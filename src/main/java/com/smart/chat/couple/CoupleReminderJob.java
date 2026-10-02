@@ -111,7 +111,7 @@ public class CoupleReminderJob {
             }
             // 共同日历纪念日
             for (CoupleAnniversary row : anniversaryMapper.findBySpace(space.getId())) {
-                reminded += remindCountdown(space, row.getTitle(), row.getEventDate(), row.isYearly(), now);
+                reminded += remindCountdown(space, row.getTitle(), row.getEventDate(), row.yearlyFlag(), now);
             }
         }
         if (reminded > 0) {

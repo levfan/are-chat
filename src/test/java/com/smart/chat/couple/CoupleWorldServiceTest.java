@@ -298,7 +298,7 @@ class CoupleWorldServiceTest {
                 .isInstanceOf(BusinessException.class).hasMessageContaining("互评选稿");
         service.captionPick("alice", bobId);
         verify(push).pushCoupleEventBoth(eq("world-caption-pick"), eq("alice"), eq("alice"), eq("bob"), any());
-        assertThat(captions.stream().filter(CoupleWorldCaption::isWon)).hasSize(1);
+        assertThat(captions.stream().filter(CoupleWorldCaption::wonFlag)).hasSize(1);
         // F334 定稿进百科
         List<CoupleCodexEntry> entries = new ArrayList<>();
         lenient().when(codexMapper.findTerm(eq("s1"), any())).thenAnswer(inv -> entries.stream()

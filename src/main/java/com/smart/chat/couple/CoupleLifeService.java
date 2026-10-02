@@ -254,7 +254,7 @@ public class CoupleLifeService {
     public HabitVO checkinHabit(String me, String habitId) {
         CoupleSpace space = requireSpace(me);
         CoupleHabit habit = requireHabit(habitId, space);
-        if (!habit.isActive()) {
+        if (!habit.activeFlag()) {
             throw new BusinessException(409, "这个习惯已经结束啦");
         }
         String today = LocalDate.now().toString();

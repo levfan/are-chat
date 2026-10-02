@@ -46,7 +46,7 @@ public class CoupleCountdown {
         return row;
     }
 
-    public boolean isDone() {
+    public boolean doneFlag() {
         return done != null && done == 1;
     }
 

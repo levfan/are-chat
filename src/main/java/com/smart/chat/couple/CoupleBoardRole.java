@@ -35,7 +35,7 @@ public class CoupleBoardRole {
         return row;
     }
 
-    public boolean isAppointed() {
+    public boolean appointedFlag() {
         return appointed != null && appointed == 1;
     }
 }

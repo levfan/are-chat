@@ -37,7 +37,7 @@ public class CoupleFirstLook {
         return row;
     }
 
-    public boolean isRevealed() {
+    public boolean revealedFlag() {
         return Integer.valueOf(1).equals(revealed);
     }
 }

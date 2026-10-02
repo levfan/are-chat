@@ -272,7 +272,7 @@ class CoupleCodexServiceTest {
         service.firstLook("alice", "演唱会散场那秒你回头");
         service.firstLook("bob", "演唱会散场那秒你回头");
         verify(push).pushCoupleEventBoth(eq("codex-firstlook-match"), eq("bob"), eq("alice"), eq("bob"), any());
-        assertThat(rows).allMatch(CoupleFirstLook::isRevealed);
+        assertThat(rows).allMatch(CoupleFirstLook::revealedFlag);
         assertThatThrownBy(() -> service.firstLook("alice", "再改一版"))
                 .isInstanceOf(BusinessException.class).hasMessageContaining("尘埃落定");
     }

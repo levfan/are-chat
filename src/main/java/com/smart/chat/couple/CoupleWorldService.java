@@ -175,7 +175,7 @@ public class CoupleWorldService {
         if (row.getFromUser().equals(me)) {
             throw new BusinessException(400, "自己写的攻略自己确认不算双确认");
         }
-        if (row.isConfirmed()) {
+        if (row.confirmedFlag()) {
             return build(space, me, now);
         }
         row.setConfirmed(1);
@@ -566,7 +566,7 @@ public class CoupleWorldService {
         }
         row.setUpdatedAt(System.currentTimeMillis());
         groupMapper.updateById(row);
-        if (row.isLaughA() && row.isLaughB()) {
+        if (row.laughAFlag() && row.laughBFlag()) {
             push.pushCoupleEventBoth("world-group-both", me, space.getUserA(), space.getUserB(),
                     CoupleWorldBank.groupLaughLine(
                             CoupleRitualBank.stableHash(space.getId() + "|group|" + row.getDay()), true));
@@ -698,8 +698,8 @@ public class CoupleWorldService {
                 preps.add(new PrepVO(i + 1, raw.get(i), prepKind(raw.get(i))));
             }
             visits.add(new VisitVO(v.getId(), v.getDay(), me.equals(v.getFromUser()), v.getHostSide(),
-                    visitLabel(v.getHostSide()), preps, v.isConfirmed(), v.getReport(), v.getStatus(),
-                    !me.equals(v.getFromUser()) && !v.isConfirmed()));
+                    visitLabel(v.getHostSide()), preps, v.confirmedFlag(), v.getReport(), v.getStatus(),
+                    !me.equals(v.getFromUser()) && !v.confirmedFlag()));
         }
 
         List<GiftVO> gifts = new ArrayList<>();
@@ -742,7 +742,7 @@ public class CoupleWorldService {
                 break;
             }
             captions.add(new CaptionVO(c.getId(), c.getDay(), me.equals(c.getFromUser()), c.getSlot(),
-                    c.getText(), c.isWon()));
+                    c.getText(), c.wonFlag()));
         }
 
         List<CityVO> cities = new ArrayList<>();
@@ -782,9 +782,9 @@ public class CoupleWorldService {
         String partnerLine = isA ? g.getLineB() : g.getLineA();
         // laugh_a 记的是「A 笑过」，所以读自己那一列；早先这里是反的（A 读到 laugh_b），
         // 结果我笑过后还能再笑一次、TA 笑过却把我锁死，partnerLaughed 也跟着错
-        boolean iLaughed = isA ? g.isLaughA() : g.isLaughB();
-        boolean partnerLaughed = isA ? g.isLaughB() : g.isLaughA();
-        boolean both = g.isLaughA() && g.isLaughB();
+        boolean iLaughed = isA ? g.laughAFlag() : g.laughBFlag();
+        boolean partnerLaughed = isA ? g.laughBFlag() : g.laughAFlag();
+        boolean both = g.laughAFlag() && g.laughBFlag();
         GroupVO groupVO = new GroupVO(today, myLine, partnerLine, iLaughed, partnerLaughed, both,
                 CoupleWorldBank.groupLaughLine(
                         CoupleRitualBank.stableHash(space.getId() + "|group|" + today), both),

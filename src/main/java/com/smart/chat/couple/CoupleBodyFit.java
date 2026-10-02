@@ -45,7 +45,7 @@ public class CoupleBodyFit {
         return row;
     }
 
-    public boolean isLinked() {
+    public boolean linkedFlag() {
         return linked != null && linked == 1;
     }
 }

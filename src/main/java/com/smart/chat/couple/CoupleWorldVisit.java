@@ -46,7 +46,7 @@ public class CoupleWorldVisit {
         return row;
     }
 
-    public boolean isConfirmed() {
+    public boolean confirmedFlag() {
         return confirmed != null && confirmed == 1;
     }
 }

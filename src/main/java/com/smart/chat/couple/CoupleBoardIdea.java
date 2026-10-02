@@ -33,7 +33,7 @@ public class CoupleBoardIdea {
         return row;
     }
 
-    public boolean isAdopted() {
+    public boolean adoptedFlag() {
         return adopted != null && adopted == 1;
     }
 }

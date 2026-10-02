@@ -39,7 +39,7 @@ public class CoupleLuckyDay {
         return row;
     }
 
-    public boolean isConfirmed() {
+    public boolean confirmedFlag() {
         return Integer.valueOf(1).equals(confirmed);
     }
 }

@@ -36,11 +36,11 @@ public class CoupleSpinTask {
         return row;
     }
 
-    public boolean isConfirmed() {
+    public boolean confirmedFlag() {
         return Integer.valueOf(1).equals(confirmed);
     }
 
-    public boolean isDone() {
+    public boolean doneFlag() {
         return Integer.valueOf(1).equals(done);
     }
 }

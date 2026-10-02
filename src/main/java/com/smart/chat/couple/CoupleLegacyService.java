@@ -370,7 +370,7 @@ public class CoupleLegacyService {
         if (row.getByUser().equals(me)) {
             throw new BusinessException(400, "拟品牌的人自己确认不作数");
         }
-        if (row.isPublished()) {
+        if (row.publishedFlag()) {
             return build(space, me, now, DEFAULT_GOAL);
         }
         row.setPublished(1);
@@ -485,7 +485,7 @@ public class CoupleLegacyService {
         String y = String.valueOf(now.getYear());
         CoupleLegacyDraw row = ensureDraw(space, y);
         boolean isA = me.equals(space.getUserA());
-        if (isA ? row.isDrawnA() : row.isDrawnB()) {
+        if (isA ? row.drawnAFlag() : row.drawnBFlag()) {
             throw new BusinessException(400, "今年你已经抽过了，剩下的那次是 TA 的");
         }
         int idx = Math.floorMod(CoupleRitualBank.stableHash(space.getId() + "|draw|" + y + "|" + me),
@@ -510,7 +510,7 @@ public class CoupleLegacyService {
     private void settle(CoupleSpace space, LocalDate now) {
         String y = String.valueOf(now.getYear());
         CoupleLegacyDraw row = drawMapper.findByYear(space.getId(), y);
-        if (row == null || row.isNotified() || space.getAnniversary() == null || space.getAnniversary().isBlank()) {
+        if (row == null || row.notifiedFlag() || space.getAnniversary() == null || space.getAnniversary().isBlank()) {
             return;
         }
         LocalDate anniv = parseMd(space.getAnniversary(), now.getYear());
@@ -583,8 +583,8 @@ public class CoupleLegacyService {
         CoupleLegacyBrand brandRow = brandMapper.find(space.getId());
         BrandVO brand = brandRow == null ? new BrandVO("", "", "", false, false, "")
                 : new BrandVO(brandRow.getName(), brandRow.getSlogan(), brandRow.getIntro(),
-                brandRow.isPublished(), me.equals(brandRow.getByUser()),
-                brandRow.isPublished() ? CoupleLegacyBank.brandLine(
+                brandRow.publishedFlag(), me.equals(brandRow.getByUser()),
+                brandRow.publishedFlag() ? CoupleLegacyBank.brandLine(
                         CoupleRitualBank.stableHash(space.getId() + "|brand|" + brandRow.getName())) : "");
 
         List<ReviewVO> reviews = new ArrayList<>();
@@ -603,8 +603,8 @@ public class CoupleLegacyService {
         boolean isA = me.equals(space.getUserA());
         DrawVO drawVO = new DrawVO(year, isA ? draw.getPrizeA() : draw.getPrizeB(),
                 isA ? draw.getPrizeB() : draw.getPrizeA(),
-                isA ? draw.isDrawnA() : draw.isDrawnB(), isA ? draw.isDrawnB() : draw.isDrawnA(),
-                draw.isNotified() && !(isA ? draw.isDrawnA() : draw.isDrawnB()));
+                isA ? draw.drawnAFlag() : draw.drawnBFlag(), isA ? draw.drawnBFlag() : draw.drawnAFlag(),
+                draw.notifiedFlag() && !(isA ? draw.drawnAFlag() : draw.drawnBFlag()));
 
         int g = goal < 10 || goal > 100000 ? DEFAULT_GOAL : goal;
         MilestoneVO milestone = milestone(space, g, now);

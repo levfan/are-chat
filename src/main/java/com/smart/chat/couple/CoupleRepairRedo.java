@@ -40,7 +40,7 @@ public class CoupleRepairRedo {
         return row;
     }
 
-    public boolean isUsed() {
+    public boolean usedFlag() {
         return used != null && used == 1;
     }
 }

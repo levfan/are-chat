@@ -806,7 +806,7 @@ public class CoupleService {
 
         // 共享清单完成
         for (CoupleItem item : itemMapper.findBySpace(space.getId())) {
-            if (!item.isDone() || item.getDoneAt() == null) {
+            if (!item.doneFlag() || item.getDoneAt() == null) {
                 continue;
             }
             String day = Instant.ofEpochMilli(item.getDoneAt()).atZone(ZoneId.systemDefault()).toLocalDate().toString();
@@ -850,7 +850,7 @@ public class CoupleService {
         long questionDays = bothAnsweredDays(space);
         long promiseDone = promiseMapper.findBySpace(space.getId()).stream()
                 .filter(p -> CouplePromise.STATUS_DONE.equals(p.getStatus())).count();
-        long itemDone = itemMapper.findBySpace(space.getId()).stream().filter(CoupleItem::isDone).count();
+        long itemDone = itemMapper.findBySpace(space.getId()).stream().filter(CoupleItem::doneFlag).count();
         long moodDays = moodMapper.findBySpace(space.getId()).size();
         int score = (int) (morning + night * 2 + questionDays * 2 + promiseDone * 5 + itemDone * 3 + moodDays);
         IntimacyBreakdown breakdown = new IntimacyBreakdown(morning, night, questionDays, promiseDone, itemDone, moodDays);
@@ -1179,7 +1179,7 @@ public class CoupleService {
             return null;
         }
         LocalDate today = LocalDate.now();
-        if (row.isYearly() && date.isBefore(startDate)) {
+        if (row.yearlyFlag() && date.isBefore(startDate)) {
             // 每年重复：落到今年（2/29 在平年跳过）
             try {
                 date = date.withYear(today.getYear());
@@ -1351,12 +1351,12 @@ public class CoupleService {
 
     private static ItemVO toItemVO(CoupleItem item) {
         return new ItemVO(item.getId(), item.getKind(), item.getTitle(),
-                item.getNote() == null ? "" : item.getNote(), item.getDueDate(), item.isDone(),
+                item.getNote() == null ? "" : item.getNote(), item.getDueDate(), item.doneFlag(),
                 item.getDoneBy(), item.getDoneAt(), item.getCreatedBy(), item.getCreated());
     }
 
     private static AnniversaryVO toAnniversaryVO(CoupleAnniversary row) {
-        return new AnniversaryVO(row.getId(), row.getTitle(), row.getEventDate(), row.isYearly(),
+        return new AnniversaryVO(row.getId(), row.getTitle(), row.getEventDate(), row.yearlyFlag(),
                 row.getKind() == null ? CoupleAnniversary.KIND_NORMAL : row.getKind(),
                 row.getCreatedBy(), row.getCreated());
     }

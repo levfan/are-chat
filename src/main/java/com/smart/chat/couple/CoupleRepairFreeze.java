@@ -53,16 +53,16 @@ public class CoupleRepairFreeze {
         return row;
     }
 
-    public boolean isSignedA() {
+    public boolean signedAFlag() {
         return signedA != null && signedA == 1;
     }
 
-    public boolean isSignedB() {
+    public boolean signedBFlag() {
         return signedB != null && signedB == 1;
     }
 
     /** 双人签齐才放行解冻。 */
     public boolean isBothSigned() {
-        return isSignedA() && isSignedB();
+        return signedAFlag() && signedBFlag();
     }
 }

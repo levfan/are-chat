@@ -57,7 +57,7 @@ public class CoupleAnniversary {
         return row;
     }
 
-    public boolean isYearly() {
+    public boolean yearlyFlag() {
         return Integer.valueOf(1).equals(yearly);
     }
 }

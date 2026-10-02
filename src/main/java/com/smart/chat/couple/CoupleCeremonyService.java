@@ -406,7 +406,7 @@ public class CoupleCeremonyService {
                     ChronoUnit.DAYS.between(today, next)));
         }
         for (CoupleCountdown cd : countdownMapper.findBySpace(space.getId())) {
-            if (cd.isDone() || cd.getTargetDay() == null || cd.getTargetDay().compareTo(today.toString()) < 0) {
+            if (cd.doneFlag() || cd.getTargetDay() == null || cd.getTargetDay().compareTo(today.toString()) < 0) {
                 continue;
             }
             list.add(new AlmanacVO("countdown", cd.getTitle(), cd.getTargetDay(),

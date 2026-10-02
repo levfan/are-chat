@@ -183,7 +183,7 @@ public class CoupleCodexService {
 
         CoupleFirstLook mineF = firstMapper.findUser(space.getId(), me);
         CoupleFirstLook otherF = firstMapper.findUser(space.getId(), partner);
-        boolean revealedF = (mineF != null && mineF.isRevealed()) || (otherF != null && otherF.isRevealed());
+        boolean revealedF = (mineF != null && mineF.revealedFlag()) || (otherF != null && otherF.revealedFlag());
         boolean canSee = revealedF || (mineF != null && otherF != null
                 && mineF.getTries() >= CoupleFirstLook.TRIES_MAX && otherF.getTries() >= CoupleFirstLook.TRIES_MAX);
         FirstLookVO firstLook = new FirstLookVO(
@@ -409,7 +409,7 @@ public class CoupleCodexService {
         if (!x.getQuizzedUser().equals(me)) {
             throw new BusinessException(400, "这题不是考你的");
         }
-        if (x.isDone()) {
+        if (x.doneFlag()) {
             throw new BusinessException(400, "这题已经答对了，光荣记档");
         }
         LocalDate now = LocalDate.now();
@@ -472,7 +472,7 @@ public class CoupleCodexService {
         }
         String partner = space.partnerOf(me);
         CoupleFirstLook mine = firstMapper.findUser(space.getId(), me);
-        if (mine != null && mine.isRevealed()) {
+        if (mine != null && mine.revealedFlag()) {
             throw new BusinessException(400, "已经互见过啦，这一刻尘埃落定");
         }
         boolean isNew = mine == null;
@@ -489,7 +489,7 @@ public class CoupleCodexService {
             firstMapper.updateById(mine);
         }
         CoupleFirstLook other = firstMapper.findUser(space.getId(), partner);
-        if (other != null && !mine.isRevealed()) {
+        if (other != null && !mine.revealedFlag()) {
             if (other.getMoment().equals(mine.getMoment())) {
                 revealBoth(mine, other);
                 push.pushCoupleEventBoth("codex-firstlook-match", me, space.getUserA(), space.getUserB(),

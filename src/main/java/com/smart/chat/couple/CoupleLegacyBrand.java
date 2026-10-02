@@ -39,7 +39,7 @@ public class CoupleLegacyBrand {
         return row;
     }
 
-    public boolean isPublished() {
+    public boolean publishedFlag() {
         return published != null && published == 1;
     }
 }

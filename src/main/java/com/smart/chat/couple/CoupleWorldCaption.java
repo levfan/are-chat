@@ -37,7 +37,7 @@ public class CoupleWorldCaption {
         return row;
     }
 
-    public boolean isWon() {
+    public boolean wonFlag() {
         return won != null && won == 1;
     }
 }

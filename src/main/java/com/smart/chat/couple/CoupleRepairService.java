@@ -222,7 +222,7 @@ public class CoupleRepairService {
             throw new BusinessException(400, CoupleRepairBank.freezeWaitLine((row.getUntilAt() - ts) / 60000L));
         }
         boolean isA = me.equals(space.getUserA());
-        if (isA ? row.isSignedA() : row.isSignedB()) {
+        if (isA ? row.signedAFlag() : row.signedBFlag()) {
             return build(space, me, now);
         }
         if (isA) {
@@ -368,7 +368,7 @@ public class CoupleRepairService {
             throw new BusinessException(400, "场景最多 " + SCENE_MAX + " 字");
         }
         CoupleRepairRedo row = redoMapper.findByQuarter(space.getId(), quarter);
-        if (row != null && row.isUsed()) {
+        if (row != null && row.usedFlag()) {
             throw new BusinessException(400, quarter + " 的重来卡已经用掉了，下季再来");
         }
         if (row == null) {
@@ -388,7 +388,7 @@ public class CoupleRepairService {
         CoupleSpace space = requireSpace(me);
         LocalDate now = LocalDate.now();
         CoupleRepairRedo row = requireRedo(space, quarterOf(now));
-        if (row.isUsed()) {
+        if (row.usedFlag()) {
             throw new BusinessException(400, "这卡已经用过了");
         }
         String t = trim(replayNote, "这次改说了什么，写一句");
@@ -410,7 +410,7 @@ public class CoupleRepairService {
         CoupleSpace space = requireSpace(me);
         LocalDate now = LocalDate.now();
         CoupleRepairRedo row = requireRedo(space, quarterOf(now));
-        if (!row.isUsed()) {
+        if (!row.usedFlag()) {
             throw new BusinessException(400, "还没重放，打什么分");
         }
         if (!row.getRatedBy().isEmpty()) {
@@ -700,7 +700,7 @@ public class CoupleRepairService {
         if (row.getFromUser().equals(me)) {
             throw new BusinessException(400, "自己给自己发感动奖不算");
         }
-        if (row.isTouched()) {
+        if (row.touchedFlag()) {
             return build(space, me, now);
         }
         row.setTouched(1);
@@ -767,7 +767,7 @@ public class CoupleRepairService {
 
     private void settle(CoupleSpace space, long ts) {
         for (CoupleRepairMakeup m : makeupMapper.findRunning(space.getId())) {
-            if (m.endAt() <= ts && !m.isPaused()) {
+            if (m.endAt() <= ts && !m.pausedFlag()) {
                 offer(m);
                 m.setUpdatedAt(ts);
                 makeupMapper.updateById(m);
@@ -793,8 +793,8 @@ public class CoupleRepairService {
                 break;
             }
             boolean mine = me.equals(f.getFromUser());
-            boolean signedMe = me.equals(space.getUserA()) ? f.isSignedA() : f.isSignedB();
-            boolean signedPartner = me.equals(space.getUserA()) ? f.isSignedB() : f.isSignedA();
+            boolean signedMe = me.equals(space.getUserA()) ? f.signedAFlag() : f.signedBFlag();
+            boolean signedPartner = me.equals(space.getUserA()) ? f.signedBFlag() : f.signedAFlag();
             FreezeVO vo = new FreezeVO(f.getId(), f.getStartDay(), mine, f.getHours(), f.getStatus(),
                     Math.max(0, (f.getUntilAt() - ts) / 60000L), f.getReason(), f.getAnswer1(), f.getAnswer2(),
                     f.getAnswer3(), signedMe, signedPartner, f.isBothSigned(), questionsDone(f),
@@ -819,9 +819,9 @@ public class CoupleRepairService {
         CoupleRepairRedo redoRow = redoMapper.findByQuarter(space.getId(), quarter);
         RedoVO redoVO = redoRow == null
                 ? new RedoVO(quarter, false, "", false, "", null, "", true, false)
-                : new RedoVO(quarter, me.equals(redoRow.getFromUser()), redoRow.getScene(), redoRow.isUsed(),
+                : new RedoVO(quarter, me.equals(redoRow.getFromUser()), redoRow.getScene(), redoRow.usedFlag(),
                 redoRow.getReplayNote(), redoRow.getSatisfaction(), redoRow.getRatedBy(),
-                !redoRow.isUsed(), redoRow.isUsed() && redoRow.getRatedBy().isEmpty());
+                !redoRow.usedFlag(), redoRow.usedFlag() && redoRow.getRatedBy().isEmpty());
 
         List<RebuildVO> rebuilds = new ArrayList<>();
         int planKept = 0;
@@ -846,7 +846,7 @@ public class CoupleRepairService {
         for (CoupleRepairMakeup m : makeupMapper.findBySpace(space.getId())) {
             boolean mine = me.equals(m.getFromUser());
             MakeupVO vo = new MakeupVO(m.getId(), m.getDay(), mine, m.getMinutes(), m.getStatus(),
-                    Math.max(0, (m.endAt() - ts) / 1000L), m.isPaused(), m.getPausedBy(), m.getStepCard(),
+                    Math.max(0, (m.endAt() - ts) / 1000L), m.pausedFlag(), m.getPausedBy(), m.getStepCard(),
                     !mine && CoupleRepairMakeup.STATUS_RUNNING.equals(m.getStatus()),
                     CoupleRepairMakeup.STATUS_RUNNING.equals(m.getStatus())
                             || CoupleRepairMakeup.STATUS_OFFERED.equals(m.getStatus()));
@@ -869,7 +869,7 @@ public class CoupleRepairService {
                 break;
             }
             admits.add(new AdmitVO(a.getId(), a.getDay(), me.equals(a.getFromUser()), a.getAboutUser(),
-                    a.getDetail(), a.isTouched(), !me.equals(a.getFromUser()) && !a.isTouched()));
+                    a.getDetail(), a.touchedFlag(), !me.equals(a.getFromUser()) && !a.touchedFlag()));
         }
 
         List<BoxVO> boxes = new ArrayList<>();
@@ -928,11 +928,11 @@ public class CoupleRepairService {
         }
         List<CoupleAdmitLog> admitRows = admitMapper.findBySpace(space.getId());
         int admitCount = (int) admitRows.stream().filter(a -> a.getDay().startsWith(yearPrefix)).count();
-        int touched = (int) admitRows.stream().filter(a -> a.isTouched() && a.getDay().startsWith(yearPrefix)).count();
+        int touched = (int) admitRows.stream().filter(a -> a.touchedFlag() && a.getDay().startsWith(yearPrefix)).count();
         int boxesDone = (int) boxMapper.findBySpace(space.getId()).stream()
                 .filter(b -> CoupleRepairBox.STATUS_DONE.equals(b.getStatus())).count();
         int redoUsed = (int) redoMapper.findBySpace(space.getId()).stream()
-                .filter(CoupleRepairRedo::isUsed).count();
+                .filter(CoupleRepairRedo::usedFlag).count();
         int peaceLines = (int) peaceMapper.findBySpace(space.getId()).stream()
                 .filter(p -> p.getDay().startsWith(yearPrefix)).count();
         int reconciles = 0;

@@ -44,7 +44,7 @@ public class CoupleEchoSlow {
         return row;
     }
 
-    public boolean isDelivered() {
+    public boolean deliveredFlag() {
         return delivered != null && delivered == 1;
     }
 }

@@ -133,7 +133,7 @@ public class CoupleMemoryService {
         long questionDays = bothAnsweredDays(space);
         long promiseDone = promiseMapper.findBySpace(spaceId).stream()
                 .filter(p -> CouplePromise.STATUS_DONE.equals(p.getStatus())).count();
-        long itemDone = itemMapper.findBySpace(spaceId).stream().filter(CoupleItem::isDone).count();
+        long itemDone = itemMapper.findBySpace(spaceId).stream().filter(CoupleItem::doneFlag).count();
         long pactDone = pactMapper.findBySpace(spaceId).stream().filter(CouplePact::isAccepted).count();
         long fundReached = fundMapper.findBySpace(spaceId).stream().filter(CoupleFund::isReached).count();
         long tacitMatched = tacitMapper.countMatched(spaceId);
@@ -198,7 +198,7 @@ public class CoupleMemoryService {
 
         // 共享清单完成
         for (CoupleItem item : itemMapper.findBySpace(space.getId())) {
-            if (!item.isDone() || item.getDoneAt() == null) {
+            if (!item.doneFlag() || item.getDoneAt() == null) {
                 continue;
             }
             LocalDate day = Instant.ofEpochMilli(item.getDoneAt()).atZone(ZoneId.systemDefault()).toLocalDate();
@@ -252,7 +252,7 @@ public class CoupleMemoryService {
 
         // 共同日历纪念日（yearly 的按年回看）
         for (CoupleAnniversary row : anniversaryMapper.findBySpace(space.getId())) {
-            if (!row.isYearly()) {
+            if (!row.yearlyFlag()) {
                 continue;
             }
             LocalDate date;
@@ -369,8 +369,8 @@ public class CoupleMemoryService {
         CoupleSpace space = requireSpace(me);
         return countdownMapper.findBySpace(space.getId()).stream()
                 .sorted((a, b) -> {
-                    if (a.isDone() != b.isDone()) {
-                        return a.isDone() ? 1 : -1;
+                    if (a.doneFlag() != b.doneFlag()) {
+                        return a.doneFlag() ? 1 : -1;
                     }
                     return a.getTargetDay().compareTo(b.getTargetDay());
                 })
@@ -404,7 +404,7 @@ public class CoupleMemoryService {
         String today = LocalDate.now().toString();
         for (CoupleSpace space : spaceMapper.findAllActive()) {
             for (CoupleCountdown row : countdownMapper.findBySpace(space.getId())) {
-                if (row.isDone() || today.equals(row.getLastRemindDay())) {
+                if (row.doneFlag() || today.equals(row.getLastRemindDay())) {
                     continue;
                 }
                 long days = row.daysLeft(LocalDate.now());
@@ -465,7 +465,7 @@ public class CoupleMemoryService {
                 .filter(p -> CouplePromise.STATUS_DONE.equals(p.getStatus()))
                 .filter(p -> p.getDoneAt() != null && inMonth(p.getDoneAt(), target)).count();
         long itemCount = itemMapper.findBySpace(spaceId).stream()
-                .filter(CoupleItem::isDone)
+                .filter(CoupleItem::doneFlag)
                 .filter(i -> i.getDoneAt() != null && inMonth(i.getDoneAt(), target)).count();
 
         List<ReportItem> items = new ArrayList<>();
@@ -506,7 +506,7 @@ public class CoupleMemoryService {
         items.add(new ReportItem("promise", "兑现承诺", "🤙", promiseMapper.findBySpace(spaceId).stream()
                 .filter(p -> CouplePromise.STATUS_DONE.equals(p.getStatus())).count(), "个"));
         items.add(new ReportItem("item", "完成小事", "✅", itemMapper.findBySpace(spaceId).stream()
-                .filter(CoupleItem::isDone).count(), "件"));
+                .filter(CoupleItem::doneFlag).count(), "件"));
         items.add(new ReportItem("pact", "恋爱条约", "📜", pactMapper.findBySpace(spaceId).stream()
                 .filter(CouplePact::isAccepted).count(), "条"));
         items.add(new ReportItem("fund", "达成心愿", "⛵", fundMapper.findBySpace(spaceId).stream()
@@ -517,7 +517,7 @@ public class CoupleMemoryService {
         items.add(new ReportItem("reconcile", "和好次数", "🕊️", reconcileMapper.countAccepted(spaceId), "次"));
         items.add(new ReportItem("capsule", "时光胶囊", "⏳", capsuleMapper.findBySpace(spaceId).size(), "枚"));
         items.add(new ReportItem("countdown", "期待成真", "🎉", countdownMapper.findBySpace(spaceId).stream()
-                .filter(CoupleCountdown::isDone).count(), "个"));
+                .filter(CoupleCountdown::doneFlag).count(), "个"));
         return new DataOverviewVO(daysTogether(space), items);
     }
 
@@ -662,7 +662,7 @@ public class CoupleMemoryService {
 
     private static CountdownVO toCountdownVO(CoupleCountdown row) {
         return new CountdownVO(row.getId(), row.getTitle(), row.getTargetDay(),
-                row.getNote() == null ? "" : row.getNote(), row.isDone(), row.getDoneAt(),
+                row.getNote() == null ? "" : row.getNote(), row.doneFlag(), row.getDoneAt(),
                 row.daysLeft(LocalDate.now()), row.getCreatedBy(), row.getCreated());
     }
 

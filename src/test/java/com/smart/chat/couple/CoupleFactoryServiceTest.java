@@ -117,10 +117,10 @@ class CoupleFactoryServiceTest {
         verify(push).pushCoupleEvent(eq("factory-spin-item-done"), eq("alice"), eq("bob"), any());
         for (CoupleSpinTask t : rows) {
             String doer = t.getAssignedUser();
-            if (!t.isConfirmed()) {
+            if (!t.confirmedFlag()) {
                 service.confirmSpin(doer.equals("alice") ? "bob" : "alice", t.getId());
             }
-            if (!t.isDone()) {
+            if (!t.doneFlag()) {
                 service.doneSpin(doer, t.getId());
             }
         }
@@ -284,7 +284,7 @@ class CoupleFactoryServiceTest {
                 .isInstanceOf(BusinessException.class).hasMessageContaining("拍过");
         service.standup("bob");
         verify(push).pushCoupleEventBoth(eq("factory-standup-both"), eq("bob"), eq("alice"), eq("bob"), any());
-        assertThat(rows).allMatch(CoupleStandup::isPaired);
+        assertThat(rows).allMatch(CoupleStandup::pairedFlag);
     }
 
     // ========== F277 垫付本 ==========

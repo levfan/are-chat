@@ -343,7 +343,7 @@ public class CoupleAlmanacService {
     public TodayVO confirmLucky(String me, String id) {
         CoupleSpace space = requireSpace(me);
         CoupleLuckyDay row = requireLucky(space, id);
-        if (row.isConfirmed()) {
+        if (row.confirmedFlag()) {
             return today(me);
         }
         if (row.getFromUser().equals(me)) {
@@ -609,7 +609,7 @@ public class CoupleAlmanacService {
 
     private LuckyVO toLuckyVO(CoupleLuckyDay l, String me) {
         return new LuckyVO(l.getId(), l.getDay(), l.getMatter(), l.getComment(),
-                l.getFromUser().equals(me), l.isConfirmed());
+                l.getFromUser().equals(me), l.confirmedFlag());
     }
 
     private CoupleTermRitual requireRitual(CoupleSpace space, String id) {

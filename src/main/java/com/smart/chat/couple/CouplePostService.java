@@ -207,7 +207,7 @@ public class CouplePostService {
         if (step == null || !step.getSpaceId().equals(space.getId())) {
             throw new BusinessException(400, "这一步不存在");
         }
-        if (step.isDone()) {
+        if (step.doneFlag()) {
             return post(me);
         }
         step.setDone(1);
@@ -216,7 +216,7 @@ public class CouplePostService {
         stepMapper.updateById(step);
         CoupleBucket bucket = bucketMapper.selectById(step.getBucketId());
         List<CoupleBucketStep> siblings = stepMapper.findByBucket(step.getBucketId());
-        boolean allDone = bucket != null && siblings.stream().allMatch(CoupleBucketStep::isDone)
+        boolean allDone = bucket != null && siblings.stream().allMatch(CoupleBucketStep::doneFlag)
                 && !siblings.isEmpty();
         if (allDone) {
             bucket.setStatus(CoupleBucket.STATUS_DONE);
@@ -644,10 +644,10 @@ public class CouplePostService {
         List<BucketVO> buckets = new ArrayList<>();
         for (CoupleBucket b : bucketMapper.findOpen(space.getId())) {
             List<CoupleBucketStep> steps = stepMapper.findByBucket(b.getId());
-            int done = (int) steps.stream().filter(CoupleBucketStep::isDone).count();
+            int done = (int) steps.stream().filter(CoupleBucketStep::doneFlag).count();
             List<StepVO> stepVOs = new ArrayList<>();
             for (CoupleBucketStep st : steps) {
-                stepVOs.add(new StepVO(st.getId(), st.getSeq(), st.getText(), st.isDone(), st.getDoneBy()));
+                stepVOs.add(new StepVO(st.getId(), st.getSeq(), st.getText(), st.doneFlag(), st.getDoneBy()));
             }
             buckets.add(new BucketVO(b.getId(), b.getName(), b.getTargetDay(), b.getNote(),
                     b.getOwnerUser().equals(me), b.getStatus(), done, steps.size(), stepVOs));

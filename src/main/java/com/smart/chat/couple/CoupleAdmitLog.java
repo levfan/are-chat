@@ -35,7 +35,7 @@ public class CoupleAdmitLog {
         return row;
     }
 
-    public boolean isTouched() {
+    public boolean touchedFlag() {
         return touched != null && touched == 1;
     }
 }

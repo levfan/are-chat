@@ -39,15 +39,15 @@ public class CoupleLegacyDraw {
         return row;
     }
 
-    public boolean isDrawnA() {
+    public boolean drawnAFlag() {
         return drawnA != null && drawnA == 1;
     }
 
-    public boolean isDrawnB() {
+    public boolean drawnBFlag() {
         return drawnB != null && drawnB == 1;
     }
 
-    public boolean isNotified() {
+    public boolean notifiedFlag() {
         return notified != null && notified == 1;
     }
 }

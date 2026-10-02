@@ -33,7 +33,7 @@ public class CoupleStandup {
         return row;
     }
 
-    public boolean isPaired() {
+    public boolean pairedFlag() {
         return Integer.valueOf(1).equals(paired);
     }
 }

@@ -35,7 +35,7 @@ public class CoupleBoardAttend {
         return row;
     }
 
-    public boolean isConvened() {
+    public boolean convenedFlag() {
         return convened != null && convened == 1;
     }
 }

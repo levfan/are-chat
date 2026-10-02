@@ -131,12 +131,12 @@ public class CoupleFactoryService {
         List<SpinVO> spins = new ArrayList<>();
         for (CoupleSpinTask t : spinMapper.findByWeek(space.getId(), week)) {
             spins.add(new SpinVO(t.getId(), t.getWeek(), t.getItem(), t.getAssignedUser(),
-                    t.getAssignedUser().equals(me), t.isConfirmed(), t.isDone()));
+                    t.getAssignedUser().equals(me), t.confirmedFlag(), t.doneFlag()));
         }
         List<String> owed = new ArrayList<>();
         for (int i = 1; i <= 3; i++) {
             for (CoupleSpinTask t : spinMapper.findByWeek(space.getId(), monday(now.minusWeeks(i)))) {
-                if (!t.isDone()) {
+                if (!t.doneFlag()) {
                     owed.add(t.getWeek() + " · " + t.getItem() + "（" + t.getAssignedUser() + "）");
                 }
             }
@@ -270,7 +270,7 @@ public class CoupleFactoryService {
         if (row.getAssignedUser().equals(me)) {
             throw new BusinessException(400, "自己的活自己认，TA 的活等 TA 认");
         }
-        if (row.isConfirmed()) {
+        if (row.confirmedFlag()) {
             return board(me);
         }
         row.setConfirmed(1);
@@ -287,17 +287,17 @@ public class CoupleFactoryService {
         if (!row.getAssignedUser().equals(me)) {
             throw new BusinessException(400, "这活不是你的，抢功也得等下周");
         }
-        if (row.isDone()) {
+        if (row.doneFlag()) {
             return board(me);
         }
-        if (!row.isConfirmed()) {
+        if (!row.confirmedFlag()) {
             throw new BusinessException(400, "先等对方认账，干了也白干");
         }
         row.setDone(1);
         row.setDoneAt(System.currentTimeMillis());
         spinMapper.updateById(row);
         List<CoupleSpinTask> siblings = spinMapper.findByWeek(space.getId(), row.getWeek());
-        boolean allDone = siblings.stream().allMatch(CoupleSpinTask::isDone);
+        boolean allDone = siblings.stream().allMatch(CoupleSpinTask::doneFlag);
         if (allDone) {
             push.pushCoupleEventBoth("factory-spin-clear", me, space.getUserA(), space.getUserB(),
                     "本周家务全部干完，车间熄灯放假 🎉");

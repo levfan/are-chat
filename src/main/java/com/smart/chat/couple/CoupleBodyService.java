@@ -409,7 +409,7 @@ public class CoupleBodyService {
             row.setCountB(c);
             row.setAtB(ts);
         }
-        boolean wasLinked = row.isLinked();
+        boolean wasLinked = row.linkedFlag();
         row.setLinked(row.getAtA() > 0 && row.getAtB() > 0
                 && Math.abs(row.getAtA() - row.getAtB()) <= CoupleBodyFit.LINK_WINDOW_MS ? 1 : 0);
         row.setUpdatedAt(ts);
@@ -418,10 +418,10 @@ public class CoupleBodyService {
         } else {
             fitMapper.updateById(row);
         }
-        if (row.isLinked() && !wasLinked) {
+        if (row.linkedFlag() && !wasLinked) {
             push.pushCoupleEventBoth("body-fit-link", me, space.getUserA(), space.getUserB(),
                     fitLabel(k) + " 链子接上了：" + row.getCountA() + " ↔ " + row.getCountB() + " 🔗");
-        } else if (!row.isLinked()) {
+        } else if (!row.linkedFlag()) {
             push.pushCoupleEvent("body-fit", me, space.partnerOf(me),
                     "TA 报了" + fitLabel(k) + " " + (isA ? row.getCountA() : row.getCountB())
                             + " 个，30 分钟内接上才算链 🔗");
@@ -724,7 +724,7 @@ public class CoupleBodyService {
             int partnerCount = mineA ? f.getCountB() : f.getCountA();
             long partnerAt = mineA ? f.getAtB() : f.getAtA();
             fits.add(new FitVO(f.getDay(), f.getKind(), fitLabel(f.getKind()), myCount, partnerCount,
-                    f.isLinked(), partnerAt > 0, partnerAt > 0 ? Math.max(0, (ts - partnerAt) / 60000L) : -1));
+                    f.linkedFlag(), partnerAt > 0, partnerAt > 0 ? Math.max(0, (ts - partnerAt) / 60000L) : -1));
         }
 
         List<SosVO> soss = new ArrayList<>();
@@ -810,7 +810,7 @@ public class CoupleBodyService {
     }
 
     private boolean isSigned(CoupleBodyOath oath, boolean sideA) {
-        return sideA ? oath.isSignedA() : oath.isSignedB();
+        return sideA ? oath.signedAFlag() : oath.signedBFlag();
     }
 
     private int campDays(CoupleBodyQuit camp, LocalDate now) {

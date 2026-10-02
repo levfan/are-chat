@@ -43,12 +43,12 @@ public class CoupleBodyOath {
     }
 
     /** userA 是否已签。 */
-    public boolean isSignedA() {
+    public boolean signedAFlag() {
         return signedA != null && signedA == 1;
     }
 
     /** userB 是否已签。 */
-    public boolean isSignedB() {
+    public boolean signedBFlag() {
         return signedB != null && signedB == 1;
     }
 }
