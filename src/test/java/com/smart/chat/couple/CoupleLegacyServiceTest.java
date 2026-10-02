@@ -182,11 +182,20 @@ class CoupleLegacyServiceTest {
         verify(push, times(1)).pushCoupleEvent(eq("legacy-ten-done"), eq("alice"), eq("bob"), any());
         assertThat(tens.get(0).getAnswers()).contains("改写第五答");
 
+        // 逐题钳制：bob 一格没答，就看不到 alice 已答的十格
+        CoupleLegacyService.TenVO blind = service.legacy("bob", null).tens().get(0);
+        assertThat(blind.partnerAnswers()).hasSize(10);
+        assertThat(blind.partnerAnswers()).allMatch(String::isEmpty);
+
         for (int i = 1; i <= 10; i++) {
             service.tenAnswer("bob", YEAR, i, "TA" + i);
         }
+        // bob 答完第 1 格之前 alice 也看不到那格：先改 bob 的第 1 格，alice 侧应立刻可见
         assertThat(service.legacy("alice", null).tens().get(0).bothDone()).isTrue();
-        assertThat(service.legacy("alice", null).tens().get(0).partnerAnswers()).hasSize(10);
+        List<String> revealed = service.legacy("alice", null).tens().get(0).partnerAnswers();
+        assertThat(revealed).hasSize(10);
+        assertThat(revealed.get(0)).isEqualTo("TA1");
+        assertThat(revealed.get(9)).isEqualTo("TA10");
     }
 
     // ========== F341 记忆库年审 ==========

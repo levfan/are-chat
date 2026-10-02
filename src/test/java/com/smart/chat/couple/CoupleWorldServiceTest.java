@@ -448,6 +448,21 @@ class CoupleWorldServiceTest {
         assertThat(service.world("bob").apologies().get(0).template()).isEmpty();
     }
 
+    @Test
+    void worldListsAreCappedOnRead() {
+        // 35 条历史候选文案只回最近 30 条；30 条灵感未触及 40 上限则全给
+        for (int i = 0; i < 35; i++) {
+            captions.add(CoupleWorldCaption.of("s1", LocalDate.now().minusDays(i).toString(),
+                    i % 2 == 0 ? "alice" : "bob", 1, "文案" + i));
+        }
+        for (int i = 0; i < 30; i++) {
+            gifts.add(CoupleWorldGift.of("s1", "长辈" + i, "灵感" + i, "", "", "alice"));
+        }
+        CoupleWorldService.WorldVO vo = service.world("alice");
+        assertThat(vo.captions()).hasSize(30);
+        assertThat(vo.gifts()).hasSize(30);
+    }
+
     // ========== 总览与空间 ==========
 
     @Test

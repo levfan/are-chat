@@ -140,3 +140,11 @@
   2. **追剧拿不到本人剧终态**：`MovieVO.status/finished` 只在双人都剧终才翻转，前端无法显示「我已剧终、等 TA」，只能把剧终钮常驻。补 `mineFinished / partnerFinished` 两个字段；断言中途态（我已完成、TA 未完成、整体未完成）。
   3. **总览列表无上限**：diaries/booths/refs/awards/tickets/movies 全量历史进 payload，工单簿会越用越肥。钳到最近 14/30/60/30/12/20 条，**但颁奖礼计数改走全量**（`awardTotal/refTotal/orderTotal`），免得钳了列表让「年度 25 单」显示成 20 单；用例塞 25 张工单断言 `tickets=20 && gala.orders=25`。
 - agent 其余 10 条「与描述不一致」均为口径澄清（本批无日期入参、`masterReview` 评语允许空、`SERVE_TARGET=3` 是出师门槛而 7 是打卡上限、六个列表历史上就不过滤等），已按后端为准实现，无需改动。
+
+## 架构师代码走查（第三轮：同类缺陷横向排查）
+
+- 批次二十六暴露的「偷看答案」和「列表无上限」不是孤例，按同一两类横向排查 v6 其余模块：
+  1. **提前下发（偷看）类**：`CoupleLegacyService` 年度十问的 `partnerAnswers` 原本无条件下发——我一个字没答就能看到 TA 的十答，等于把年度仪式变成抄答案。改为**逐格钳制**（我自己那格填了才给看那格），补断言「bob 未答时全空、bob 答完 alice 侧立刻可见」。其余排查项：`post` 新年卡已按 SENT 钳、`codex` 第一眼按 revealed 钳、`listen` 换位信按开放日钳、`theater` 日记/家长题/追剧已钳，无同类问题。
+  2. **无上限列表类**：`CoupleRepairService`（freezes/sorries/rebuilds/admits/boxes/peace）与 `CoupleWorldService`（visits/gifts/declares/captions/apologies/vows）原本全量历史进 payload。统一钳到最近 N 条，并把钳制阈值提为 `LIST_*` 常量；`repair` 的 F325 年报原先是**拿已钳好的 VO 列表再计数**（钳列表会把年报数字一起改小）→ 重构成直接查原始表计数（`sorryMapper/admitMapper/boxMapper/peaceMapper/redoMapper.findBySpace`），与批次二十六颁奖礼同一口径。
+  3. **off-by-one**：列表钳制初版写 `if (kept++ > MAX)` 实际会多给一条，统一改 `>=`；补用例断言 35 条只回 30、25 封待验在列表里是 20 条而 `report.sorryIn()` 仍是 25。
+- 全量 **502 绿**（新增 2 用例 + 3 组断言）。

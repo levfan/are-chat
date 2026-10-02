@@ -536,7 +536,12 @@ public class CoupleLegacyService {
             CoupleLegacyTen mineRow = tenMapper.findByYearUser(space.getId(), y, me);
             CoupleLegacyTen otherRow = tenMapper.findByYearUser(space.getId(), y, partner);
             List<String> myLines = lines(mineRow == null ? "" : mineRow.getAnswers(), CoupleLegacyTen.QUESTION_COUNT);
-            List<String> otherLines = lines(otherRow == null ? "" : otherRow.getAnswers(), CoupleLegacyTen.QUESTION_COUNT);
+            List<String> otherRaw = lines(otherRow == null ? "" : otherRow.getAnswers(), CoupleLegacyTen.QUESTION_COUNT);
+            // 逐题钳制：我自己这一格没答之前，看不到 TA 那一格（年度十问不是抄答案）
+            List<String> otherLines = new ArrayList<>();
+            for (int i = 0; i < otherRaw.size(); i++) {
+                otherLines.add(myLines.get(i).isEmpty() ? "" : otherRaw.get(i));
+            }
             tens.add(new TenVO(y, true, String.join(" / ", myLines), String.join(" / ", otherLines),
                     CoupleLegacyBank.TEN_QUESTIONS, myLines, otherLines, answeredCount(
                     mineRow == null ? "" : mineRow.getAnswers()),

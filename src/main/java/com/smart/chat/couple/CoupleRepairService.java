@@ -43,6 +43,12 @@ public class CoupleRepairService {
     static final int PEACE_NOTE_MAX = 80;
     /** 档位限 14/30：signed_days 存 MMdd:A/MMdd:B 记号，30 天双签正好落在列宽内。 */
     static final List<Integer> TARGET_DAYS = List.of(14, 30);
+    static final int LIST_FREEZE_MAX = 30;
+    static final int LIST_SORRY_MAX = 20;
+    static final int LIST_ADMIT_MAX = 40;
+    static final int LIST_PEACE_MAX = 30;
+    static final int LIST_BOX_MAX = 20;
+    static final int LIST_PLAN_MAX = 12;
     static final int THAW_EARN_POINTS = 8;
 
     private final CoupleSpaceMapper spaceMapper;
@@ -777,7 +783,11 @@ public class CoupleRepairService {
 
         List<FreezeVO> freezes = new ArrayList<>();
         FreezeVO current = null;
+        int freezeKept = 0;
         for (CoupleRepairFreeze f : freezeMapper.findBySpace(space.getId())) {
+            if (freezeKept++ >= LIST_FREEZE_MAX) {
+                break;
+            }
             boolean mine = me.equals(f.getFromUser());
             boolean signedMe = me.equals(space.getUserA()) ? f.isSignedA() : f.isSignedB();
             boolean signedPartner = me.equals(space.getUserA()) ? f.isSignedB() : f.isSignedA();
@@ -792,7 +802,11 @@ public class CoupleRepairService {
         }
 
         List<SorryVO> sorries = new ArrayList<>();
+        int sorryKept = 0;
         for (CoupleSorryReview s : sorryMapper.findBySpace(space.getId())) {
+            if (sorryKept++ >= LIST_SORRY_MAX) {
+                break;
+            }
             sorries.add(new SorryVO(s.getId(), me.equals(s.getFromUser()), s.getLetter(), tokens(s.getPoints()),
                     s.getStatus(), s.getVerdict(), s.getVerifiedBy(), !me.equals(s.getFromUser())
                     && CoupleSorryReview.STATUS_VERIFY.equals(s.getStatus())));
@@ -806,7 +820,11 @@ public class CoupleRepairService {
                 !redoRow.isUsed(), redoRow.isUsed() && redoRow.getRatedBy().isEmpty());
 
         List<RebuildVO> rebuilds = new ArrayList<>();
+        int planKept = 0;
         for (CoupleRebuildPlan p : rebuildMapper.findBySpace(space.getId())) {
+            if (planKept++ >= LIST_PLAN_MAX) {
+                break;
+            }
             List<TaskVO> tasks = new ArrayList<>();
             List<String> rawTasks = tokens(p.getTasks());
             for (int i = 0; i < rawTasks.size(); i++) {
@@ -841,33 +859,44 @@ public class CoupleRepairService {
         }
 
         List<AdmitVO> admits = new ArrayList<>();
+        int admitKept = 0;
         for (CoupleAdmitLog a : admitMapper.findBySpace(space.getId())) {
+            if (admitKept++ >= LIST_ADMIT_MAX) {
+                break;
+            }
             admits.add(new AdmitVO(a.getId(), a.getDay(), me.equals(a.getFromUser()), a.getAboutUser(),
                     a.getDetail(), a.isTouched(), !me.equals(a.getFromUser()) && !a.isTouched()));
         }
 
         List<BoxVO> boxes = new ArrayList<>();
+        int boxKept = 0;
         for (CoupleRepairBox b : boxMapper.findBySpace(space.getId())) {
+            if (boxKept++ >= LIST_BOX_MAX) {
+                break;
+            }
             boxes.add(new BoxVO(b.getId(), b.getDay(), me.equals(b.getOwnerUser()), b.getTask(), b.getStatus(),
                     CoupleRepairBox.STATUS_DONE.equals(b.getStatus()) ? CoupleRepairBank.boxDoneLine(
                             CoupleRitualBank.stableHash(space.getId() + "|box|" + b.getId())) : ""));
         }
 
         List<PeaceVO> peace = new ArrayList<>();
+        int peaceKept = 0;
         for (CouplePeaceLine p : peaceMapper.findBySpace(space.getId())) {
+            if (peaceKept++ >= LIST_PEACE_MAX) {
+                break;
+            }
             peace.add(new PeaceVO(p.getId(), p.getDay(), me.equals(p.getFromUser()), p.getLine(), p.getNote()));
         }
 
-        ReportVO report = report(space, freezes, sorries, admits, redoVO, boxes, peace, now);
+        ReportVO report = report(space, now);
 
         return new RepairVO(today, quarter, year, freezes, current, sorries, redoVO, rebuilds, makeupVO,
                 makeups, bottoms, admits, boxes, peace, report);
     }
 
-    /** F325 冲突类型年报（读时聚合，无表）。 */
-    private ReportVO report(CoupleSpace space, List<FreezeVO> freezes, List<SorryVO> sorries,
-                            List<AdmitVO> admits, RedoVO redo, List<BoxVO> boxes, List<PeaceVO> peace,
-                            LocalDate now) {
+    /** F325 冲突类型年报（读时聚合，无表；全部走原始表计数，不受列表钳制影响）。 */
+    private ReportVO report(CoupleSpace space, LocalDate now) {
+        String yearPrefix = String.valueOf(now.getYear());
         int fz = 0;
         int thawed = 0;
         int hours = 0;
@@ -884,23 +913,27 @@ public class CoupleRepairService {
         int in = 0;
         int passed = 0;
         int backed = 0;
-        for (SorryVO s : sorries) {
-            if (CoupleSorryReview.STATUS_VERIFY.equals(s.status())) {
+        for (CoupleSorryReview s : sorryMapper.findBySpace(space.getId())) {
+            if (CoupleSorryReview.STATUS_VERIFY.equals(s.getStatus())) {
                 in++;
-            } else if (CoupleSorryReview.STATUS_PASSED.equals(s.status())) {
+            } else if (CoupleSorryReview.STATUS_PASSED.equals(s.getStatus())) {
                 passed++;
             } else {
                 backed++;
             }
         }
-        int admitCount = (int) admits.stream().filter(a -> a.day().startsWith(String.valueOf(now.getYear()))).count();
-        int touched = (int) admits.stream().filter(a -> a.touched()
-                && a.day().startsWith(String.valueOf(now.getYear()))).count();
-        int boxesDone = (int) boxes.stream().filter(b -> CoupleRepairBox.STATUS_DONE.equals(b.status())).count();
+        List<CoupleAdmitLog> admitRows = admitMapper.findBySpace(space.getId());
+        int admitCount = (int) admitRows.stream().filter(a -> a.getDay().startsWith(yearPrefix)).count();
+        int touched = (int) admitRows.stream().filter(a -> a.isTouched() && a.getDay().startsWith(yearPrefix)).count();
+        int boxesDone = (int) boxMapper.findBySpace(space.getId()).stream()
+                .filter(b -> CoupleRepairBox.STATUS_DONE.equals(b.getStatus())).count();
+        int redoUsed = (int) redoMapper.findBySpace(space.getId()).stream()
+                .filter(CoupleRepairRedo::isUsed).count();
+        int peaceLines = (int) peaceMapper.findBySpace(space.getId()).stream()
+                .filter(p -> p.getDay().startsWith(yearPrefix)).count();
         long seed = CoupleRitualBank.stableHash(space.getId() + "|report|" + now.getYear());
         return new ReportVO(String.valueOf(now.getYear()), fz, thawed, in, passed, backed, admitCount, touched,
-                redo.used() ? 1 : 0, boxesDone,
-                (int) peace.stream().filter(p -> p.day().startsWith(String.valueOf(now.getYear()))).count(),
+                redoUsed, boxesDone, peaceLines,
                 fz == 0 ? 0 : Math.round((float) hours / fz),
                 CoupleRepairBank.reportPrize(seed, admitCount, passed),
                 CoupleRepairBank.reportSummary(seed, fz, thawed));

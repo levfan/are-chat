@@ -480,6 +480,23 @@ class CoupleRepairServiceTest {
         assertThat(r.summary()).contains("挂过 2 次冷冻");
     }
 
+    @Test
+    void workshopListsAreCappedButYearReportCountsEverything() {
+        for (int i = 0; i < 25; i++) {
+            sorries.add(CoupleSorryReview.of("s1", i % 2 == 0 ? "alice" : "bob", "信" + i, "FACT,FEEL,SORRY"));
+        }
+        for (int i = 0; i < 45; i++) {
+            admits.add(CoupleAdmitLog.of("s1", LocalDate.now().minusDays(i).toString(),
+                    i % 2 == 0 ? "alice" : "bob", "对方", "认错" + i));
+        }
+        CoupleRepairService.RepairVO vo = service.workshop("alice");
+        assertThat(vo.sorries()).hasSize(20);
+        assertThat(vo.admits()).hasSize(40);
+        // 年报走原始表：25 封待验就是 25 封，不因钳列表而变小
+        assertThat(vo.report().sorryIn()).isEqualTo(25);
+        assertThat(vo.report().admits()).isEqualTo(45);
+    }
+
     // ========== 空间校验 ==========
 
     @Test

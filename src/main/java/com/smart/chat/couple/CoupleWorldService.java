@@ -40,6 +40,12 @@ public class CoupleWorldService {
     static final int APOLOGY_REASON_MAX = 200;
     static final int APOLOGY_DRAFT_MAX = 300;
     static final int REVIEW_NOTE_MAX = 140;
+    static final int LIST_VISIT_MAX = 30;
+    static final int LIST_GIFT_MAX = 40;
+    static final int LIST_DECLARE_MAX = 24;
+    static final int LIST_CAPTION_MAX = 30;
+    static final int LIST_APOLOGY_MAX = 20;
+    static final int LIST_VOW_MAX = 30;
     static final int VOW_KEPT_POINTS = 10;
 
     private final CoupleSpaceMapper spaceMapper;
@@ -673,7 +679,11 @@ public class CoupleWorldService {
         boolean isA = me.equals(space.getUserA());
 
         List<VisitVO> visits = new ArrayList<>();
+        int visitKept = 0;
         for (CoupleWorldVisit v : visitMapper.findBySpace(space.getId())) {
+            if (visitKept++ >= LIST_VISIT_MAX) {
+                break;
+            }
             List<PrepVO> preps = new ArrayList<>();
             List<String> raw = tokens(v.getPreps());
             for (int i = 0; i < raw.size(); i++) {
@@ -685,7 +695,11 @@ public class CoupleWorldService {
         }
 
         List<GiftVO> gifts = new ArrayList<>();
+        int giftKept = 0;
         for (CoupleWorldGift g : giftMapper.findBySpace(space.getId())) {
+            if (giftKept++ >= LIST_GIFT_MAX) {
+                break;
+            }
             gifts.add(new GiftVO(g.getId(), g.getPerson(), g.getIdea(), g.getBudget(), g.getAvoid(),
                     me.equals(g.getOwnerUser()), g.getTakerUser(), g.getStatus(),
                     CoupleWorldGift.STATUS_OPEN.equals(g.getStatus()) && !me.equals(g.getOwnerUser())));
@@ -705,12 +719,20 @@ public class CoupleWorldService {
                 ? CoupleWorldBank.friendViewLine(CoupleRitualBank.stableHash(space.getId() + "|view|" + today)) : "";
 
         List<DeclareVO> declares = new ArrayList<>();
+        int declareKept = 0;
         for (CoupleWorldDeclare d : declareMapper.findBySpace(space.getId())) {
+            if (declareKept++ >= LIST_DECLARE_MAX) {
+                break;
+            }
             declares.add(new DeclareVO(d.getMonth(), d.getText(), me.equals(d.getFromUser())));
         }
 
         List<CaptionVO> captions = new ArrayList<>();
+        int captionKept = 0;
         for (CoupleWorldCaption c : captionMapper.findBySpace(space.getId())) {
+            if (captionKept++ >= LIST_CAPTION_MAX) {
+                break;
+            }
             captions.add(new CaptionVO(c.getId(), c.getDay(), me.equals(c.getFromUser()), c.getSlot(),
                     c.getText(), c.isWon()));
         }
@@ -734,7 +756,11 @@ public class CoupleWorldService {
         }
 
         List<VowVO> vows = new ArrayList<>();
+        int vowKept = 0;
         for (CoupleWorldVow v : vowMapper.findBySpace(space.getId())) {
+            if (vowKept++ >= LIST_VOW_MAX) {
+                break;
+            }
             long left = java.time.temporal.ChronoUnit.DAYS.between(now, LocalDate.parse(v.getDueDay()));
             vows.add(new VowVO(v.getId(), v.getContent(), me.equals(v.getOwnerUser()), v.getDueDay(),
                     v.isWitnessed(), v.getStatus(), v.getBrokenNote(), left,
@@ -754,7 +780,11 @@ public class CoupleWorldService {
                 myLine.isEmpty(), !myLine.isEmpty() && !partnerLine.isEmpty() && !iLaughed);
 
         List<ApologyVO> apologies = new ArrayList<>();
+        int apologyKept = 0;
         for (CoupleWorldApology a : apologyMapper.findBySpace(space.getId())) {
+            if (apologyKept++ >= LIST_APOLOGY_MAX) {
+                break;
+            }
             apologies.add(new ApologyVO(a.getId(), a.getToPerson(), me.equals(a.getFromUser()), a.getReason(),
                     a.getDraft(), a.getStatus(), a.getReviewNote(), me.equals(a.getFromUser())
                     ? CoupleWorldBank.APOLOGY_TEMPLATES.get(
