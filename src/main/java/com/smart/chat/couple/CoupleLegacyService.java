@@ -478,7 +478,7 @@ public class CoupleLegacyService {
 
     // ========== F348 周年抽奖箱 ==========
 
-    /** 抽今年的奖（每人一年一次，奖池用 Bank 迷你愿望位）。 */
+    /** 抽今年的奖（每人一年一次，奖池见 {@link #drawPool}）。 */
     public LegacyVO draw(String me) {
         CoupleSpace space = requireSpace(me);
         LocalDate now = LocalDate.now();
@@ -488,9 +488,9 @@ public class CoupleLegacyService {
         if (isA ? row.drawnAFlag() : row.drawnBFlag()) {
             throw new BusinessException(400, "今年你已经抽过了，剩下的那次是 TA 的");
         }
-        int idx = Math.floorMod(CoupleRitualBank.stableHash(space.getId() + "|draw|" + y + "|" + me),
-                CoupleLegacyBank.PRIZES.size());
-        String prize = CoupleLegacyBank.PRIZES.get(idx);
+        List<String> pool = drawPool(space, y);
+        String prize = pool.get(Math.floorMod(
+                CoupleRitualBank.stableHash(space.getId() + "|draw|" + y + "|" + me), pool.size()));
         if (isA) {
             row.setPrizeA(prize);
             row.setDrawnA(1);
@@ -503,6 +503,22 @@ public class CoupleLegacyService {
         push.pushCoupleEvent("legacy-draw", me, space.partnerOf(me),
                 "TA 抽到了：「" + prize + "」🎰 你也来一次");
         return build(space, me, now, DEFAULT_GOAL);
+    }
+
+    /**
+     * F348 奖池：按规格吃「当年攒的迷你愿望」——本年家务积分台账里 EARN 出来的条目就是他们自己攒下的愿望位，
+     * 去重后按稳定哈希取一条；今年一条都没攒过，才回落 Bank 的固定迷你愿望位，保证箱子里永远有东西可抽。
+     */
+    private List<String> drawPool(CoupleSpace space, String y) {
+        List<String> own = ledgerMapper.findBySpace(space.getId()).stream()
+                .filter(l -> CouplePointLedger.TYPE_EARN.equals(l.getType()))
+                .filter(l -> yearOf(l.getCreated()) == Integer.parseInt(y))
+                .map(l -> l.getItem() == null ? "" : l.getItem().trim())
+                .filter(s -> !s.isEmpty())
+                .map(s -> s.length() > PRIZE_MAX ? s.substring(0, PRIZE_MAX) : s)
+                .distinct()
+                .toList();
+        return own.isEmpty() ? CoupleLegacyBank.PRIZES : own;
     }
 
     // ========== 惰性结算（周年提醒，不建 Job） ==========
