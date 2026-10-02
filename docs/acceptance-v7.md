@@ -41,6 +41,8 @@
 13. **P2｜服务层查重与库的排序规则不同口径**：`couple_laugh_moment`/`couple_laugh_joke` 的 uk 里 title/content 没写 `COLLATE`，MariaDB 默认 `*_ci` 把「Bo」和「bo」视为同一行，而服务层用 `find(space,user,title)` 精确匹配放行 → 用户看到的是「服务说没重复、insert 撞唯一键 500」。改为在已加载的当日/全空间列表上 `equalsIgnoreCase` 比对（语义与库一致，还省一次查询）。
 14. **P2｜F348 周年抽奖奖池跟规格无关**：规格写的是「奖池=当年攒的迷你愿望（积分位）」，实现成了固定 8 条 Bank 静态愿望位——抽到的奖跟你们这一年实际做的事毫无关系。改为取本年 `couple_point_ledger` 里 `EARN` 的条目（去重、按 `PRIZE_MAX` 截断）作奖池，本年一条都没攒过才回落静态位。
 15. **P2｜F358 未拆读的信把正文一起下发**：`CoupleEchoService.toSelf()` 不分状态返回 `content`，聚合接口 `GET /vault` 因此把「写给低落的自己」的原文直接交给前端——规格写的是「只在本人点开补给时可读」，前端不渲染也照样能在网络面板里看到，锁等于没锁。改为 SEALED 态返回空串、`readSelf` 置 READ 后才给原文（领补给那条路不吃 `toSelf`，不受影响）。**原先的单测把这条泄漏写成了预期**（断言 SEALED 时 `content` 等于原文），已反向锁住。
+16. **P1｜`GET /today` 读时自动签收把「一键收全部」吃掉**：`CoupleFocusService.today()` 里调了 `settleRead()`，每次打开总览就把 `to_user=me` 的留言全部置已读 → `queueUnread` 恒 0、`POST /queue/read` 恒签 0 条、`focus-queue-read` 回执永不推。F362 的「你忙的时候我先把话放这儿，TA 回头看」整个签收仪式被页面加载静默消费掉了。改为只在 `queueRead()` 里结算。
+17. **P2｜双点打卡卡不给「我这一格按过没」**：`TodayVO` 只有 `unplugMine`，`meal/gaze/detox` 三张卡只有合计与 `both`，前端只能本地记位——刷新/重进后 `meals=1` 无法归因，界面会把「我已经倒扣了」显示成「TA 已经把手机扣了，就差你这一个」，**是在说谎而不是降级**。补 `mealMine/gazeMine/detoxMine` 三个位，前端删掉本地位改吃服务端。
 
 ## 误报账（查过、确认不是缺陷）
 - 心情卡「😍 恋爱中」点了没反应：`selected` 默认值就是 `LOVE`，再点是同一值，无变化属正常
@@ -119,8 +121,18 @@
   8. `DEED_PAGE=30` 无分页参数 → 文案标「最近 30 条」，**接受**
   9. 比后端更严的九处前端闸门（当天已领/罐满 5/在途 3/精选满 12/未拆禁写/电量未点格/长度与日期格式/归属钮不渲染）→ **保留**，其中「电量 level 传 null 后端静默按 3 格」是后端该报错没报错，已记账不改
 
+## 前端批次三十二 F360-F369 注意力保护区
+
+- 交付（分 4）：`feat 契约层 types+focusApi 13 方法` → `feat CoupleFocus.vue 十卡` → `feat 落位 growth 页签最末 + registry 134→144` → `test 11 用例（189→200）`
+- 主线程复核：`vue-tsc` 零错、`vitest run` 200 全绿、`vite build` 成功（三关各自取退出码）；6 个 record 与 6 个 interface 逐字段（名+序+可空性）脚本比对 0 不一致；静默守卫审计 21 处 `return` 逐条确认全是纯函数/`noData()`（后者自带 warning）
+- 实时巡检：`ONLY_TABS=growth ONLY_KEY_RE=couple-focus- FILL=1` → 10 卡 **0 error / 0 dead / 0 4xx**；写入取证：UI 点「攒进队列」→ `POST /api/couple/focus/queue` 200，收件人 bob 连读两次 `GET /today` 未读恒为 1、`POST /queue/read` 后归 0
+- 巡检顺带查出两处后端缺陷（缺陷账 16、17），都由 agent 报的「口径不一致」追出来：
+  - `todaySettlesReadsSilently` 这条**旧单测把「读时自动签收」写成了预期**，实际让 F362 的一键签收永久签 0 条、回执永不推
+  - `TodayVO` 缺 `mealMine/gazeMine/detoxMine`，前端只能本地记位，重进页面把「我已经点了」误显示成「就差你一个」——这是**界面在说谎**，不是降级
+- 其余 7 条不一致的裁决：F361「开始前 1h 提醒」后端无实现 → 卡片不承诺提醒；F363/F365 时长后端不校验 → 只写口径不假装计时；F364 月度点亮无接口 → 不做月聚合；F368「周末发起」后端不校验周几 → **前端不加周末闸门**（比后端更严会挡掉合法提交）；Bank 若干静态文案不下发 → 前端自写同类句不改判定；`queue` 只下发 `to_user=me` 致「在途 ≤5」前端算不出 → 交后端 400 直透；`YearlyVO.hours` 是字符串、`topDay` 用空串 → types 照实标
+
 ## 尚未完成（接续点）
 
-- 前端批次 注意力保护区 / 人生关卡 / 聆听者 / 欢笑银行（四批 40 个功能的界面，后端与 api 契约已就绪）
+- 前端批次 人生关卡 / 聆听者 / 欢笑银行（三批 30 个功能的界面，后端与 api 契约已就绪）
 - 后端补口：`VISIT_TIPS`/`RELATIVES_SAMPLE` 是否下发；`profileApi.friendsBirthdays`、`coupleApi.relationshipOf` 要不要做入口
 - 收官：全绿后升 `1.6.0-rc.1`（独立 commit）、双仓地图终稿、全量验收总结
