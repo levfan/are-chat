@@ -43,6 +43,8 @@
 15. **P2｜F358 未拆读的信把正文一起下发**：`CoupleEchoService.toSelf()` 不分状态返回 `content`，聚合接口 `GET /vault` 因此把「写给低落的自己」的原文直接交给前端——规格写的是「只在本人点开补给时可读」，前端不渲染也照样能在网络面板里看到，锁等于没锁。改为 SEALED 态返回空串、`readSelf` 置 READ 后才给原文（领补给那条路不吃 `toSelf`，不受影响）。**原先的单测把这条泄漏写成了预期**（断言 SEALED 时 `content` 等于原文），已反向锁住。
 16. **P1｜`GET /today` 读时自动签收把「一键收全部」吃掉**：`CoupleFocusService.today()` 里调了 `settleRead()`，每次打开总览就把 `to_user=me` 的留言全部置已读 → `queueUnread` 恒 0、`POST /queue/read` 恒签 0 条、`focus-queue-read` 回执永不推。F362 的「你忙的时候我先把话放这儿，TA 回头看」整个签收仪式被页面加载静默消费掉了。改为只在 `queueRead()` 里结算。
 17. **P2｜双点打卡卡不给「我这一格按过没」**：`TodayVO` 只有 `unplugMine`，`meal/gaze/detox` 三张卡只有合计与 `both`，前端只能本地记位——刷新/重进后 `meals=1` 无法归因，界面会把「我已经倒扣了」显示成「TA 已经把手机扣了，就差你这一个」，**是在说谎而不是降级**。补 `mealMine/gazeMine/detoxMine` 三个位，前端删掉本地位改吃服务端。
+18. **P2｜F376 新家第一晚「补话」被静默丢弃**：`moveNight()` 只在 `tick()` 真翻转（0→1）时才 `updateById`，所以点过之后再来写那句话只改了内存对象就返回——界面报「补上了」，重进页面什么都没有。改为补话也落库（note 与存库值不同才写），推送仍只在真翻转那一次发。前端跟着放开输入口（原先因此把输入口 `:disabled`，等于让用户永远补不进去）。
+19. **性能观察项（未改）**：`CoupleQuestService.build()` 里调 `wallOf()`，一次花 9 个查询，而 27 个写接口全部返回 `build()` 的整份聚合——用户点个「加油」「代记一笔」这种小动作，后端替他重算了整张年度成就墙。同型问题在 v7 各批聚合接口里普遍存在（批次三十一/三十二的 `build()` 也都是十几到几十个查询）。要治得改契约（把 wall 挪成懒读，前端已有 `GET /wall`），属结构改动，与联系人列表 2N 那条一起等重构口径定了统一处理。
 
 ## 误报账（查过、确认不是缺陷）
 - 心情卡「😍 恋爱中」点了没反应：`selected` 默认值就是 `LOVE`，再点是同一值，无变化属正常
@@ -131,8 +133,16 @@
   - `TodayVO` 缺 `mealMine/gazeMine/detoxMine`，前端只能本地记位，重进页面把「我已经点了」误显示成「就差你一个」——这是**界面在说谎**，不是降级
 - 其余 7 条不一致的裁决：F361「开始前 1h 提醒」后端无实现 → 卡片不承诺提醒；F363/F365 时长后端不校验 → 只写口径不假装计时；F364 月度点亮无接口 → 不做月聚合；F368「周末发起」后端不校验周几 → **前端不加周末闸门**（比后端更严会挡掉合法提交）；Bank 若干静态文案不下发 → 前端自写同类句不改判定；`queue` 只下发 `to_user=me` 致「在途 ≤5」前端算不出 → 交后端 400 直透；`YearlyVO.hours` 是字符串、`topDay` 用空串 → types 照实标
 
+## 前端批次三十三 F370-F379 人生关卡（v7 最大一批）
+
+- 交付（分 4）：`feat 契约层 types+questApi 29 方法` → `feat CoupleQuest.vue 十卡（1622 行）` → `feat 落位 promises 页签最末 + registry 144→154` → `test 14 用例（200→214）`
+- 主线程复核：`vue-tsc` 零错、`vitest` 214 全绿、`vite build` 成功（三关各自取退出码）；13 个 record 与 13 个 interface 用脚本逐字段（名+顺序+可空）比对 **0 不一致**（含根 QuestVO 的 20 个字段）；静默守卫改用**只扫「会发请求的 handler」**的方法重跑（1622 行组件的原始 `return` 扫描出 48 处噪音，限定到 27 个 handler 后只剩 `if (noData()) return` 一类，而 `noData()` 自带 warning）——这套审计口径比全文件扫准得多，后续批次沿用
+- 实时巡检：`ONLY_TABS=promises ONLY_KEY_RE='couple-quest-' FILL=1 MAX_CLICKS=20` → 10 卡 **0 error / 0 dead / 0 4xx**；写入取证走 UI 点「挂上这一关」→ `POST /api/couple/quest/battle` 200，回读 `/board` 得 `battles=1`（name/kind=INTERVIEW/day=2026-10-20 全对）、`wall.battles=1`。顺带两次撞上前端闸门并给出可见提示（日期框填中文标题 → 「关卡日写成 yyyy-MM-dd」；没选关卡类型 → 「先挑一个关卡类型」），这就是「点了没反应」的反面证据
+- 巡检查出缺陷 18（补话静默丢弃），并顺手把探针填错的两次点击变成了闸门有效性的证据
+- 其余 8 条不一致的裁决（agent 编号 1-8）：功能编号与批文错位 → 保留十个 testid、卡内按后端源码口径装功能并在地图记映射表；`myPod/partnerPod` 是「最近一舱」不过滤在舱态 → 判在途只看 `in`；`daysLeft` 出舱/回升后恒 0 → 只在 in/low 时挂倒数；无 `lampMine`、无「本周我已颁」→ 按 `lampBy`/`awardedBy` 与 `auth.username` 比对（沿批次二十/二十三/二十九先例）；F374 加油卡与 F376 不说话卡的话术只在 WS 正文里、无 VO 下发 → 界面只显示张数（**待裁决是否补 VO**）；`wall.pods`/`awards` 是两项合计 → chip 照实写合计名；每次 `build()` 都算 wall → 记性能观察项
+
 ## 尚未完成（接续点）
 
-- 前端批次 人生关卡 / 聆听者 / 欢笑银行（三批 30 个功能的界面，后端与 api 契约已就绪）
+- 前端批次 聆听者 / 欢笑银行（两批 20 个功能的界面，后端与 api 契约已就绪）
 - 后端补口：`VISIT_TIPS`/`RELATIVES_SAMPLE` 是否下发；`profileApi.friendsBirthdays`、`coupleApi.relationshipOf` 要不要做入口
 - 收官：全绿后升 `1.6.0-rc.1`（独立 commit）、双仓地图终稿、全量验收总结
