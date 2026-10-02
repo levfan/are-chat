@@ -498,10 +498,12 @@ class CoupleEchoServiceTest {
 
         CoupleEchoService.SelfLetterVO letter = service.vault("alice").selfLetter();
         assertThat(letter.status()).isEqualTo(CoupleEchoSelfLetter.STATUS_SEALED);
-        assertThat(letter.content()).isEqualTo("难过的时候先把自己喂饱");
+        // 没拆读就不该把正文抄给前端（规格：只在本人点开时可读；前端不渲染不等于没泄漏）
+        assertThat(letter.content()).isEmpty();
 
         CoupleEchoService.EchoVO read = service.readSelf("alice");
         assertThat(read.selfLetter().status()).isEqualTo(CoupleEchoSelfLetter.STATUS_READ);
+        assertThat(read.selfLetter().content()).isEqualTo("难过的时候先把自己喂饱");
         assertThat(selfs.get(0).getStatus()).isEqualTo(CoupleEchoSelfLetter.STATUS_READ);
         assertThat(service.vault("alice").selfLetter()).isNull();
 
