@@ -59,6 +59,7 @@ public class CoupleWorldService {
     private final CoupleWorldVowMapper vowMapper;
     private final CoupleWorldGroupReportMapper groupMapper;
     private final CoupleWorldApologyMapper apologyMapper;
+    private final CoupleCodexEntryMapper codexMapper;
     private final CouplePointLedgerMapper ledgerMapper;
     private final ImPushService push;
 
@@ -67,8 +68,8 @@ public class CoupleWorldService {
                               CoupleWorldDeclareMapper declareMapper, CoupleWorldCaptionMapper captionMapper,
                               CoupleWorldCityPlanMapper cityMapper, CoupleWorldRelativesQMapper relativeMapper,
                               CoupleWorldVowMapper vowMapper, CoupleWorldGroupReportMapper groupMapper,
-                              CoupleWorldApologyMapper apologyMapper, CouplePointLedgerMapper ledgerMapper,
-                              ImPushService push) {
+                              CoupleWorldApologyMapper apologyMapper, CoupleCodexEntryMapper codexMapper,
+                              CouplePointLedgerMapper ledgerMapper, ImPushService push) {
         this.spaceMapper = spaceMapper;
         this.visitMapper = visitMapper;
         this.giftMapper = giftMapper;
@@ -80,6 +81,7 @@ public class CoupleWorldService {
         this.vowMapper = vowMapper;
         this.groupMapper = groupMapper;
         this.apologyMapper = apologyMapper;
+        this.codexMapper = codexMapper;
         this.ledgerMapper = ledgerMapper;
         this.push = push;
     }
@@ -357,6 +359,12 @@ public class CoupleWorldService {
         for (CoupleWorldCaption c : captionMapper.findByDay(space.getId(), row.getDay())) {
             c.setWon(c.getId().equals(row.getId()) ? 1 : 0);
             captionMapper.updateById(c);
+        }
+        // F334 规格要求「定稿进百科」：选中的文案存成百科词条，日后在百科书架里能翻到
+        String term = "定稿文案 · " + row.getDay();
+        if (codexMapper.findTerm(space.getId(), term) == null) {
+            codexMapper.insert(CoupleCodexEntry.of(space.getId(), term, row.getText(),
+                    "TA 替我写的文案，选定于 " + row.getDay(), "发朋友圈用", row.getFromUser()));
         }
         push.pushCoupleEventBoth("world-caption-pick", me, space.getUserA(), space.getUserB(),
                 "定稿：「" + row.getText() + "」—— " + CoupleWorldBank.captionPickedLine(

@@ -148,3 +148,4 @@
   2. **无上限列表类**：`CoupleRepairService`（freezes/sorries/rebuilds/admits/boxes/peace）与 `CoupleWorldService`（visits/gifts/declares/captions/apologies/vows）原本全量历史进 payload。统一钳到最近 N 条，并把钳制阈值提为 `LIST_*` 常量；`repair` 的 F325 年报原先是**拿已钳好的 VO 列表再计数**（钳列表会把年报数字一起改小）→ 重构成直接查原始表计数（`sorryMapper/admitMapper/boxMapper/peaceMapper/redoMapper.findBySpace`），与批次二十六颁奖礼同一口径。
   3. **off-by-one**：列表钳制初版写 `if (kept++ > MAX)` 实际会多给一条，统一改 `>=`；补用例断言 35 条只回 30、25 封待验在列表里是 20 条而 `report.sorryIn()` 仍是 25。
 - 全量 **502 绿**（新增 2 用例 + 3 组断言）。
+- **规格漏项补齐（F334 定稿进百科）**：走查逐条对照 v6 规格时发现 `world` 的文案代写只做了「三候选互评选稿」，规格里「定稿进百科」这一句没落地。已补：选稿时把定稿写成百科词条 `定稿文案 · {日期}`（definition=定稿正文、origin=谁替谁写的、usageNote=用途），走 `couple_codex_entry` 同一 uk 幂等查重，日后在百科书架能直接翻到。用例断言词条 term 前缀与正文，全量 502 绿。这类「规格里一句话没实现」的漏项，后面每批都按 F 号逐行对一遍规格表而不是只对模块名。

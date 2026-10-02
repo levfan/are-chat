@@ -56,6 +56,8 @@ class CoupleWorldServiceTest {
     @Mock
     private CoupleWorldApologyMapper apologyMapper;
     @Mock
+    private CoupleCodexEntryMapper codexMapper;
+    @Mock
     private CouplePointLedgerMapper ledgerMapper;
     @Mock
     private ImPushService push;
@@ -297,6 +299,18 @@ class CoupleWorldServiceTest {
         service.captionPick("alice", bobId);
         verify(push).pushCoupleEventBoth(eq("world-caption-pick"), eq("alice"), eq("alice"), eq("bob"), any());
         assertThat(captions.stream().filter(CoupleWorldCaption::isWon)).hasSize(1);
+        // F334 定稿进百科
+        List<CoupleCodexEntry> entries = new ArrayList<>();
+        lenient().when(codexMapper.findTerm(eq("s1"), any())).thenAnswer(inv -> entries.stream()
+                .filter(e -> e.getTerm().equals(inv.getArgument(1))).findFirst().orElse(null));
+        lenient().when(codexMapper.insert(any(CoupleCodexEntry.class))).thenAnswer(inv -> {
+            entries.add(inv.getArgument(0));
+            return 1;
+        });
+        service.captionPick("alice", bobId);
+        assertThat(entries).hasSize(1);
+        assertThat(entries.get(0).getTerm()).startsWith("定稿文案 · ").contains(DAY);
+        assertThat(entries.get(0).getDefinition()).contains("我负责配合");
         assertThat(service.world("bob").captions().stream().filter(CoupleWorldService.CaptionVO::won)
                 .findFirst().orElseThrow().mine()).isTrue();
     }
