@@ -284,14 +284,18 @@ class CoupleFocusServiceTest {
     }
 
     @Test
-    void todaySettlesReadsSilently() {
+    void readingTodayMustNotAutoSettleOtherwiseSignOffDies() {
         service.queueAdd("alice", "偷偷攒的一句");
 
+        // 打开总览就把留言置已读 → queueUnread 恒 0、/queue/read 恒签 0 条、focus-queue-read 永不推，
+        // 「一键收全部」这个功能会被页面加载吃掉，所以读接口只读不签
         CoupleFocusService.TodayVO vo = service.today("bob");
-
-        assertThat(vo.queueUnread()).isZero();
-        assertThat(vo.queue()).hasSize(1);
+        assertThat(vo.queueUnread()).isEqualTo(1);
         verify(push, never()).pushCoupleEventBoth(eq("focus-queue-read"), any(), any(), any(), any());
+
+        CoupleFocusService.TodayVO signed = service.queueRead("bob");
+        assertThat(signed.queueUnread()).isZero();
+        verify(push).pushCoupleEventBoth(eq("focus-queue-read"), any(), any(), any(), any());
     }
 
     // ========== F363/F364/F365 双点打卡 ==========
@@ -306,6 +310,26 @@ class CoupleFocusServiceTest {
 
         verify(push, times(1)).pushCoupleEventBoth(eq("focus-meal-both"), any(), any(), any(), any());
         assertThat(service.today("alice").meals()).isEqualTo(2);
+    }
+
+    @Test
+    void doubleTickCardsReportWhoAlreadyTapped() {
+        // TodayVO 原本只给「几人点了 + 是否双点」，不给「我这一趟按过没」，
+        // 前端只能自己本地记，重进页面就把「我已经点了」误显示成「就差你一个」
+        assertThat(service.today("alice").mealMine()).isFalse();
+        service.mealTick("alice");
+        assertThat(service.today("alice").mealMine()).isTrue();
+        assertThat(service.today("bob").mealMine()).isFalse();
+        assertThat(service.today("bob").mealBoth()).isFalse();
+
+        service.gazeTick("bob");
+        assertThat(service.today("bob").gazeMine()).isTrue();
+        assertThat(service.today("alice").gazeMine()).isFalse();
+
+        service.detox("alice", "AM");
+        assertThat(service.today("alice").detoxMine()).isTrue();
+        assertThat(service.today("bob").detoxMine()).isFalse();
+        assertThat(service.today("bob").detoxKind()).isEqualTo("AM");
     }
 
     @Test
