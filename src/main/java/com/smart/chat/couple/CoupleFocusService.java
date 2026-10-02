@@ -77,18 +77,22 @@ public class CoupleFocusService {
 
     /** 今日注意力总览：写接口一律原样返回这份聚合，前端整体替换。 */
     public record TodayVO(String day, NightVO night, int queueUnread, List<QueueVO> queue, SlotVO slot,
-                          int meals, boolean mealBoth, int gazes, boolean gazeBoth, boolean unplugMine,
+                          int meals, boolean mealMine, boolean mealBoth,
+                          int gazes, boolean gazeMine, boolean gazeBoth, boolean unplugMine,
                           boolean unplugBoth, int unplugStreak, int nudgesToday, int nudgeQuotaLeft,
-                          boolean detoxBoth, String detoxKind) {
+                          boolean detoxMine, boolean detoxBoth, String detoxKind) {
     }
 
     // ========== 读 ==========
 
-    /** 今日注意力总览（GET /today；同时对 to_user=me 的未读留言批量置已读——读时惰性签收，不推事件）。 */
+    /**
+     * 今日注意力总览（GET /today）。
+     * ⚠️ 这里**不能**顺手签收：读时置已读会让 queueUnread 恒 0、`POST /queue/read` 恒签 0 条、
+     * `focus-queue-read` 回执永远不推——一打开页面就把「一键收全部」这个功能吃掉了。签收只在 queueRead 里做。
+     */
     public TodayVO today(String me) {
         CoupleSpace space = requireSpace(me);
         LocalDate now = LocalDate.now();
-        settleRead(space, me);
         return build(space, me, now);
     }
 
@@ -461,8 +465,10 @@ public class CoupleFocusService {
         return new TodayVO(day, toNight(night, isA),
                 unread, queue, slot,
                 meal == null ? 0 : (meal.ticked(true) ? 1 : 0) + (meal.ticked(false) ? 1 : 0),
+                meal != null && meal.ticked(isA),
                 meal != null && meal.bothTicked(),
                 gaze == null ? 0 : (gaze.ticked(true) ? 1 : 0) + (gaze.ticked(false) ? 1 : 0),
+                gaze != null && gaze.ticked(isA),
                 gaze != null && gaze.bothTicked(),
                 unplug != null && unplug.ticked(isA),
                 unplug != null && unplug.bothTicked(),
@@ -470,6 +476,7 @@ public class CoupleFocusService {
                 nudgesToday,
                 Math.max(0, CoupleFocusNudge.DAILY_MAX
                         - nudgeMapper.findByDayUser(space.getId(), day, me).size()),
+                detox != null && detox.ticked(isA),
                 detox != null && detox.bothTicked(),
                 detox == null ? null : nz(detox.getKind()));
     }
