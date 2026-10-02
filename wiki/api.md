@@ -1,6 +1,6 @@
 # REST 接口总表
 
-> 本页回答：全部 Controller 的端点清单（方法+路径+一句话）。路径省略类前缀 `/api`；couple 系前缀见各节标题。全库共 42 个 Controller、508 个 REST 端点（批次二十后按源码注解清点）。
+> 本页回答：全部 Controller 的端点清单（方法+路径+一句话）。路径省略类前缀 `/api`；couple 系前缀见各节标题。全库共 52 个 Controller、698 个 REST 端点（批次三十 / v6 收官后按源码映射注解清点：`@GetMapping` 235 / `@PostMapping` 428 / `@PutMapping` 10 / `@DeleteMapping` 25，无 `@PatchMapping`；其中 v6 十个新 Controller 贡献 190 个）。
 
 来源：`src/main/java` 各 `*Controller.java` 的映射注解与 javadoc。返回统一 `ApiResponse{code,message,data}`；除 `/api/auth/**` 与 `/api/health` 外均需登录会话。业务功能编号（F 号）含义见 [couple-space.md](couple-space.md)。
 
@@ -266,3 +266,101 @@
 - POST `/idea` {content} 投金点子（一句话≤140 字）｜ POST `/idea/adopt` {id} 采纳 TA 的点子自动生成决议转表决（自己点子 400）（F245）
 - POST `/attend` 例会签到（10s 窗口内双签到=召开会议，只推一次 both）（F247）
 - 写操作全部返回 OverviewVO 聚合（同 GET `/overview`）
+
+### `CoupleAlmanacController` `/couple/almanac`（批次二十一，F250-F259）
+- GET `/today` 今日岁时总览 ｜ POST `/check` F250 节气当日跟风打卡 ｜ POST `/ritual` F251 写节气过法
+- POST `/ritual/remove` F251 划掉节气过法（连带其打卡） ｜ POST `/ritual/mark` F251 节气当日过法打卡 ｜ POST `/lucky` F252 择吉日
+- POST `/lucky/confirm` F252 吉日双盖章 ｜ POST `/festival` F254 节日家档 ｜ POST `/note` F255 节气手账
+- POST `/wish` F257 长假愿望（首写/补写） ｜ POST `/normal` F258 提报放空日 ｜ GET `/zodiac` F256 生肖年运
+- GET `/yearly` F259 一年日子小结
+- F253 农历生日换算无独立端点：落在 V34 给 `couple_anniversary` 加的 `calendar_type`/`lunar_md` 两列，换算结果在 `/today` 总览下发
+- 除 `/zodiac` 返回 ZodiacVO、`/yearly` 返回 YearVO 外，其余全部返回 TodayVO 聚合（同 GET `/today`）
+
+### `CoupleListenController` `/couple/listen`（批次二十二，F260-F269）
+- GET `/today` 今日倾听台总览（含早想说惰性放行、休战到期结算） ｜ POST `/slot` F260 申请「只听我说」时段 ｜ POST `/slot/confirm` F260 对方确认让位（说的人不能自确认）
+- POST `/slot/done` F260 标记这段聊完了 ｜ POST `/slot/rate` F260 互评被听感 ｜ POST `/proxy` F261 替 TA 写一句（在途草稿可覆盖）
+- POST `/proxy/adopt` F261 被代笔人定稿 ｜ POST `/misrewind` F262 误会倒带 ｜ POST `/stuck` F263 本周卡壳一问
+- POST `/stuck/answer` F263 答 TA 的卡壳一问（只能答对方的题） ｜ POST `/letter` F264 写换位信 ｜ POST `/letter/open` F264 拆 TA 写给我的信
+- POST `/hold` F265 封存一句早想说 ｜ POST `/three` F266 今日三行打卡 ｜ POST `/tone` F267 自报今日语气
+- POST `/truce` F268 举休战旗 ｜ POST `/truce/decide` F268 到点表态：继续/算了 ｜ POST `/name/use` F269 今日称呼「用过了」
+- 18 个端点全部返回 TodayVO 聚合（同 GET `/today`）；早想说放行与休战到期均为 `/today` 读时惰性结算，不挂 Job
+
+### `CoupleFactoryController` `/couple/factory`（批次二十三，F270-F279）
+- GET `/board` 本周车间总览 ｜ POST `/spin` F270 一转定分工 ｜ POST `/spin/confirm` F270 对方认账（双签才落定）
+- POST `/spin/done` F270 天选之人打勾干完 ｜ POST `/shop` F271 采买清单 ｜ POST `/shop/remove` F271 删清单项（仅登记者本人）
+- POST `/shop/done` F271 报「我买了」推登记人 ｜ POST `/stock` F272 冰箱库存 ｜ POST `/stock/out` F272 标记用完置 OUT
+- POST `/parcel` F273 代拿快递 ｜ POST `/parcel/grab` F273 接单代拿（自接 400） ｜ POST `/parcel/done` F273 送达并向台账插 EARN2 感谢章
+- POST `/wake` F274 叫醒服务 ｜ POST `/wake/give` F274 今日递出叫醒卡（一天一张） ｜ POST `/med` F275 服药提醒链
+- POST `/med/stop` F275 停服（可复活） ｜ POST `/med/remind` F275 TA 点「提醒了」 ｜ POST `/med/taken` F275 本人点「吃了」链 +1
+- POST `/standup` F276 久坐互拍 ｜ POST `/advance` F277 垫付本 ｜ POST `/advance/settle` F277 清账推 both 无债卡
+- POST `/grocery` F278 战利品互猜 ｜ POST `/grocery/guess` F278 猜 TA 为什么买 ｜ POST `/grocery/rate` F278 买家 0-5 打分
+- POST `/homecheck` F279 家安月检
+- 25 个端点全部返回 BoardVO 聚合（同 GET `/board`）；F273 是唯一写 `couple_point_ledger`（EARN 2 分）的端点，与 F186/F244 同账本
+
+### `CoupleCodexController` `/couple/codex`（批次二十四，F280-F289）
+- GET `/overview` 百科总览 ｜ POST `/entry` F280 词条共建 ｜ POST `/entry/remove` F280 删词条（仅首建人）
+- POST `/quiz/start` F281 开一期默契考 ｜ POST `/quiz/answer` F281 交五答 ｜ POST `/top/list` F282 本人榜
+- POST `/top/guess` F282 猜对方的榜 ｜ POST `/story` F283 外号考据 ｜ POST `/exam` F284 出题
+- POST `/exam/try` F284 作答 ｜ POST `/place` F285 足迹登记 ｜ POST `/firstlook` F286 第一眼对视盲提交
+- POST `/habit` F287 记录 TA 的小习惯 ｜ POST `/habit/verdict` F287 判案：确实/冤枉 ｜ POST `/taste` F288 口味变迁
+- POST `/type` F289 人格双报
+- 16 个端点全部返回 OverviewVO 聚合（同 GET `/overview`）
+
+### `CouplePostController` `/couple/post`（批次二十五，F290-F299）
+- GET `/box` 明日邮局总览（含到期放行/逾期下架惰性结算） ｜ POST `/oath` F290 写今年的新年卡 ｜ POST `/bucket` F291 立大事
+- POST `/bucket/abandon` F291 放弃大事（仅发起人，留档 GONE） ｜ POST `/bucket/step` F291 拆一步 ｜ POST `/bucket/step/done` F291 TA 补一步进展章
+- POST `/shelf` F292 上拍 ｜ POST `/shelf/take` F292 认领排期 ｜ POST `/shelf/done` F292 认领后排期完成
+- POST `/home` F293 梦想家 ｜ POST `/retire` F294 退休计划 ｜ POST `/well` F295 井答
+- POST `/relay` F296 封存一笔未来信 ｜ POST `/relay/open` F296 拆 TA 写给我的到期笔 ｜ POST `/dream` F297 记梦
+- POST `/dream/read` F297 认领解梦（一案一断） ｜ POST `/dream/judge` F297 做梦人盖「灵/胡说」章 ｜ POST `/wish` F298 立/改愿望
+- POST `/wish/verdict` F298 往年中奖者本人盖 KEPT/PIGEON ｜ POST `/promise` F299 立旗 ｜ POST `/promise/keep` F299 兑现立旗（逾期由读时结算降额）
+- 21 个端点全部返回 PostVO 聚合（同 GET `/box`）；到期类玩法（新年卡/拍卖逾期/承诺逾期）一律 `/box` 读时惰性结算，零 Job
+
+### `CoupleTheaterController` `/couple/theater`（批次二十六，F300-F309）
+- GET `/today` 今日剧场总览（含电话亭到点接通的惰性结算，F309 颁奖礼数据在 `gala` 字段） ｜ POST `/role/rate` F300 日终演技分 ｜ POST `/diary` F301 以 TA 的身份写今天这一页
+- POST `/master/serve` F302 徒弟今日侍奉打卡 ｜ POST `/master/review` F302 师父评语定级 ｜ POST `/booth` F303 拨一通跨时空电话
+- POST `/ref` F304 收录黑话 ｜ POST `/ref/quiz` F304 抽查作答 ｜ POST `/ref/judge` F304 收录人判卷
+- POST `/award` F305 递出今日奥斯卡提名 ｜ POST `/family` F306 作答今日家长题 ｜ POST `/movie` F307 认领角色并追更角色日记
+- POST `/movie/finish` F307 我这一路剧终 ｜ POST `/order` F308 下服务工单 ｜ POST `/order/answer` F308 客服响应
+- POST `/order/score` F308 顾客评分 ｜ POST `/order/appeal` F308 客服差评申诉
+- 17 个端点全部返回 TheaterVO 聚合（同 GET `/today`）；F309 无表无端点，总览列表钳到最近 14/30/60/30/12/20 条而颁奖礼计数走全量
+
+### `CoupleBodyController` `/couple/body`（批次二十七，F310-F319）
+- GET `/overview` 身体总览（近 7 天数值、近 14 天周期、当周军令状违约率、饭桌忌口撞标） ｜ POST `/metric` F310 报今日体征（超自设线推 TA） ｜ POST `/snore` F311 晨起自报呼噜档位
+- POST `/snore/shake` F311 给对方补震感点评 ｜ POST `/cycle` F312 标记自己当天的周期阶段与不适 ｜ POST `/cycle/care` F312 递照顾卡
+- POST `/quit` F313 开营 ｜ POST `/quit/broke` F313 记破戒 ｜ POST `/quit/cheer` F313 陪绑方送安慰词
+- POST `/quit/close` F313 本人结营 ｜ POST `/fit` F314 报今日运动计数 ｜ POST `/sos` F315 一键不舒服
+- POST `/sos/hold` F315 对方接住（选一张「我能做」） ｜ POST `/redline` F316 登记忌口红线 ｜ POST `/redline/remove` F316 划掉红线
+- POST `/checkup` F317 约体检 ｜ POST `/checkup/company` F317 虚拟陪同到场 ｜ POST `/checkup/report` F317 检后一句话报告
+- POST `/med` F318 本周身体账（自愿，非医嘱） ｜ POST `/med/reply` F318 回一句陪伴话术 ｜ POST `/oath` F319 签本周熄灯线
+- 21 个端点全部返回 BodyVO 聚合（同 GET `/overview`）；全链路口径是「陪伴」不是「诊断」，异常只按本人自设阈值判；F316 忌口红线由 `CoupleDiningService.TicketVO.redlines` 只读拼标回饭桌
+
+### `CoupleRepairController` `/couple/repair`（批次二十八，F320-F329）
+- GET `/workshop` 修复车间总览（含倒计时到点自动递台阶卡的惰性结算，F325 年报在 `report` 字段） ｜ POST `/freeze` F320 挂冷冻 ｜ POST `/freeze/ask` F320 答解冻三问
+- POST `/freeze/sign` F320 签解冻 ｜ POST `/sorry` F321 交道歉信 ｜ POST `/sorry/rewrite` F321 打回后重写
+- POST `/sorry/verify` F321 对方验货 ｜ POST `/redo` F322 领重来卡 ｜ POST `/redo/play` F322 重放完成
+- POST `/redo/rate` F322 重放满意度 ｜ POST `/rebuild` F323 开重建计划 ｜ POST `/rebuild/sign` F323 每日双签
+- POST `/rebuild/review` F323 周复盘 ｜ POST `/rebuild/giveup` F323 中止计划 ｜ POST `/makeup` F324 开冷战倒计时
+- POST `/makeup/pause` F324 对方暂停/继续 ｜ POST `/makeup/offer` F324 提前递台阶 ｜ POST `/makeup/end` F324 宣布和好（掉礼盒）
+- POST `/bottom` F326 声明底线 ｜ POST `/bottom/breach` F326 踩线补红线记录 ｜ POST `/admit` F327 认错
+- POST `/admit/touch` F327 标最感人认错 ｜ POST `/box/done` F328 完成补偿任务 ｜ POST `/peace` F329 立和平纪念碑
+- 24 个端点全部返回 RepairVO 聚合（同 GET `/workshop`）；F325 年报无表无端点；解冻成功向答完三问的冷冻提出人记台账 EARN 8 分（读时结算、幂等）
+
+### `CoupleWorldController` `/couple/world`（批次二十九，F330-F339）
+- GET `/world` 两家与朋友总览（含保证到期自动解除的惰性结算） ｜ POST `/visit` F330 写拜访攻略 ｜ POST `/visit/confirm` F330 确认攻略
+- POST `/visit/report` F330 交战报 ｜ POST `/gift` F331 收送礼灵感 ｜ POST `/gift/take` F331 接单代买（只能接对方的单）
+- POST `/gift/bought` F331 买好推 both（仅接单人可宣布） ｜ POST `/friendView` F332 回填他观一题 ｜ POST `/declare` F333 发本月官宣卡
+- POST `/caption` F334 交候选文案 ｜ POST `/caption/pick` F334 互评选稿 ｜ POST `/city` F335 存接待手册
+- POST `/relative` F336 出称谓题 ｜ POST `/relative/try` F336 作答称谓题 ｜ POST `/vow` F337 立保证
+- POST `/vow/witness` F337 见证 ｜ POST `/vow/break` F337 塌房记录 ｜ POST `/group` F338 交今日群聊素材
+- POST `/group/laugh` F338 笑了对方那条 ｜ POST `/apology` F339 写赔礼信 ｜ POST `/apology/review` F339 TA 审阅
+- POST `/apology/rewrite` F339 打回后重写
+- 22 个端点全部返回 WorldVO 聚合（同 GET `/world`）；`/friendView` 为源码里的驼峰路径（其余均连字符）；社会信用到期且已见证 → 读时置 KEPT 并向立保证人记台账 EARN 10 分
+
+### `CoupleLegacyController` `/couple/legacy`（批次三十，F340-F349）
+- GET `/vault` 传世系统总览（含周年抽奖提醒的读时惰性结算；`goal` 为 F343 目标次数，缺省 300） ｜ POST `/ten` F340 答年度十问的一题 ｜ POST `/audit` F341 记忆库年审
+- POST `/speech` F342 年度发言 ｜ POST `/speech/rate` F342 对方评分卡 ｜ POST `/fx` F344 报恋爱汇率
+- POST `/fx/settle` F344 年末结算 ｜ POST `/brand` F345 建/改情侣品牌 ｜ POST `/brand/confirm` F345 对方确认发布
+- POST `/review` F346 一键生成年度盘点 ｜ POST `/item` F347 登记传世条目 ｜ POST `/item/seal` F347 对方加签封存
+- POST `/draw` F348 抽今年的奖
+- 13 个端点全部返回 LegacyVO 聚合（同 GET `/vault`）；F343 里程碑倒推与 F349 空间等级无表无端点（数据在 `/vault` 的 milestone/level 字段）；F348 周年提醒改为 `notified` 标记的读时结算，不新建 Job

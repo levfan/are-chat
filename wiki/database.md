@@ -1,8 +1,8 @@
 # 数据库
 
-> 本页回答：全库数据约定、V1→V33 Flyway 迁移时间线、按域分组的表清单。
+> 本页回答：全库数据约定、V1→V43 Flyway 迁移时间线、按域分组的表清单。
 
-结构事实源：`src/main/resources/schema.sql`（全量结构文档，170 张表，不由运行时执行）+ `src/main/resources/db/V*.sql`（真正被 Flyway 执行的增量脚本）。运行时建表路径只有 Flyway；生产与测试（H2）统一走同一批 V 脚本。
+结构事实源：`src/main/resources/schema.sql`（全量结构文档，265 张表，不由运行时执行）+ `src/main/resources/db/V*.sql`（真正被 Flyway 执行的增量脚本，V1→V43 共 43 个脚本恰好建出这 265 张表，与 schema.sql 逐名对齐无差集）。运行时建表路径只有 Flyway；生产与测试（H2）统一走同一批 V 脚本。
 
 ## 数据约定（硬性）
 
@@ -20,7 +20,7 @@
 
 改表流程与幂等细则：`.agents/skills/db-migration/SKILL.md`；"新增 V 脚本 + 同步 schema.sql + 独立 db commit" 为硬性要求（见 [dev-guide.md](dev-guide.md)）。
 
-## 迁移时间线（V1 → V33）
+## 迁移时间线（V1 → V43）
 
 | 版本 | 主题 | 新增表 / 变更 |
 |---|---|---|
