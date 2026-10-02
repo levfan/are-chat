@@ -153,7 +153,10 @@ public class CoupleLaughService {
         String s = limit(scene, CoupleLaughMoment.SCENE_MAX, "现场还原");
         int lv = funLevel == null ? 3 : Math.max(CoupleLaughMoment.LEVEL_MIN,
                 Math.min(CoupleLaughMoment.LEVEL_MAX, funLevel));
-        if (momentMapper.find(space.getId(), d, me, t) != null) {
+        if (momentMapper.findByDay(space.getId(), d).stream()
+                // 查重按大小写不敏感：uk(space,day,from,title) 里的 title 没写 COLLATE，
+                // MariaDB 默认 *_ci 会把「Bo」和「bo」判为同一行，服务层必须和库同一口径，否则 insert 撞唯一键变 500
+                .anyMatch(m -> me.equals(m.getFromUser()) && t.equalsIgnoreCase(nz(m.getTitle())))) {
             throw new BusinessException(400, "这条笑点已经存过了");
         }
         long sameDay = momentMapper.findByDay(space.getId(), d).stream().filter(m -> me.equals(m.getFromUser())).count();
@@ -248,7 +251,9 @@ public class CoupleLaughService {
         if (c.length() > CoupleLaughJoke.CONTENT_MAX) {
             throw new BusinessException(400, "冷笑话最多 " + CoupleLaughJoke.CONTENT_MAX + " 字");
         }
-        if (jokeMapper.find(space.getId(), me, c) != null) {
+        if (jokeMapper.findBySpace(space.getId()).stream()
+                // 同 uk_laugh_joke 的 content 比较语义：与库一致按大小写不敏感查重，少一次查询也不多一条 500
+                .anyMatch(j -> me.equals(j.getFromUser()) && c.equalsIgnoreCase(nz(j.getContent())))) {
             throw new BusinessException(400, "这条已经丢过一次了，冷笑话不许重播");
         }
         long today = jokeMapper.findBySpace(space.getId()).stream()
@@ -275,9 +280,9 @@ public class CoupleLaughService {
         row.judge(me, frozen != null && frozen);
         jokeMapper.updateById(row);
         int tellerFrozen = (int) jokeMapper.findBySpace(space.getId()).stream()
-                .filter(j -> row.getFromUser().equals(j.getFromUser()) && j.isFrozen()).count();
+                .filter(j -> row.getFromUser().equals(j.getFromUser()) && j.frozenFlag()).count();
         push.pushCoupleEvent("laugh-frozen", me, row.getFromUser(),
-                CoupleLaughBank.frozenLine(row.isFrozen(), tellerFrozen));
+                CoupleLaughBank.frozenLine(row.frozenFlag(), tellerFrozen));
         return build(space, me, now);
     }
 
@@ -465,7 +470,7 @@ public class CoupleLaughService {
 
         List<JokeVO> jokes = jokeMapper.findBySpace(space.getId()).stream().limit(LIST_JOKE)
                 .map(j -> new JokeVO(j.getId(), nz(j.getDay()), me.equals(j.getFromUser()), nz(j.getContent()),
-                        j.isFrozen(), j.judged(), nz(j.getJudgedBy()),
+                        j.frozenFlag(), j.judged(), nz(j.getJudgedBy()),
                         !me.equals(j.getFromUser()) && !j.judged(), !me.equals(j.getFromUser())))
                 .toList();
 
@@ -520,8 +525,8 @@ public class CoupleLaughService {
         }
 
         List<CoupleLaughJoke> allJokes = jokeMapper.findBySpace(space.getId());
-        int myFrozen = (int) allJokes.stream().filter(j -> j.isFrozen() && me.equals(j.getFromUser())).count();
-        int partnerFrozen = (int) allJokes.stream().filter(j -> j.isFrozen() && !me.equals(j.getFromUser())).count();
+        int myFrozen = (int) allJokes.stream().filter(j -> j.frozenFlag() && me.equals(j.getFromUser())).count();
+        int partnerFrozen = (int) allJokes.stream().filter(j -> j.frozenFlag() && !me.equals(j.getFromUser())).count();
 
         return new LaughVO(day, weekStart(now).toString(), today, moments, jokes, cringes, turnedFunny, attacks,
                 guessVos, rxList, styles, styleHint, rotationHint, myFrozen, partnerFrozen,
@@ -541,7 +546,7 @@ public class CoupleLaughService {
         int happy = (int) dailies.stream().filter(d -> CoupleLaughDaily.VERDICT_HAPPY.equals(d.getVerdict())).count();
         int fake = (int) dailies.stream().filter(d -> CoupleLaughDaily.VERDICT_FAKE.equals(d.getVerdict())).count();
         int frozen = (int) jokeMapper.findBySpace(space.getId()).stream()
-                .filter(j -> inRange(j.getDay(), fromDay, toDay) && j.isFrozen()).count();
+                .filter(j -> inRange(j.getDay(), fromDay, toDay) && j.frozenFlag()).count();
         int hits = (int) attackMapper.findBySpace(space.getId()).stream()
                 .filter(a -> inRange(a.getDay(), fromDay, toDay) && a.hit()).count();
         List<String> jokeIds = jokeMapper.findBySpace(space.getId()).stream()
@@ -574,7 +579,7 @@ public class CoupleLaughService {
         int happy = (int) dailies.stream().filter(d -> CoupleLaughDaily.VERDICT_HAPPY.equals(d.getVerdict())).count();
         List<CoupleLaughJoke> jokes = jokeMapper.findBySpace(space.getId()).stream()
                 .filter(j -> yearOf(j.getDay()) == year).toList();
-        List<CoupleLaughJoke> frozen = jokes.stream().filter(CoupleLaughJoke::isFrozen).toList();
+        List<CoupleLaughJoke> frozen = jokes.stream().filter(CoupleLaughJoke::frozenFlag).toList();
         String kingOfCold = frozen.stream()
                 .collect(java.util.stream.Collectors.groupingBy(CoupleLaughJoke::getFromUser,
                         java.util.stream.Collectors.counting()))
@@ -588,7 +593,10 @@ public class CoupleLaughService {
         List<CoupleLaughAttack> attacks = attackMapper.findBySpace(space.getId()).stream()
                 .filter(a -> yearOf(a.getDay()) == year).toList();
         int hits = (int) attacks.stream().filter(CoupleLaughAttack::hit).count();
+        // guess 表没有 day 列，归年只能借它考的哪条冷笑话的发出日（与周报同一口径），否则切哪年都是全历史
+        List<String> yearJokeIds = jokes.stream().map(CoupleLaughJoke::getId).toList();
         int guessTwin = (int) guessMapper.findBySpace(space.getId()).stream()
+                .filter(g -> yearJokeIds.contains(g.getJokeId()))
                 .collect(java.util.stream.Collectors.groupingBy(CoupleLaughGuess::getJokeId, java.util.stream.Collectors.toList()))
                 .values().stream()
                 .filter(pair -> pair.size() >= 2 && pair.get(0).predictsLaugh() == pair.get(1).predictsLaugh())

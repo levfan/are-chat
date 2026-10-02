@@ -61,7 +61,7 @@ public class CoupleLaughJoke {
     }
 
     /** 已判且判成了结冰。 */
-    public boolean isFrozen() {
+    public boolean frozenFlag() {
         return frozen != null && frozen == 1;
     }
 

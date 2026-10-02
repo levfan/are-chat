@@ -43,7 +43,7 @@ public class CoupleWorldVow {
         return row;
     }
 
-    public boolean isWitnessed() {
+    public boolean witnessedFlag() {
         return witnessed != null && witnessed == 1;
     }
 }

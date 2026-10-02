@@ -489,7 +489,7 @@ public class CoupleWorldService {
         if (row.getOwnerUser().equals(me)) {
             throw new BusinessException(400, "见证人得是对方，自己见证不作数");
         }
-        if (row.isWitnessed()) {
+        if (row.witnessedFlag()) {
             return build(space, me, now);
         }
         row.setWitnessed(1);
@@ -666,7 +666,7 @@ public class CoupleWorldService {
     private void settle(CoupleSpace space, LocalDate now) {
         String today = now.toString();
         for (CoupleWorldVow v : vowMapper.findDue(space.getId(), today)) {
-            if (v.isWitnessed()) {
+            if (v.witnessedFlag()) {
                 v.setStatus(CoupleWorldVow.STATUS_KEPT);
                 v.setUpdatedAt(System.currentTimeMillis());
                 vowMapper.updateById(v);
@@ -771,8 +771,8 @@ public class CoupleWorldService {
             }
             long left = java.time.temporal.ChronoUnit.DAYS.between(now, LocalDate.parse(v.getDueDay()));
             vows.add(new VowVO(v.getId(), v.getContent(), me.equals(v.getOwnerUser()), v.getDueDay(),
-                    v.isWitnessed(), v.getStatus(), v.getBrokenNote(), left,
-                    CoupleWorldVow.STATUS_OPEN.equals(v.getStatus()) && !v.isWitnessed()
+                    v.witnessedFlag(), v.getStatus(), v.getBrokenNote(), left,
+                    CoupleWorldVow.STATUS_OPEN.equals(v.getStatus()) && !v.witnessedFlag()
                             && !me.equals(v.getOwnerUser()),
                     CoupleWorldVow.STATUS_OPEN.equals(v.getStatus()) && !me.equals(v.getOwnerUser())));
         }
