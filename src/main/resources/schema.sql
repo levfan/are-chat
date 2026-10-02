@@ -4054,3 +4054,109 @@ CREATE TABLE `couple_legacy_draw` (
     PRIMARY KEY (`id`),
     UNIQUE KEY `uk_legacy_draw` (`space_id`, `year`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='F348 周年抽奖箱';
+
+-- smart_collections.couple_echo_deed definition
+CREATE TABLE `couple_echo_deed` (
+    `id` varchar(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '主键UUID',
+    `space_id` varchar(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '情侣空间ID（关联 couple_space.id）',
+    `from_user` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '记录人：写下 TA 为自己做的一件事（区分大小写）',
+    `content` varchar(120) NOT NULL DEFAULT '' COMMENT '事情本身（≤80 字，宽度放宽）',
+    `day` varchar(10) NOT NULL COMMENT '发生日 yyyy-MM-dd',
+    `starred` tinyint(4) NOT NULL DEFAULT 0 COMMENT '1=记录人点过「这条救过我」（仅记录人本人，幂等）',
+    `created` bigint(20) NOT NULL COMMENT '时间（毫秒时间戳）',
+    `updated_at` bigint(20) NOT NULL COMMENT '更新时间（毫秒时间戳）',
+    PRIMARY KEY (`id`),
+    KEY `idx_echo_deed` (`space_id`, `from_user`, `day`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='F350 好事簿（单记录人模型）';
+
+-- smart_collections.couple_echo_juice definition
+CREATE TABLE `couple_echo_juice` (
+    `id` varchar(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '主键UUID',
+    `space_id` varchar(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '情侣空间ID（关联 couple_space.id）',
+    `from_user` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '写鼓励语的人（区分大小写）',
+    `idx` int(11) NOT NULL DEFAULT 1 COMMENT '罐子槽位 1-5（uk 占位，删除后空槽复用）',
+    `content` varchar(90) NOT NULL DEFAULT '' COMMENT '鼓励语（≤60 字，宽度放宽）',
+    `created` bigint(20) NOT NULL COMMENT '时间（毫秒时间戳）',
+    `updated_at` bigint(20) NOT NULL COMMENT '更新时间（毫秒时间戳）',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_echo_juice` (`space_id`, `from_user`, `idx`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='F352 鼓励语罐（每人 ≤5 条）';
+
+-- smart_collections.couple_echo_refill_log definition
+CREATE TABLE `couple_echo_refill_log` (
+    `id` varchar(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '主键UUID',
+    `space_id` varchar(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '情侣空间ID（关联 couple_space.id）',
+    `from_user` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '领补给的人（区分大小写）',
+    `day` varchar(10) NOT NULL COMMENT '领取日 yyyy-MM-dd',
+    `created` bigint(20) NOT NULL COMMENT '时间（毫秒时间戳）',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_echo_refill` (`space_id`, `from_user`, `day`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='F351 能量补给领取日志（每人每天一次）';
+
+-- smart_collections.couple_echo_slow definition
+CREATE TABLE `couple_echo_slow` (
+    `id` varchar(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '主键UUID',
+    `space_id` varchar(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '情侣空间ID（关联 couple_space.id）',
+    `from_user` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '写信的人（区分大小写）',
+    `to_user` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '收信的人=对方（区分大小写）',
+    `content` varchar(150) NOT NULL DEFAULT '' COMMENT '想谢的话（≤100 字，宽度放宽）',
+    `open_day` varchar(10) NOT NULL COMMENT '送达日=写信日+7 yyyy-MM-dd',
+    `delivered` tinyint(4) NOT NULL DEFAULT 0 COMMENT '1=已送达（open_day<=今天 且 delivered=0 读时置 1 并推双方）',
+    `created` bigint(20) NOT NULL COMMENT '时间（毫秒时间戳）',
+    `updated_at` bigint(20) NOT NULL COMMENT '更新时间（毫秒时间戳）',
+    PRIMARY KEY (`id`),
+    KEY `idx_echo_slow` (`space_id`, `from_user`, `delivered`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='F354 感谢慢递（在途每人 ≤3 封）';
+
+-- smart_collections.couple_echo_highlight definition
+CREATE TABLE `couple_echo_highlight` (
+    `id` varchar(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '主键UUID',
+    `space_id` varchar(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '情侣空间ID（关联 couple_space.id）',
+    `from_user` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '收藏这条高光的人（区分大小写）',
+    `moment` varchar(60) NOT NULL DEFAULT '' COMMENT '什么时候（≤40 字，宽度放宽）',
+    `did` varchar(120) NOT NULL DEFAULT '' COMMENT '做了什么（≤80 字，宽度放宽）',
+    `feel` varchar(120) NOT NULL DEFAULT '' COMMENT '当时什么感觉（≤80 字，宽度放宽）',
+    `created` bigint(20) NOT NULL COMMENT '时间（毫秒时间戳）',
+    `updated_at` bigint(20) NOT NULL COMMENT '更新时间（毫秒时间戳）',
+    PRIMARY KEY (`id`),
+    KEY `idx_echo_highlight` (`space_id`, `from_user`, `created`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='F355 高光重放（每人 ≤12 条三行卡）';
+
+-- smart_collections.couple_echo_receipt definition
+CREATE TABLE `couple_echo_receipt` (
+    `id` varchar(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '主键UUID',
+    `space_id` varchar(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '情侣空间ID（关联 couple_space.id）',
+    `quote_id` varchar(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '夸夸墙条目 id（关联 couple_praise.id）',
+    `from_user` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '回执的人（区分大小写）',
+    `created` bigint(20) NOT NULL COMMENT '时间（毫秒时间戳）',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_echo_receipt` (`space_id`, `quote_id`, `from_user`),
+    KEY `idx_echo_receipt_user` (`space_id`, `from_user`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='F356 夸夸回执（重复点不重复记）';
+
+-- smart_collections.couple_echo_battery definition
+CREATE TABLE `couple_echo_battery` (
+    `id` varchar(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '主键UUID',
+    `space_id` varchar(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '情侣空间ID（关联 couple_space.id）',
+    `day` varchar(10) NOT NULL COMMENT '预报日 yyyy-MM-dd',
+    `from_user` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '报电量的人（区分大小写）',
+    `level` int(11) NOT NULL DEFAULT 3 COMMENT '电量 1-5（服务层钳制）',
+    `want` varchar(60) NOT NULL DEFAULT '' COMMENT '今天想被怎样对待（≤40 字，宽度放宽）',
+    `created` bigint(20) NOT NULL COMMENT '时间（毫秒时间戳）',
+    `updated_at` bigint(20) NOT NULL COMMENT '更新时间（毫秒时间戳）',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_echo_battery` (`space_id`, `day`, `from_user`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='F357 电量预报（每人每天一格）';
+
+-- smart_collections.couple_echo_self_letter definition
+CREATE TABLE `couple_echo_self_letter` (
+    `id` varchar(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '主键UUID',
+    `space_id` varchar(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '情侣空间ID（关联 couple_space.id）',
+    `from_user` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '写信给自己的人（区分大小写）',
+    `content` varchar(400) NOT NULL DEFAULT '' COMMENT '想对低落的自己说的话（≤300 字，宽度放宽）',
+    `status` varchar(10) NOT NULL DEFAULT 'SEALED' COMMENT 'SEALED 在途 / READ 已开读（可空位不写 charset）',
+    `created` bigint(20) NOT NULL COMMENT '时间（毫秒时间戳）',
+    `updated_at` bigint(20) NOT NULL COMMENT '更新时间（毫秒时间戳）',
+    PRIMARY KEY (`id`),
+    KEY `idx_echo_self_letter` (`space_id`, `from_user`, `status`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='F358 写给低落的自己（一人同时一封在途）';
