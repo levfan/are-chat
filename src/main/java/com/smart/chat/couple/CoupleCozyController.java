@@ -118,10 +118,4 @@ public class CoupleCozyController {
         return ApiResponse.ok(service.hug(Sessions.requireUser(session), req.cnt(), req.note()));
     }
 
-    /** F229 月度安眠小结。 */
-    @GetMapping("/monthly")
-    public ApiResponse<CoupleCozyService.MonthlyVO> monthly(@RequestParam(required = false) String month,
-                                                            HttpSession session) {
-        return ApiResponse.ok(service.monthly(Sessions.requireUser(session), month));
-    }
 }

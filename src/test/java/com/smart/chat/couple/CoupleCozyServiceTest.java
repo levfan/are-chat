@@ -313,39 +313,6 @@ class CoupleCozyServiceTest {
 
     // ========== F229 月度小结 ==========
 
-    @Test
-    void monthlyAggregatesAndClampsIndex() {
-        stubSpace("alice");
-        String month = LocalDate.now().toString().substring(0, 7);
-        when(lightoutMapper.findRange("s1", month + "-01", month + "-31"))
-                .thenReturn(List.of(CoupleCozyLightout.of("s1", DAY, "alice", ""),
-                        CoupleCozyLightout.of("s1", DAY, "bob", "")));
-        when(lightoutMapper.findByDay("s1", DAY)).thenReturn(List.of(
-                CoupleCozyLightout.of("s1", DAY, "alice", ""), CoupleCozyLightout.of("s1", DAY, "bob", "")));
-        when(sleepMapper.findRange("s1", month + "-01", month + "-31"))
-                .thenReturn(List.of(CoupleCozySleep.of("s1", DAY, "alice", 4, "")));
-        when(sheepMapper.findRange("s1", month + "-01", month + "-31")).thenReturn(List.of());
-        when(waterMapper.findRange("s1", month + "-01", month + "-31"))
-                .thenReturn(List.of(CoupleCozyWater.of("s1", DAY, "alice")));
-
-        CoupleCozyService.MonthlyVO vo = service.monthly("alice", null);
-
-        assertThat(vo.month()).isEqualTo(month);
-        assertThat(vo.bothLitNights()).isEqualTo(1);
-        assertThat(vo.bestStreak()).isEqualTo(1);
-        assertThat(vo.sleepReports()).isEqualTo(1);
-        assertThat(vo.avgStars()).isEqualTo(4.0);
-        assertThat(vo.index()).isEqualTo(2 + 2 + 0 + 0);
-    }
-
-    @Test
-    void monthlyRejectsBadMonth() {
-        stubSpace("alice");
-        assertThatThrownBy(() -> service.monthly("alice", "20261"))
-                .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("月份");
-    }
-
     // ========== 无空间 ==========
 
     @Test

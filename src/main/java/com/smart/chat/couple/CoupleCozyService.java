@@ -94,10 +94,6 @@ public class CoupleCozyService {
                           List<RemedyVO> remedies, HugVO hug) {
     }
 
-    public record MonthlyVO(String month, Integer bothLitNights, Integer bestStreak, Integer sleepReports,
-                            Double avgStars, Integer sheepDone, Integer cupsTotal, Integer index) {
-    }
-
     // ========== 读：今日体温总览 ==========
 
     /** 今日体温同步总览（所有卡片一次拉齐）。 */
@@ -466,44 +462,6 @@ public class CoupleCozyService {
     }
 
     // ========== F229 月度安眠小结（聚合无表） ==========
-
-    /** 聚合当月熄灯夜/最长连击/睡眠自评/数羊/喝水，折算「体温同步指数」0-100。 */
-    public MonthlyVO monthly(String me, String month) {
-        CoupleSpace space = requireSpace(me);
-        String m = month == null || month.isBlank()
-                ? LocalDate.now().toString().substring(0, 7) : month.trim();
-        if (!m.matches("\\d{4}-\\d{2}")) {
-            throw new BusinessException(400, "月份要写 2026-10 这样哦");
-        }
-        String from = m + "-01";
-        String to = m + "-31";
-        List<CoupleCozyLightout> lights = lightoutMapper.findRange(space.getId(), from, to);
-        Set<String> bothDays = new HashSet<>();
-        for (String day : new HashSet<>(lights.stream().map(CoupleCozyLightout::getDay).toList())) {
-            List<CoupleCozyLightout> rows = lightoutMapper.findByDay(space.getId(), day);
-            if (rows.size() >= 2) {
-                bothDays.add(day);
-            }
-        }
-        int best = 0;
-        int run = 0;
-        String prev = null;
-        for (String day : bothDays.stream().sorted().toList()) {
-            run = prev != null && LocalDate.parse(day).minusDays(1).toString().equals(prev) ? run + 1 : 1;
-            best = Math.max(best, run);
-            prev = day;
-        }
-        List<CoupleCozySleep> sleeps = sleepMapper.findRange(space.getId(), from, to);
-        double avgStars = sleeps.stream().mapToInt(CoupleCozySleep::getStars).average().orElse(0);
-        int sheepDone = (int) sheepMapper.findRange(space.getId(), from, to).stream()
-                .filter(s -> Integer.valueOf(1).equals(s.getDone())).count();
-        int cups = waterMapper.findRange(space.getId(), from, to).stream()
-                .mapToInt(CoupleCozyWater::getCups).sum();
-        int index = Math.min(40, bothDays.size() * 2) + Math.min(30, sleeps.size() * 2)
-                + Math.min(15, sheepDone * 3) + Math.min(15, cups / 2);
-        return new MonthlyVO(m, bothDays.size(), best, sleeps.size(),
-                Math.round(avgStars * 10) / 10.0, sheepDone, cups, Math.min(100, index));
-    }
 
     // ========== 深夜判断（供 F225 前端展示入口用，无表） ==========
 
