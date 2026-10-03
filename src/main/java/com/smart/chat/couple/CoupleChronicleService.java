@@ -28,7 +28,6 @@ public class CoupleChronicleService {
     private final CouplePromiseMapper promiseMapper;
     private final CoupleTravelWishMapper travelMapper;
     private final CoupleTruthMapper truthMapper;
-    private final CouplePassbookMapper passbookMapper;
     private final CoupleMoodMapper moodMapper;
     private final CoupleQuoteMapper quoteMapper;
     private final UserProfileMapper profileMapper;
@@ -46,7 +45,6 @@ public class CoupleChronicleService {
         this.promiseMapper = promiseMapper;
         this.travelMapper = travelMapper;
         this.truthMapper = truthMapper;
-        this.passbookMapper = passbookMapper;
         this.moodMapper = moodMapper;
         this.quoteMapper = quoteMapper;
         this.profileMapper = profileMapper;
@@ -141,10 +139,6 @@ public class CoupleChronicleService {
         for (CoupleTruth t : truthMapper.findBySpace(space.getId())) {
             pool.add(new ArchaeologyCardVO("truth", t.getDay(), daysAgo(t.getDay()),
                     "那天 TA 的真心话", t.getAnswer()));
-        }
-        for (CouplePassbook p : passbookMapper.findBySpace(space.getId())) {
-            pool.add(new ArchaeologyCardVO("passbook", p.getDay(), daysAgo(p.getDay()),
-                    "那天 TA 往恋爱存折里存了", p.getContent()));
         }
         for (CoupleQuote q : quoteMapper.findBySpace(space.getId())) {
             pool.add(new ArchaeologyCardVO("quote", toDay(q.getCreated()), daysAgo(toDay(q.getCreated())),
@@ -256,15 +250,12 @@ public class CoupleChronicleService {
         long travels = travelMapper.findBySpace(space.getId()).stream()
                 .filter(w -> w.isVisited() && w.getVisitedAt() != null
                         && inRange(toDay(w.getVisitedAt()), sinceFinal, today)).count();
-        long deposits = passbookMapper.findBySpace(space.getId()).stream()
-                .filter(p -> inRange(p.getDay(), sinceFinal, today)).count();
         List<ReportItem> items = List.of(
                 new ReportItem("promises", "兑现的约定", "🤝", promisesDone, "个"),
                 new ReportItem("moods", "记录的心情", "🌦️", moods, "天"),
                 new ReportItem("truths", "交出的真心话", "💬", truths, "次"),
                 new ReportItem("firsts", "解锁的第一次", "🧾", firsts, "个"),
-                new ReportItem("travels", "一起走过的地方", "🧳", travels, "个"),
-                new ReportItem("deposits", "恋爱存折存款", "💰", deposits, "笔"));
+                new ReportItem("travels", "一起走过的地方", "🧳", travels, "个"));
         String summary = "从 " + since + " 到今天，是你们在一起的第 " + nthYear + " 年——"
                 + (promisesDone + firsts + travels == 0
                 ? "这一年平澹但踏实，下一年多创造一点值得写进史册的事吧"
@@ -306,11 +297,6 @@ public class CoupleChronicleService {
             if (t.getDay().endsWith(mmdd)) {
                 events.add(new ChronicleEvent(t.getDay(), "truth", "真心话：" + shortText(t.getAnswer(), 40),
                         t.getQuestion(), "💬"));
-            }
-        }
-        for (CouplePassbook p : passbookMapper.findBySpace(space.getId())) {
-            if (p.getDay().endsWith(mmdd)) {
-                events.add(new ChronicleEvent(p.getDay(), "passbook", "存折里的一笔", p.getContent(), "💰"));
             }
         }
         for (CoupleMood m : moodMapper.findBySpace(space.getId())) {

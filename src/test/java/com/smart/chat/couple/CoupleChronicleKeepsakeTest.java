@@ -54,8 +54,6 @@ class CoupleChronicleKeepsakeTest {
     @Mock
     private CoupleTruthMapper truthMapper;
 
-    @Mock
-    private CouplePassbookMapper passbookMapper;
 
     @Mock
     private CoupleMoodMapper moodMapper;
@@ -136,16 +134,17 @@ class CoupleChronicleKeepsakeTest {
     void archaeologyPrefersRecordsOlderThanThirtyDays() {
         stubSpace("alice");
         String oldDay = LocalDate.now().minusDays(31).toString();
-        CouplePassbook oldRow = CouplePassbook.of("s1", "bob", "陪 TA 散步");
-        oldRow.setDay(oldDay);
-        when(passbookMapper.findBySpace("s1")).thenReturn(List.of(oldRow));
+        // 考古来源之一「恋爱存折」已随共同养成裁剪，改用语录册这条仍在职的来源验证同一行为
+        CoupleQuote oldRow = CoupleQuote.of("s1", "bob", "陪 TA 散步", "下班路上");
+        oldRow.setCreated(java.time.LocalDate.parse(oldDay)
+                .atStartOfDay(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli());
+        when(quoteMapper.findBySpace("s1")).thenReturn(List.of(oldRow));
         when(truthMapper.findBySpace("s1")).thenReturn(List.of());
-        when(quoteMapper.findBySpace("s1")).thenReturn(List.of());
         when(moodMapper.findBySpace("s1")).thenReturn(List.of());
 
         CoupleChronicleService.ArchaeologyCardVO card = chronicleService.archaeology("alice");
 
-        assertThat(card.kind()).isEqualTo("passbook");
+        assertThat(card.kind()).isEqualTo("quote");
         assertThat(card.daysAgo()).isEqualTo(31);
         assertThat(card.content()).isEqualTo("陪 TA 散步");
     }
@@ -153,7 +152,6 @@ class CoupleChronicleKeepsakeTest {
     @Test
     void archaeologyThrowsWhenNoRecordsAtAll() {
         stubSpace("alice");
-        when(passbookMapper.findBySpace("s1")).thenReturn(List.of());
         when(truthMapper.findBySpace("s1")).thenReturn(List.of());
         when(quoteMapper.findBySpace("s1")).thenReturn(List.of());
         when(moodMapper.findBySpace("s1")).thenReturn(List.of());
@@ -194,13 +192,12 @@ class CoupleChronicleKeepsakeTest {
         when(truthMapper.findBySpace("s1")).thenReturn(List.of());
         when(firstMapper.findBySpace("s1")).thenReturn(List.of());
         when(travelMapper.findBySpace("s1")).thenReturn(List.of());
-        when(passbookMapper.findBySpace("s1")).thenReturn(List.of());
 
         CoupleChronicleService.AnniversaryReportVO report = chronicleService.anniversaryReport("alice");
 
         assertThat(report.anniversaryDay()).isEqualTo("2024-10-01");
         assertThat(report.nthYear()).isGreaterThanOrEqualTo(2);
-        assertThat(report.items()).hasSize(6);
+        assertThat(report.items()).hasSize(5);
         assertThat(report.items().stream().filter(i -> "promises".equals(i.key())).findFirst().orElseThrow().value())
                 .isEqualTo(1);
         // since 不晚于今天
@@ -229,7 +226,6 @@ class CoupleChronicleKeepsakeTest {
         CoupleFirst first = CoupleFirst.of("s1", "第一次一起过生日", "2025-03-15", "蛋糕是草莓的", "alice");
         when(firstMapper.findBySpace("s1")).thenReturn(List.of(first));
         when(truthMapper.findBySpace("s1")).thenReturn(List.of());
-        when(passbookMapper.findBySpace("s1")).thenReturn(List.of());
         when(moodMapper.findBySpace("s1")).thenReturn(List.of());
 
         CoupleChronicleService.BirthdayLookVO look = chronicleService.birthdayLook("alice");
