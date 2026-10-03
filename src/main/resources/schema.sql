@@ -116,7 +116,9 @@ CREATE TABLE `friend_request` (
     `status` varchar(16) NOT NULL COMMENT '申请状态：PENDING 待处理 / ACCEPTED 已接受 / REJECTED 已拒绝',
     `created` bigint(20) NOT NULL COMMENT '申请时间（毫秒时间戳）',
     `updated_at` bigint(20) DEFAULT NULL COMMENT '最近处理时间（毫秒时间戳）',
-    PRIMARY KEY (`id`)
+    PRIMARY KEY (`id`),
+    KEY `idx_fr_to_user_status` (`to_user`, `status`),
+    KEY `idx_fr_from_to` (`from_user`, `to_user`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='好友申请表：对方同意后双方各建一条 friend 关系';
 
 
@@ -159,7 +161,9 @@ CREATE TABLE `private_message` (
     `edited` tinyint(4) DEFAULT 0 COMMENT '内容是否已编辑：1 已编辑 / 0 未编辑',
     `heart_at` bigint(20) DEFAULT NULL COMMENT '心动时刻标记时间（毫秒时间戳，null = 未标记）',
     `created` bigint(20) NOT NULL COMMENT '发送时间（毫秒时间戳）',
-    PRIMARY KEY (`id`)
+    PRIMARY KEY (`id`),
+    KEY `idx_pm_from_to_created` (`from_user`, `to_user`, `created`),
+    KEY `idx_pm_to_from_created` (`to_user`, `from_user`, `created`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='点对点私聊消息表：支持文本/图片/拍一拍/系统/名片/位置/文件消息';
 
 
