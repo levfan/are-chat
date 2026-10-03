@@ -31,13 +31,6 @@ public class CoupleCatchController {
         return ApiResponse.ok(service.board(Sessions.requireUser(session)));
     }
 
-    /** F389 聆听者年报（year 缺省当年）。 */
-    @GetMapping("/year")
-    public ApiResponse<CoupleCatchService.YearVO> year(@RequestParam(required = false) String year,
-                                                       HttpSession session) {
-        return ApiResponse.ok(service.yearReport(Sessions.requireUser(session), year));
-    }
-
     /** F380 悄悄记一条 TA 随口说的心愿（不推给对方）。 */
     public record WishRequest(String content, String sourceDay, String scene) {
     }
@@ -102,84 +95,6 @@ public class CoupleCatchController {
     public ApiResponse<CoupleCatchService.CatchVO> safewordReflect(@RequestBody ReflectRequest req,
                                                                    HttpSession session) {
         return ApiResponse.ok(service.reflectUse(Sessions.requireUser(session), req.id(), req.reflect()));
-    }
-
-    /** F383 给 TA 标一个敏感日（只能标今天或将来）。 */
-    public record SensitiveRequest(String day, String kind, String care) {
-    }
-
-    @PostMapping("/sensitive")
-    public ApiResponse<CoupleCatchService.CatchVO> sensitive(@RequestBody SensitiveRequest req, HttpSession session) {
-        return ApiResponse.ok(service.addSensitive(Sessions.requireUser(session), req.day(), req.kind(), req.care()));
-    }
-
-    /** F383 撤掉代标的一天。 */
-    @PostMapping("/sensitive/remove")
-    public ApiResponse<CoupleCatchService.CatchVO> sensitiveRemove(@RequestBody IdRequest req, HttpSession session) {
-        return ApiResponse.ok(service.removeSensitive(Sessions.requireUser(session), req.id()));
-    }
-
-    /** F384 存一个被打断的话头（在途每人 ≤5）。 */
-    public record ThreadRequest(String topic, String progress) {
-    }
-
-    @PostMapping("/thread")
-    public ApiResponse<CoupleCatchService.CatchVO> thread(@RequestBody ThreadRequest req, HttpSession session) {
-        return ApiResponse.ok(service.addThread(Sessions.requireUser(session), req.topic(), req.progress()));
-    }
-
-    /** F384 续完销档（只有存话头的人能销）。 */
-    @PostMapping("/thread/done")
-    public ApiResponse<CoupleCatchService.CatchVO> threadDone(@RequestBody IdRequest req, HttpSession session) {
-        return ApiResponse.ok(service.finishThread(Sessions.requireUser(session), req.id()));
-    }
-
-    /** F385 申报一条口是心非（say ≤20、means ≤60，每人 ≤10 条）。 */
-    public record SayRequest(String say, String means) {
-    }
-
-    @PostMapping("/say")
-    public ApiResponse<CoupleCatchService.CatchVO> say(@RequestBody SayRequest req, HttpSession session) {
-        return ApiResponse.ok(service.addSay(Sessions.requireUser(session), req.say(), req.means()));
-    }
-
-    /** F385 删掉自己申报的词条（对方只能看）。 */
-    @PostMapping("/say/remove")
-    public ApiResponse<CoupleCatchService.CatchVO> sayRemove(@RequestBody IdRequest req, HttpSession session) {
-        return ApiResponse.ok(service.removeSay(Sessions.requireUser(session), req.id()));
-    }
-
-    /** F386 写「我难过时要的是」（五选一 + 补充说明）。 */
-    public record ProtocolRequest(String mode, String note) {
-    }
-
-    @PostMapping("/protocol")
-    public ApiResponse<CoupleCatchService.CatchVO> protocol(@RequestBody ProtocolRequest req, HttpSession session) {
-        return ApiResponse.ok(service.setProtocol(Sessions.requireUser(session), req.mode(), req.note()));
-    }
-
-    /** F387 许一题「希望我们多聊 XX」。 */
-    public record TopicRequest(String title) {
-    }
-
-    @PostMapping("/topic")
-    public ApiResponse<CoupleCatchService.CatchVO> topic(@RequestBody TopicRequest req, HttpSession session) {
-        return ApiResponse.ok(service.addTopic(Sessions.requireUser(session), req.title()));
-    }
-
-    /** F387 接单（只有非许愿人能接）。 */
-    @PostMapping("/topic/take")
-    public ApiResponse<CoupleCatchService.CatchVO> topicTake(@RequestBody IdRequest req, HttpSession session) {
-        return ApiResponse.ok(service.takeTopic(Sessions.requireUser(session), req.id()));
-    }
-
-    /** F387 聊完并留一句感想（超一周记一笔超时）。 */
-    public record TopicTalkRequest(String id, String reflect) {
-    }
-
-    @PostMapping("/topic/talk")
-    public ApiResponse<CoupleCatchService.CatchVO> topicTalk(@RequestBody TopicTalkRequest req, HttpSession session) {
-        return ApiResponse.ok(service.talkTopic(Sessions.requireUser(session), req.id(), req.reflect()));
     }
 
     /** F388 留今天想对 TA 说的一句（≤40 字）。 */

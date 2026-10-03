@@ -15,28 +15,6 @@ public final class CoupleCatchBank {
 
     // ========== 字典 ==========
 
-    /** F386 聆听方式中文标签。 */
-    public static String modeLabel(String mode) {
-        return switch (mode == null ? "" : mode) {
-            case CoupleCatchProtocol.MODE_REASON -> "跟我讲道理";
-            case CoupleCatchProtocol.MODE_RANT -> "陪我一起骂";
-            case CoupleCatchProtocol.MODE_HUG -> "抱抱，别说话";
-            case CoupleCatchProtocol.MODE_FOOD -> "递吃的";
-            case CoupleCatchProtocol.MODE_SPACE -> "先别理我";
-            default -> "还没说";
-        };
-    }
-
-    /** F383 敏感日类型中文标签。 */
-    public static String kindLabel(String kind) {
-        return switch (kind == null ? "" : kind) {
-            case CoupleCatchSensitive.KIND_PERIOD -> "周期第一天";
-            case CoupleCatchSensitive.KIND_CHECK -> "考核日";
-            case CoupleCatchSensitive.KIND_MEMORY -> "忌日/纪念日";
-            default -> "其它";
-        };
-    }
-
     // ========== F380 暗中心愿 ==========
 
     /** F380 记下（只推记账人自己，绝不推给对方——这是保密的）。 */
@@ -124,17 +102,6 @@ public final class CoupleCatchBank {
     public static String protocolLine(String modeLabel, String note) {
         String tail = note == null || note.isBlank() ? "" : "（补充：" + note + "）";
         return "🎧 TA 的难过说明书更新了：难过的时候要的是「" + modeLabel + "」" + tail + "。下次照这个来。";
-    }
-
-    /** F386 双方协议不一致时的提示行（挂在总览上，不推送）。 */
-    public static String protocolClashLine(String myLabel, String partnerLabel) {
-        return "⚠️ 你们要的安慰不一样：你要「" + myLabel + "」，TA 要「" + partnerLabel
-                + "」——这不是矛盾，这是两个都需要被照料的时刻。";
-    }
-
-    /** F386 协议齐了（挂在总览上）。 */
-    public static String protocolBothLine() {
-        return "📜 两份说明书都交了。下次对方难过，先翻这一页再开口。";
     }
 
     // ========== F387 话题许愿池 ==========

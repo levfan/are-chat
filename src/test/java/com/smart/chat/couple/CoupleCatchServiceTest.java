@@ -47,16 +47,6 @@ class CoupleCatchServiceTest {
     @Mock
     private CoupleCatchSafewordUseMapper useMapper;
     @Mock
-    private CoupleCatchSensitiveMapper sensitiveMapper;
-    @Mock
-    private CoupleCatchThreadMapper threadMapper;
-    @Mock
-    private CoupleCatchSayMapper sayMapper;
-    @Mock
-    private CoupleCatchProtocolMapper protocolMapper;
-    @Mock
-    private CoupleCatchTopicMapper topicMapper;
-    @Mock
     private CoupleCatchDailyMapper dailyMapper;
     @Mock
     private ImPushService push;
@@ -72,11 +62,6 @@ class CoupleCatchServiceTest {
     private final List<CoupleCatchMine> mines = new ArrayList<>();
     private final List<CoupleCatchSafeword> words = new ArrayList<>();
     private final List<CoupleCatchSafewordUse> uses = new ArrayList<>();
-    private final List<CoupleCatchSensitive> sensitives = new ArrayList<>();
-    private final List<CoupleCatchThread> threads = new ArrayList<>();
-    private final List<CoupleCatchSay> says = new ArrayList<>();
-    private final List<CoupleCatchProtocol> protocols = new ArrayList<>();
-    private final List<CoupleCatchTopic> topics = new ArrayList<>();
     private final List<CoupleCatchDaily> dailies = new ArrayList<>();
 
     @BeforeEach
@@ -117,41 +102,10 @@ class CoupleCatchServiceTest {
                 .filter(u -> u.getDay().startsWith((String) inv.getArgument(1))).toList());
         stubSelectByIdAndUpsert(useMapper, CoupleCatchSafewordUse.class, uses, CoupleCatchSafewordUse::getId);
 
-        lenient().when(sensitiveMapper.findBySpace("s1")).thenAnswer(inv -> List.copyOf(sensitives));
-        lenient().when(sensitiveMapper.find(eq("s1"), any(), any(), any())).thenAnswer(inv -> sensitives.stream()
-                .filter(s -> s.getOwnerUser().equals(inv.getArgument(1)) && s.getDay().equals(inv.getArgument(2))
-                        && s.getKind().equals(inv.getArgument(3)))
-                .findFirst().orElse(null));
-        lenient().when(sensitiveMapper.findByDay(eq("s1"), any())).thenAnswer(inv -> sensitives.stream()
-                .filter(s -> s.getDay().equals(inv.getArgument(1))).toList());
-        stubSelectByIdAndUpsert(sensitiveMapper, CoupleCatchSensitive.class, sensitives, CoupleCatchSensitive::getId);
 
-        lenient().when(threadMapper.findBySpace("s1")).thenAnswer(inv -> List.copyOf(threads));
-        lenient().when(threadMapper.findByUserStatus(eq("s1"), any(), any())).thenAnswer(inv -> threads.stream()
-                .filter(t -> t.getFromUser().equals(inv.getArgument(1)) && t.getStatus().equals(inv.getArgument(2)))
-                .toList());
-        stubSelectByIdAndUpsert(threadMapper, CoupleCatchThread.class, threads, CoupleCatchThread::getId);
 
-        lenient().when(sayMapper.findBySpace("s1")).thenAnswer(inv -> List.copyOf(says));
-        lenient().when(sayMapper.findByUser(eq("s1"), any())).thenAnswer(inv -> says.stream()
-                .filter(s -> s.getFromUser().equals(inv.getArgument(1))).toList());
-        lenient().when(sayMapper.find(eq("s1"), any(), any())).thenAnswer(inv -> says.stream()
-                .filter(s -> s.getFromUser().equals(inv.getArgument(1)) && s.getSay().equals(inv.getArgument(2)))
-                .findFirst().orElse(null));
-        stubSelectByIdAndUpsert(sayMapper, CoupleCatchSay.class, says, CoupleCatchSay::getId);
 
-        lenient().when(protocolMapper.findBySpace("s1")).thenAnswer(inv -> List.copyOf(protocols));
-        lenient().when(protocolMapper.find(eq("s1"), any())).thenAnswer(inv -> protocols.stream()
-                .filter(p -> p.getFromUser().equals(inv.getArgument(1))).findFirst().orElse(null));
-        stubInsertAndUpdate(protocolMapper, CoupleCatchProtocol.class, protocols);
 
-        lenient().when(topicMapper.findBySpace("s1")).thenAnswer(inv -> List.copyOf(topics));
-        lenient().when(topicMapper.find(eq("s1"), any(), any())).thenAnswer(inv -> topics.stream()
-                .filter(t -> t.getFromUser().equals(inv.getArgument(1)) && t.getTitle().equals(inv.getArgument(2)))
-                .findFirst().orElse(null));
-        lenient().when(topicMapper.findByStatus(eq("s1"), any())).thenAnswer(inv -> topics.stream()
-                .filter(t -> t.getStatus().equals(inv.getArgument(1))).toList());
-        stubSelectByIdAndUpsert(topicMapper, CoupleCatchTopic.class, topics, CoupleCatchTopic::getId);
 
         lenient().when(dailyMapper.findBySpace("s1")).thenAnswer(inv -> List.copyOf(dailies));
         lenient().when(dailyMapper.find(eq("s1"), any(), any())).thenAnswer(inv -> dailies.stream()
@@ -354,163 +308,13 @@ class CoupleCatchServiceTest {
 
     // ========== F383 敏感日历 ==========
 
-    @Test
-    void sensitiveRejectsPastDayBadKindAndDuplicate() {
-        assertThatThrownBy(() -> service.addSensitive("alice", YESTERDAY, "PERIOD", "别问我"))
-                .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("提前标");
-        assertThatThrownBy(() -> service.addSensitive("alice", TOMORROW, "TAX_DAY", "别问我"))
-                .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("周期");
-
-        service.addSensitive("alice", TOMORROW, "CHECK", "帮我留灯");
-        assertThatThrownBy(() -> service.addSensitive("alice", TOMORROW, "CHECK", "又标一次"))
-                .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("标过");
-
-        var vo = service.board("bob");
-        assertThat(vo.sensitives()).hasSize(1);
-        assertThat(vo.sensitives().get(0).mineAsOwner()).isTrue();
-        assertThat(vo.sensitives().get(0).remindTomorrow()).isTrue();
-    }
-
-    @Test
-    void sensitiveRemoveBlockedForOwner() {
-        service.addSensitive("alice", TOMORROW, "MEMORY", "安静陪着");
-        String id = sensitives.get(0).getId();
-
-        assertThatThrownBy(() -> service.removeSensitive("bob", id))
-                .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("TA 替你标的");
-        assertThat(service.removeSensitive("alice", id).sensitives()).isEmpty();
-    }
-
     // ========== F384 说到哪了 ==========
-
-    @Test
-    void threadQuotaFiveInFlightAndDuplicateTopic() {
-        for (int i = 0; i < CoupleCatchThread.IN_FLIGHT_MAX; i++) {
-            service.addThread("alice", "话头 " + i, "说到第 " + i + " 句");
-        }
-        assertThatThrownBy(() -> service.addThread("alice", "第六个", "没说完"))
-                .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("在途");
-        assertThatThrownBy(() -> service.addThread("alice", "话头 1", "重复"))
-                .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("线轴");
-    }
-
-    @Test
-    void threadFinishOnlyByOwnerAndIdempotent() {
-        service.addThread("alice", "要不要换工作", "说到第三步");
-        String id = threads.get(0).getId();
-
-        assertThatThrownBy(() -> service.finishThread("bob", id))
-                .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("TA 存的");
-
-        assertThat(service.finishThread("alice", id).myThreads()).isEmpty();
-        service.finishThread("alice", id);
-        verify(push, times(1)).pushCoupleEventBoth(eq("catch-thread-done"), any(), any(), any(), any());
-    }
 
     // ========== F385 真话翻译机 ==========
 
-    @Test
-    void sayRequiresMeansAndQuotaTen() {
-        assertThatThrownBy(() -> service.addSay("alice", "我没事", "  "))
-                .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("翻译结果");
-        assertThatThrownBy(() -> service.addSay("alice", "句子".repeat(11), "其实有事"))
-                .isInstanceOf(BusinessException.class);
-
-        service.addSay("alice", "我没事", "其实想被抱一下");
-        assertThatThrownBy(() -> service.addSay("alice", "我没事", "换个说法"))
-                .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("申报过");
-        for (int i = 0; i < CoupleCatchSay.PER_USER_MAX - 1; i++) {
-            service.addSay("alice", "词条 " + i, "意思 " + i);
-        }
-        assertThatThrownBy(() -> service.addSay("alice", "第十一条", "意思"))
-                .isInstanceOf(BusinessException.class);
-    }
-
-    @Test
-    void sayCannotBeDeletedByPartner() {
-        service.addSay("alice", "我没事", "其实想被抱一下");
-        String id = says.get(0).getId();
-
-        assertThatThrownBy(() -> service.removeSay("bob", id))
-                .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("不能改也不能删");
-        assertThat(service.board("bob").partnerSays()).hasSize(1);
-        assertThat(service.removeSay("alice", id).mySays()).isEmpty();
-    }
-
     // ========== F386 聆听方式协议 ==========
 
-    @Test
-    void protocolRejectsUnknownModeAndHintsWhenIncomplete() {
-        assertThatThrownBy(() -> service.setProtocol("alice", "SILENCE_TREAT", null))
-                .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("五种里选一个");
-
-        service.setProtocol("alice", "HUG", "抱抱就好");
-        assertThat(service.board("alice").protocolHint()).contains("还差TA");
-        assertThat(service.board("alice").myProtocol().modeLabel()).isEqualTo("抱抱，别说话");
-        assertThat(service.board("bob").partnerProtocol().modeLabel()).isEqualTo("抱抱，别说话");
-    }
-
-    @Test
-    void protocolClashHintWhenModesDiffer() {
-        service.setProtocol("alice", "HUG", null);
-        service.setProtocol("bob", "REASON", null);
-
-        assertThat(service.board("alice").protocolHint()).contains("不一样").contains("跟我讲道理");
-
-        service.setProtocol("bob", "HUG", null);
-        assertThat(service.board("alice").protocolHint()).contains("两份说明书都交了");
-    }
-
     // ========== F387 话题许愿池 ==========
-
-    @Test
-    void topicTakeBySelfRejectedAndTalkNeedsTakerAndReflect() {
-        service.addTopic("alice", "以后想在哪座城市");
-        String id = topics.get(0).getId();
-
-        assertThatThrownBy(() -> service.addTopic("alice", "以后想在哪座城市"))
-                .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("许过");
-        assertThatThrownBy(() -> service.takeTopic("alice", id))
-                .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("不能自己接");
-        assertThatThrownBy(() -> service.talkTopic("alice", id, "聊得很好"))
-                .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("还没接单");
-
-        service.takeTopic("bob", id);
-        assertThatThrownBy(() -> service.talkTopic("alice", id, "轮不到你"))
-                .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("谁来说");
-        assertThatThrownBy(() -> service.talkTopic("bob", id, "  "))
-                .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("感想");
-
-        var vo = service.talkTopic("bob", id, "原来TA是这么想的");
-        assertThat(vo.topics().get(0).status()).isEqualTo("TALKED");
-        assertThat(vo.topics().get(0).overdue()).isFalse();
-    }
-
-    @Test
-    void topicTakeTwiceIsIdempotent() {
-        service.addTopic("alice", "婚礼怎么办");
-        String id = topics.get(0).getId();
-
-        service.takeTopic("bob", id);
-        service.takeTopic("bob", id);
-        verify(push, times(1)).pushCoupleEvent(eq("catch-topic-take"), any(), any(), any());
-    }
 
     // ========== F388 今日一句话 ==========
 
@@ -539,53 +343,10 @@ class CoupleCatchServiceTest {
     // ========== F389 年报与兜底 ==========
 
     @Test
-    void yearReportCountsRealNumbers() {
-        service.addWish("alice", "键盘", YESTERDAY, null);
-        service.fulfillWish("alice", wishes.get(0).getId());
-        service.addMine("alice", "问工资", "查岗", "先问");
-        service.ackMine("bob", mines.get(0).getId());
-        service.avoidMine("bob", mines.get(0).getId());
-        service.setSafeword("alice", "暂停", null);
-        service.useSafeword("alice");
-        service.reflectUse("alice", uses.get(0).getId(), "怕被丢下");
-        service.addThread("alice", "换工作", "说到一半");
-        service.finishThread("alice", threads.get(0).getId());
-        service.addSay("alice", "我没事", "想被抱");
-        service.addTopic("alice", "城市");
-        service.takeTopic("bob", topics.get(0).getId());
-        service.talkTopic("bob", topics.get(0).getId(), "聊完了");
-        service.daily("alice", "今天想你");
-
-        var year = service.board("alice").year();
-        assertThat(year.wishes()).isEqualTo(1);
-        assertThat(year.fulfilled()).isEqualTo(1);
-        assertThat(year.mines()).isEqualTo(1);
-        assertThat(year.acked()).isEqualTo(1);
-        assertThat(year.avoids()).isEqualTo(1);
-        assertThat(year.uses()).isEqualTo(1);
-        assertThat(year.reflected()).isEqualTo(1);
-        assertThat(year.threads()).isEqualTo(1);
-        assertThat(year.finished()).isEqualTo(1);
-        assertThat(year.says()).isEqualTo(1);
-        assertThat(year.talked()).isEqualTo(1);
-        assertThat(year.onTime()).isEqualTo(1);
-        assertThat(year.dailies()).isEqualTo(1);
-        assertThat(year.summary()).contains("聆听者年报");
-
-        assertThatThrownBy(() -> service.yearReport("alice", "26"))
-                .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("yyyy");
-    }
-
-    @Test
     void missingRowsAre404AndNoSpaceIs404() {
         assertThatThrownBy(() -> service.fulfillWish("alice", "nope")).isInstanceOf(BusinessException.class);
         assertThatThrownBy(() -> service.ackMine("bob", "nope")).isInstanceOf(BusinessException.class);
         assertThatThrownBy(() -> service.reflectUse("alice", "nope", "x")).isInstanceOf(BusinessException.class);
-        assertThatThrownBy(() -> service.removeSensitive("alice", "nope")).isInstanceOf(BusinessException.class);
-        assertThatThrownBy(() -> service.finishThread("alice", "nope")).isInstanceOf(BusinessException.class);
-        assertThatThrownBy(() -> service.removeSay("alice", "nope")).isInstanceOf(BusinessException.class);
-        assertThatThrownBy(() -> service.takeTopic("bob", "nope")).isInstanceOf(BusinessException.class);
 
         when(spaceMapper.findActiveByUser("carol")).thenReturn(Optional.empty());
         assertThatThrownBy(() -> service.board("carol")).isInstanceOf(BusinessException.class);

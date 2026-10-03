@@ -461,3 +461,19 @@
 5. `clean-fields.py` 重建字段与构造器；
 6. `mvn -q -o clean compile` 拿真退出码，按报错回 1；
 7. `orphans.mjs delete` 扫孤儿实体（迭代到 0 命中）→ 改测试 → `mvn -o test`。
+
+**四个必须知道的工具陷阱**（都真踩过，都会静默改变行为，不会被编译或测试拦住）：
+
+- **按名删成员必须只锚声明行**。早期版本把调用点也当锚点，`if (secretWishes(space, owner).size() >= PER_OWNER_MAX)`
+  这种行会命中 `secretWishes`，于是从这一行开始向后按花括号配对删除，
+  **把无关且要保留的方法里的守卫子句整块吃掉**（饭桌的 `hitRedlines`、聆听者的 `secretWishes` 各中一次）。
+  现判据：名字之前不得出现 `(`，整行须以 `{` 结尾，且行首不是 if/for/while/return 等控制词。
+  兜底动作是**删完立刻 `git diff` 核对保留代码没少行**，别只信"编译过了"。
+- **`mvn -q compile` 会被删掉的源文件骗过**。删除实体/Mapper 后不 clean 直接 compile 可能仍报 0，
+  因为增量编译器复用了 target 里的旧 class。凡是删了文件的批次，一律 `mvn -q -o clean compile` 取真退出码。
+- **孤儿扫描的引用者包含静态内容库**。功能删完后，`Couple*Bank` 里的 `kindLabel/modeLabel` 这类
+  只服务已删功能的映射方法，会因为引用实体常量而让实体"看起来还活着"，表就漏进了 V50 drop 清单。
+  每轮删完要回扫一遍 Bank 的死方法再跑孤儿。
+- **测试里的多行 stub 不能按行删**。直接过滤含死标识符的行会截断 `lenient().when(x.find(...))` 这类跨行语句，
+  留下括号不闭合的碎片（我把 Focus 的测试删坏过一次，只能 git 恢复重写）。
+  现用 `cut-stmt.mjs`：按语句走到 `)`/`}` 平衡为止，且**花括号总数不变才写盘**，否则拒绝并保留原文件。
