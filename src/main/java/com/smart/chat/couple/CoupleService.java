@@ -90,9 +90,9 @@ public class CoupleService {
     public record TimelineDay(String day, List<TimelineEvent> events) {
     }
 
-    /** 心动值明细：互道早安/晚安天数、一问完成天数、兑现承诺数、清单完成数、心情记录数。 */
+    /** 心动值明细：互道早安/晚安天数、一问完成天数、心情记录数、积分台账累计赚分。 */
     public record IntimacyBreakdown(long morningDays, long nightDays, long questionDays,
-                                    long promiseDone, long itemDone, long moodDays) {
+                                    long moodDays, long pointEarned) {
     }
 
     public record IntimacyVO(int score, int level, String title, String icon, Integer nextLevelAt,
@@ -147,6 +147,7 @@ public class CoupleService {
     private final CouplePactMapper pactMapper;
     private final CoupleFundMapper fundMapper;
     private final CoupleFundDepositMapper fundDepositMapper;
+    private final CouplePointLedgerMapper ledgerMapper;
     private final FriendMapper friendMapper;
     private final UserProfileMapper profileMapper;
     private final AppUserService userService;
@@ -159,6 +160,7 @@ public class CoupleService {
                          CoupleAnniversaryMapper anniversaryMapper, CoupleMoodMapper moodMapper,
                          CoupleLetterMapper letterMapper, CouplePactMapper pactMapper,
                          CoupleFundMapper fundMapper, CoupleFundDepositMapper fundDepositMapper,
+                         CouplePointLedgerMapper ledgerMapper,
                          FriendMapper friendMapper, UserProfileMapper profileMapper,
                          AppUserService userService, ImPushService push) {
         this.spaceMapper = spaceMapper;
@@ -172,6 +174,7 @@ public class CoupleService {
         this.moodMapper = moodMapper;
         this.letterMapper = letterMapper;
         this.pactMapper = pactMapper;
+        this.ledgerMapper = ledgerMapper;
         this.fundMapper = fundMapper;
         this.fundDepositMapper = fundDepositMapper;
         this.friendMapper = friendMapper;
@@ -840,20 +843,22 @@ public class CoupleService {
     // ========== 6. 心动值 & 恋爱等级 ==========
 
     /**
-     * 心动值：双方互道早安 +1/天、互道晚安 +2/天、一问双方都答 +2/天、
-     * 兑现承诺 +5/条、清单完成 +3/条、心情记录 +1/条；累计分数映射恋爱等级。
+     * 心动值：双方互道早安 +1/天、互道晚安 +2/天、一问双方都答 +2/天、心情记录 +1/条，
+     * 再加积分台账的累计赚分（好事簿 / 家务轮盘 / 刮刮乐三个入口）；累计分数映射恋爱等级。
      */
     public IntimacyVO intimacy(String me) {
         CoupleSpace space = requireSpace(me);
         long morning = ritualBothDays(space, CoupleCheckin.KIND_MORNING);
         long night = ritualBothDays(space, CoupleCheckin.KIND_NIGHT);
         long questionDays = bothAnsweredDays(space);
-        long promiseDone = promiseMapper.findBySpace(space.getId()).stream()
-                .filter(p -> CouplePromise.STATUS_DONE.equals(p.getStatus())).count();
-        long itemDone = itemMapper.findBySpace(space.getId()).stream().filter(CoupleItem::doneFlag).count();
         long moodDays = moodMapper.findBySpace(space.getId()).size();
-        int score = (int) (morning + night * 2 + questionDays * 2 + promiseDone * 5 + itemDone * 3 + moodDays);
-        IntimacyBreakdown breakdown = new IntimacyBreakdown(morning, night, questionDays, promiseDone, itemDone, moodDays);
+        // 系统裁剪：兑现承诺与清单完成两张卡都已下线，心动值改由积分台账累计赚分供数，
+        // 否则这个 header 数字会永远停在裁剪前那天不再增长
+        long pointEarned = ledgerMapper.findBySpace(space.getId()).stream()
+                .filter(l -> CouplePointLedger.TYPE_EARN.equals(l.getType()))
+                .mapToLong(l -> l.getPoints() == null ? 0 : l.getPoints()).sum();
+        int score = (int) (morning + night * 2 + questionDays * 2 + moodDays + pointEarned);
+        IntimacyBreakdown breakdown = new IntimacyBreakdown(morning, night, questionDays, moodDays, pointEarned);
 
         // 等级阶梯：L1 怦然心动(0) → L2 心动初启(50) → L3 甜甜热恋(150) → L4 形影不离(300)
         //          → L5 心有灵犀(500) → L6 相依相伴(800) → L7 相守一生(1300)
