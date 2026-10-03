@@ -39,16 +39,6 @@ public final class CoupleEchoBank {
         return "⚡ " + actor + " 刚领了今天的能量补给，你也来充一次？";
     }
 
-    /** F354 感谢慢递送达推送文案（推双方）。 */
-    public static String thanksArrivedLine(String fromUser, String content) {
-        return "✉️ 慢递到站：一封来自 " + fromUser + " 的感谢信刚刚送达——「" + content + "」";
-    }
-
-    /** F356 夸夸回执推送文案（发给夸的人）。 */
-    public static String receiptLine(String content) {
-        return "🧾 你的夸夸被签收啦：「" + content + "」——TA 对这句点了「收到」。";
-    }
-
     /** F357 对方低电量提示行池（都会带「今晚轻轻的」，读时挂在对方的电量格上）。 */
     public static String lowBatteryLine(long seed) {
         return LOW_BATTERY.get(Math.floorMod(seed, LOW_BATTERY.size()));
@@ -59,22 +49,4 @@ public final class CoupleEchoBank {
             "今晚轻轻的：TA 想被温柔对待，进门先抱一下再说别的 🫂",
             "今晚轻轻的：TA 的灯快没油了，先递热水别提问 🫖",
             "今晚轻轻的：今天 TA 不好撑，让她靠一会儿就好 🛏️");
-
-    /** F359 年报收尾句池。 */
-    public static String yearTail(long seed) {
-        return YEAR_TAIL.get(Math.floorMod(seed, YEAR_TAIL.size()));
-    }
-
-    private static final List<String> YEAR_TAIL = List.of(
-            "这些都是真实发生过的日子，比任何总结都算数。",
-            "回音壁的规矩：难过时来取，开心时来存。",
-            "明年继续：证据攒得越多，底气就越足。");
-
-    /** F359 年报 summary（数字全部来自真实表）。 */
-    public static String yearSummary(String year, int deeds, int starred, int refills, int arrived,
-                                     int receipts, long seed) {
-        return year + " 年回音壁年报：你们一共记下 " + deeds + " 件「TA 为我做的事」，其中 " + starred
-                + " 条救过人；能量补给领了 " + refills + " 次，感谢慢递送达 " + arrived
-                + " 封，夸夸回执开出 " + receipts + " 张。" + yearTail(seed);
-    }
 }
