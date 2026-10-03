@@ -40,19 +40,9 @@ class CoupleLaughServiceTest {
     @Mock
     private CoupleLaughMomentMapper momentMapper;
     @Mock
-    private CoupleLaughDailyMapper dailyMapper;
-    @Mock
     private CoupleLaughJokeMapper jokeMapper;
     @Mock
     private CoupleLaughCringeMapper cringeMapper;
-    @Mock
-    private CoupleLaughAttackMapper attackMapper;
-    @Mock
-    private CoupleLaughGuessMapper guessMapper;
-    @Mock
-    private CoupleLaughRxMapper rxMapper;
-    @Mock
-    private CoupleLaughStyleMapper styleMapper;
     @Mock
     private ImPushService push;
 
@@ -65,13 +55,8 @@ class CoupleLaughServiceTest {
     private static final String LONG_AGO = LocalDate.now().minusDays(400).toString();
 
     private final List<CoupleLaughMoment> moments = new ArrayList<>();
-    private final List<CoupleLaughDaily> dailies = new ArrayList<>();
     private final List<CoupleLaughJoke> jokes = new ArrayList<>();
     private final List<CoupleLaughCringe> cringes = new ArrayList<>();
-    private final List<CoupleLaughAttack> attacks = new ArrayList<>();
-    private final List<CoupleLaughGuess> guesses = new ArrayList<>();
-    private final List<CoupleLaughRx> rxList = new ArrayList<>();
-    private final List<CoupleLaughStyle> styles = new ArrayList<>();
 
     @BeforeEach
     void setUp() {
@@ -93,11 +78,6 @@ class CoupleLaughServiceTest {
                 .findFirst().orElse(null));
         stubAll(momentMapper, CoupleLaughMoment.class, moments, CoupleLaughMoment::getId);
 
-        lenient().when(dailyMapper.findBySpace("s1")).thenAnswer(inv -> List.copyOf(dailies));
-        lenient().when(dailyMapper.findByDay(eq("s1"), any())).thenAnswer(inv -> dailies.stream()
-                .filter(d -> d.getDay().equals(inv.getArgument(1))).findFirst().orElse(null));
-        stubAll(dailyMapper, CoupleLaughDaily.class, dailies, CoupleLaughDaily::getId);
-
         lenient().when(jokeMapper.findBySpace("s1")).thenAnswer(inv -> List.copyOf(jokes));
         lenient().when(jokeMapper.find(eq("s1"), any(), any())).thenAnswer(inv -> jokes.stream()
                 .filter(j -> j.getFromUser().equals(inv.getArgument(1)) && j.getContent().equals(inv.getArgument(2)))
@@ -110,33 +90,6 @@ class CoupleLaughServiceTest {
                 .findFirst().orElse(null));
         stubAll(cringeMapper, CoupleLaughCringe.class, cringes, CoupleLaughCringe::getId);
 
-        lenient().when(attackMapper.findBySpace("s1")).thenAnswer(inv -> List.copyOf(attacks));
-        lenient().when(attackMapper.findByDay(eq("s1"), any())).thenAnswer(inv -> attacks.stream()
-                .filter(a -> a.getDay().equals(inv.getArgument(1))).toList());
-        lenient().when(attackMapper.find(eq("s1"), any(), any())).thenAnswer(inv -> attacks.stream()
-                .filter(a -> a.getFromUser().equals(inv.getArgument(1)) && a.getDay().equals(inv.getArgument(2)))
-                .findFirst().orElse(null));
-        stubAll(attackMapper, CoupleLaughAttack.class, attacks, CoupleLaughAttack::getId);
-
-        lenient().when(guessMapper.findBySpace("s1")).thenAnswer(inv -> List.copyOf(guesses));
-        lenient().when(guessMapper.findByJoke(eq("s1"), any())).thenAnswer(inv -> guesses.stream()
-                .filter(g -> g.getJokeId().equals(inv.getArgument(1))).toList());
-        lenient().when(guessMapper.find(eq("s1"), any(), any())).thenAnswer(inv -> guesses.stream()
-                .filter(g -> g.getJokeId().equals(inv.getArgument(1)) && g.getFromUser().equals(inv.getArgument(2)))
-                .findFirst().orElse(null));
-        stubAll(guessMapper, CoupleLaughGuess.class, guesses, CoupleLaughGuess::getId);
-
-        lenient().when(rxMapper.findBySpace("s1")).thenAnswer(inv -> List.copyOf(rxList));
-        lenient().when(rxMapper.find(eq("s1"), any(), any())).thenAnswer(inv -> rxList.stream()
-                .filter(r -> r.getFromUser().equals(inv.getArgument(1)) && r.getDay().equals(inv.getArgument(2)))
-                .findFirst().orElse(null));
-        stubAll(rxMapper, CoupleLaughRx.class, rxList, CoupleLaughRx::getId);
-
-        lenient().when(styleMapper.findBySpace("s1")).thenAnswer(inv -> List.copyOf(styles));
-        lenient().when(styleMapper.find(eq("s1"), any(), any())).thenAnswer(inv -> styles.stream()
-                .filter(s -> s.getAboutUser().equals(inv.getArgument(1)) && s.getRater().equals(inv.getArgument(2)))
-                .findFirst().orElse(null));
-        stubAll(styleMapper, CoupleLaughStyle.class, styles, CoupleLaughStyle::getId);
     }
 
     private <T> void stubAll(com.smart.chat.im.BaseMapperCompat<T> mapper, Class<T> type, List<T> bag,
@@ -149,15 +102,6 @@ class CoupleLaughServiceTest {
         lenient().when(mapper.selectById(any())).thenAnswer(inv -> bag.stream()
                 .filter(row -> idOf.apply(row).equals(inv.getArgument(0, String.class)))
                 .findFirst().orElse(null));
-    }
-
-    /** 从总览的轮换提示里读出今天值班的人（无行时提示必给）。 */
-    private String onDuty() {
-        return service.board("alice").rotationHint().contains("alice") ? "alice" : "bob";
-    }
-
-    private String offDuty() {
-        return onDuty().equals("alice") ? "bob" : "alice";
     }
 
     // ========== F390 笑点存档 ==========
@@ -202,45 +146,6 @@ class CoupleLaughServiceTest {
 
     // ========== F391 每日一逗 ==========
 
-    @Test
-    void dailyRotationBlocksOffDutyAndJudgeOnlyByOtherSide() {
-        String duty = onDuty();
-        String off = offDuty();
-
-        assertThatThrownBy(() -> service.serveDaily(off, "讲个谐音梗"))
-                .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("轮不到你");
-
-        service.serveDaily(duty, "为什么冷笑话会冷");
-        assertThat(service.board(duty).today().content()).contains("冷笑话");
-        assertThatThrownBy(() -> service.judgeDaily(duty, dailies.get(0).getId(), "HAPPY"))
-                .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("自己判");
-        assertThat(service.judgeDaily(off, dailies.get(0).getId(), "FAKE").today().verdictLabel())
-                .isEqualTo("强撑的笑");
-        assertThatThrownBy(() -> service.judgeDaily(off, dailies.get(0).getId(), "MAYBE"))
-                .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("三种");
-    }
-
-    @Test
-    void dailyJudgeIdempotentAndBlocksRewriteAfterJudge() {
-        String duty = onDuty();
-        String off = offDuty();
-        service.serveDaily(duty, "节目一");
-        service.serveDaily(duty, "改写后的节目");
-        String id = dailies.get(0).getId();
-
-        service.judgeDaily(off, id, "HAPPY");
-        service.judgeDaily(off, id, "FLAT");
-
-        verify(push, times(1)).pushCoupleEvent(eq("laugh-daily-judge"), any(), any(), any());
-        assertThatThrownBy(() -> service.serveDaily(duty, "判完了还想改"))
-                .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("判过分");
-        assertThat(dailies.get(0).getVerdict()).isEqualTo("HAPPY");
-    }
-
     // ========== F392 冷笑话结冰榜 ==========
 
     @Test
@@ -266,18 +171,6 @@ class CoupleLaughServiceTest {
         assertThatThrownBy(() -> service.judgeJoke("bob", id, false))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("翻案");
-    }
-
-    @Test
-    void weekFrozenCountFeedsYearKingOfCold() {
-        service.addJoke("alice", "甲");
-        service.addJoke("bob", "乙");
-        service.judgeJoke("bob", jokes.get(0).getId(), true);
-        service.judgeJoke("alice", jokes.get(1).getId(), true);
-
-        var year = service.board("alice").year();
-        assertThat(year.frozen()).isEqualTo(2);
-        assertThat(year.kingOfCold()).isIn("alice", "bob");
     }
 
     // ========== F393 尴尬回收站 ==========
@@ -315,162 +208,19 @@ class CoupleLaughServiceTest {
 
     // ========== F394 快乐突袭 ==========
 
-    @Test
-    void attackKindWhitelistOncePerDayAndHitByPartner() {
-        assertThatThrownBy(() -> service.addAttack("alice", "POEM", "一首诗"))
-                .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("三种");
-        service.addAttack("alice", "praise", "你今天特别好闻");
-        assertThatThrownBy(() -> service.addAttack("alice", "MEME", "今天还想突袭"))
-                .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("突袭过一次");
-
-        String id = attacks.get(0).getId();
-        assertThatThrownBy(() -> service.hitAttack("alice", id))
-                .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("自己认");
-        assertThat(service.hitAttack("bob", id).attacks().get(0).hit()).isTrue();
-        service.hitAttack("bob", id);
-        verify(push, times(1)).pushCoupleEvent(eq("laugh-hit"), any(), any(), any());
-        assertThat(service.board("alice").attacks().get(0).kindLabel()).isEqualTo("一串夸奖");
-    }
-
     // ========== F395 笑点默契考 ==========
-
-    @Test
-    void guessUpsertsOwnVoteAndTwinNeedsBothSides() {
-        service.addJoke("alice", "冰箱门开着");
-        String jokeId = jokes.get(0).getId();
-
-        assertThat(service.guessJoke("alice", jokeId, true).guesses().get(0).twin()).isFalse();
-        assertThat(service.guessJoke("alice", jokeId, false).guesses().get(0).minePredicted()).isTrue();
-        var vo = service.guessJoke("bob", jokeId, false);
-        assertThat(vo.guesses().get(0).twin()).isTrue();
-        assertThat(vo.guesses().get(0).predictCount()).isEqualTo(2);
-        assertThat(guesses).hasSize(2);
-    }
-
-    @Test
-    void bothSidesCanPredictSoTwinIsReachable() {
-        service.addJoke("alice", "冰箱门开着");
-        String jokeId = jokes.get(0).getId();
-
-        // 讲的人也要能预判对方笑不笑：canGuess 原先等于「不是我的那条」，一条梗最多收到一票，
-        // 「双判一致=默契+1」永远凑不出来
-        var own = service.board("alice").jokes().stream()
-                .filter(j -> j.id().equals(jokeId)).findFirst().orElseThrow();
-        assertThat(own.canGuess()).isTrue();
-        assertThat(own.canJudge()).isFalse();
-
-        service.guessJoke("alice", jokeId, true);
-        service.guessJoke("bob", jokeId, true);
-        assertThat(service.board("alice").guesses().get(0).twin()).isTrue();
-
-        // 判过冰就有了答案，再投就不是盲猜：canGuess 关掉
-        var after = service.judgeJoke("bob", jokeId, false).jokes().stream()
-                .filter(j -> j.id().equals(jokeId)).findFirst().orElseThrow();
-        assertThat(after.canGuess()).isFalse();
-    }
 
     // ========== F396 大笑处方 ==========
 
-    @Test
-    void rxRejectsForeignTargetAndTakenOnlyByReceiver() {
-        assertThatThrownBy(() -> service.addRx("alice", "POEM", "x", "看看"))
-                .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("只能指向");
-        assertThatThrownBy(() -> service.addRx("alice", "MOMENT", "nope", "看看"))
-                .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("不在这儿");
-
-        service.addMoment("alice", DAY, "笑一条", null, null, 5);
-        service.addRx("bob", "MOMENT", moments.get(0).getId(), "笑一个");
-        assertThatThrownBy(() -> service.addRx("bob", "MOMENT", moments.get(0).getId(), "再来一张"))
-                .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("开过");
-
-        String id = rxList.get(0).getId();
-        assertThatThrownBy(() -> service.takeRx("bob", id))
-                .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("对方吃");
-        assertThat(service.takeRx("alice", id).rxList().get(0).taken()).isTrue();
-        service.takeRx("alice", id);
-        verify(push, times(1)).pushCoupleEvent(eq("laugh-rx-taken"), any(), any(), any());
-    }
-
     // ========== F397 幽默风格图鉴 ==========
-
-    @Test
-    void styleLimitedToCoupleAndHintTurnsToDiffAdvice() {
-        assertThatThrownBy(() -> service.setStyle("alice", "carol", "PUN", null))
-                .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("给你们俩评");
-        assertThatThrownBy(() -> service.setStyle("alice", "alice", "DRY", null))
-                .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("五种");
-
-        service.setStyle("alice", "alice", "PUN", "我自认谐音梗");
-        assertThat(service.board("alice").styleHint()).contains("还没填满");
-
-        service.setStyle("bob", "alice", "COLD", "你太冷了");
-        assertThat(service.board("alice").styleHint()).contains("不一样").contains("谐音梗").contains("冷幽默");
-
-        service.setStyle("bob", "alice", "PUN", "改判谐音梗");
-        assertThat(service.board("alice").styleHint()).contains("对上了");
-        assertThat(styles).hasSize(2);
-    }
 
     // ========== F398 / F399 榜单 ==========
 
     @Test
-    void weekAndYearAggregateRealNumbers() {
-        service.addMoment("alice", DAY, "倒立喝汤", "bob", "全家笑翻", 5);
-        service.witnessMoment("bob", moments.get(0).getId(), "我在场");
-        service.addJoke("alice", "冰棍面试");
-        service.judgeJoke("bob", jokes.get(0).getId(), true);
-        service.addCringe("bob", LONG_AGO, "叫错人");
-        service.healCringe("alice", cringes.get(0).getId());
-        service.addAttack("alice", "MEME", "丢一个梗");
-        service.hitAttack("bob", attacks.get(0).getId());
-        service.addRx("bob", "MOMENT", moments.get(0).getId(), "再笑一次");
-        service.takeRx("alice", rxList.get(0).getId());
-
-        var week = service.weekReport("alice");
-        assertThat(week.moments()).isEqualTo(1);
-        assertThat(week.frozen()).isEqualTo(1);
-        assertThat(week.hits()).isEqualTo(1);
-        assertThat(week.summary()).contains("周欢乐账");
-
-        // guess 表没有 day 列，归年只能借「考的是哪条冷笑话的发出日」：去年那条的双人一致不算进今年
-        CoupleLaughJoke lastYearJoke = CoupleLaughJoke.of("s1", LocalDate.now().minusDays(400).toString(), "alice", "去年的冷句");
-        jokes.add(lastYearJoke);
-        guesses.add(CoupleLaughGuess.of("s1", lastYearJoke.getId(), "alice", 1));
-        guesses.add(CoupleLaughGuess.of("s1", lastYearJoke.getId(), "bob", 1));
-
-        var year = service.board("alice").year();
-        assertThat(year.bestLine()).isEqualTo("倒立喝汤");
-        assertThat(year.guessTwin()).isZero();
-        assertThat(year.laughs()).isEqualTo(1);
-        assertThat(year.rxTaken()).isEqualTo(1);
-        // 年报按「社死日」归年：400 天前那条属去年，今年既不计条目也不计转档
-        assertThat(year.cringe()).isZero();
-        assertThat(year.turns()).isZero();
-        assertThat(service.board("alice").turnedFunny()).isEqualTo(1);
-        assertThat(year.summary()).contains("喜剧奖");
-        assertThatThrownBy(() -> service.yearReport("alice", "26"))
-                .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("yyyy");
-    }
-
-    @Test
     void missingRowsAndNoSpaceAre404() {
         assertThatThrownBy(() -> service.witnessMoment("bob", "nope", "x")).isInstanceOf(BusinessException.class);
-        assertThatThrownBy(() -> service.judgeDaily("bob", "nope", "HAPPY")).isInstanceOf(BusinessException.class);
         assertThatThrownBy(() -> service.judgeJoke("bob", "nope", true)).isInstanceOf(BusinessException.class);
         assertThatThrownBy(() -> service.healCringe("bob", "nope")).isInstanceOf(BusinessException.class);
-        assertThatThrownBy(() -> service.hitAttack("bob", "nope")).isInstanceOf(BusinessException.class);
-        assertThatThrownBy(() -> service.takeRx("alice", "nope")).isInstanceOf(BusinessException.class);
-        assertThatThrownBy(() -> service.guessJoke("alice", "nope", true)).isInstanceOf(BusinessException.class);
 
         when(spaceMapper.findActiveByUser("carol")).thenReturn(Optional.empty());
         assertThatThrownBy(() -> service.board("carol")).isInstanceOf(BusinessException.class);

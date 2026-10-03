@@ -25,23 +25,10 @@ public class CoupleLaughController {
         this.service = service;
     }
 
-    /** 欢笑银行总览（F390-F399 聚合，含本周与当年两份榜单）。 */
+    /** 欢笑银行总览（笑点存档 / 冷笑话结冰榜 / 社死往事）。 */
     @GetMapping("/bank")
     public ApiResponse<CoupleLaughService.LaughVO> bank(HttpSession session) {
         return ApiResponse.ok(service.board(Sessions.requireUser(session)));
-    }
-
-    /** F398 欢乐周报（周一锚聚合 + Bank 文案）。 */
-    @GetMapping("/week")
-    public ApiResponse<CoupleLaughService.WeekVO> week(HttpSession session) {
-        return ApiResponse.ok(service.weekReport(Sessions.requireUser(session)));
-    }
-
-    /** F399 年度欢笑榜（year 缺省当年）。 */
-    @GetMapping("/year")
-    public ApiResponse<CoupleLaughService.YearVO> year(@RequestParam(required = false) String year,
-                                                       HttpSession session) {
-        return ApiResponse.ok(service.yearReport(Sessions.requireUser(session), year));
     }
 
     /** F390 存一条笑点（day ≤今天、title ≤30、scene ≤100、funLevel 1-5 钳制、每人每天 ≤3 条）。 */
@@ -64,25 +51,7 @@ public class CoupleLaughController {
         return ApiResponse.ok(service.witnessMoment(Sessions.requireUser(session), req.id(), req.witness()));
     }
 
-    /** F391 值班的人交今天的节目（轮不到你 400，一天一格）。 */
-    public record DailyRequest(String content) {
-    }
-
-    @PostMapping("/daily")
-    public ApiResponse<CoupleLaughService.LaughVO> daily(@RequestBody DailyRequest req, HttpSession session) {
-        return ApiResponse.ok(service.serveDaily(Sessions.requireUser(session), req.content()));
-    }
-
     public record IdRequest(String id) {
-    }
-
-    /** F391 对方判分：HAPPY 真笑了 / FLAT 没笑 / FAKE 强撑的笑。 */
-    public record JudgeRequest(String id, String verdict) {
-    }
-
-    @PostMapping("/daily/judge")
-    public ApiResponse<CoupleLaughService.LaughVO> dailyJudge(@RequestBody JudgeRequest req, HttpSession session) {
-        return ApiResponse.ok(service.judgeDaily(Sessions.requireUser(session), req.id(), req.verdict()));
     }
 
     /** F392 丢一条冷笑话（≤80 字，内容查重，每人每天 ≤3 条）。 */
@@ -118,53 +87,4 @@ public class CoupleLaughController {
         return ApiResponse.ok(service.healCringe(Sessions.requireUser(session), req.id()));
     }
 
-    /** F394 发动一次快乐突袭（PRAISE/MEME/MEMORY，每人每天一次）。 */
-    public record AttackRequest(String kind, String content) {
-    }
-
-    @PostMapping("/attack")
-    public ApiResponse<CoupleLaughService.LaughVO> attack(@RequestBody AttackRequest req, HttpSession session) {
-        return ApiResponse.ok(service.addAttack(Sessions.requireUser(session), req.kind(), req.content()));
-    }
-
-    /** F394 收方「中弹」盖章。 */
-    @PostMapping("/attack/hit")
-    public ApiResponse<CoupleLaughService.LaughVO> attackHit(@RequestBody IdRequest req, HttpSession session) {
-        return ApiResponse.ok(service.hitAttack(Sessions.requireUser(session), req.id()));
-    }
-
-    /** F395 预判对方会不会笑（一条梗每人一票，可改自己那一票）。 */
-    public record GuessRequest(String jokeId, Boolean predict) {
-    }
-
-    @PostMapping("/guess")
-    public ApiResponse<CoupleLaughService.LaughVO> guess(@RequestBody GuessRequest req, HttpSession session) {
-        return ApiResponse.ok(service.guessJoke(Sessions.requireUser(session), req.jokeId(), req.predict()));
-    }
-
-    /** F396 开一张大笑处方（指向本空间的一条笑点/社死/突袭，每人每天一张）。 */
-    public record RxRequest(String targetKind, String targetId, String note) {
-    }
-
-    @PostMapping("/rx")
-    public ApiResponse<CoupleLaughService.LaughVO> rx(@RequestBody RxRequest req, HttpSession session) {
-        return ApiResponse.ok(service.addRx(Sessions.requireUser(session), req.targetKind(), req.targetId(),
-                req.note()));
-    }
-
-    /** F396 收方回执「已服用」。 */
-    @PostMapping("/rx/taken")
-    public ApiResponse<CoupleLaughService.LaughVO> rxTaken(@RequestBody IdRequest req, HttpSession session) {
-        return ApiResponse.ok(service.takeRx(Sessions.requireUser(session), req.id()));
-    }
-
-    /** F397 记一份幽默风格（aboutUser 限两人之一，rater=自己；自评与互评各一行）。 */
-    public record StyleRequest(String aboutUser, String style, String note) {
-    }
-
-    @PostMapping("/style")
-    public ApiResponse<CoupleLaughService.LaughVO> style(@RequestBody StyleRequest req, HttpSession session) {
-        return ApiResponse.ok(service.setStyle(Sessions.requireUser(session), req.aboutUser(), req.style(),
-                req.note()));
-    }
 }

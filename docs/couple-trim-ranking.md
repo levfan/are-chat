@@ -474,6 +474,12 @@
 - **孤儿扫描的引用者包含静态内容库**。功能删完后，`Couple*Bank` 里的 `kindLabel/modeLabel` 这类
   只服务已删功能的映射方法，会因为引用实体常量而让实体"看起来还活着"，表就漏进了 V50 drop 清单。
   每轮删完要回扫一遍 Bank 的死方法再跑孤儿。
+- **跨行签名的成员删不掉，会留下悬空调用**。判据要求「整行以 `{` 结尾」，而
+  `public static String yearSummary(String year, int moments, ...,
+ long seed) {` 首行以逗号结尾，
+  于是 `yearSummary` 躲过删除、它调用的 `yearTitle` 却被删了 —— 编译在**下一轮全量**才炸出来。
+  同类问题在 Controller 的 `year(...)` 上出现过一次。所以每删一轮都要跑全量 `mvn -o test`，
+  不能只跑被改模块那一个测试类。
 - **测试里的多行 stub 不能按行删**。直接过滤含死标识符的行会截断 `lenient().when(x.find(...))` 这类跨行语句，
   留下括号不闭合的碎片（我把 Focus 的测试删坏过一次，只能 git 恢复重写）。
   现用 `cut-stmt.mjs`：按语句走到 `)`/`}` 平衡为止，且**花括号总数不变才写盘**，否则拒绝并保留原文件。
