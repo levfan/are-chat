@@ -7,9 +7,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.stream.Collectors;
 
 /**
@@ -60,15 +60,24 @@ public class FriendService {
         Map<String, UserProfile> profileMap = peers.isEmpty() ? Map.of()
                 : profileMapper.selectBatchIds(peers).stream()
                         .collect(Collectors.toMap(UserProfile::getUsername, p -> p));
+        // 未读数与「最后一条」各一趟批量取，替代原先每人两趟（联系人越多省得越多，见 V49 与两个批量方法注释）
+        Map<String, Long> latestCreated = messageMapper.findLatestCreatedPerPeer(me);
+        Map<String, Long> unreadMap = new HashMap<>();
+        for (Map<String, Object> row : friendMapper.selectUnreadCountsByPeer(me)) {
+            if (row.get("unread") instanceof Number number) {
+                unreadMap.put(String.valueOf(row.get("peer")), number.longValue());
+            }
+        }
+        Map<String, PrivateMessage> lastMessage = pickLastMessages(
+                messageMapper.findMessagesAtCreated(me, peers, latestCreated.values()), me, latestCreated);
         List<FriendVO> result = new ArrayList<>();
         for (Friend row : rows) {
             String peer = row.getFriendUsername();
-            long unread = messageMapper.countUnread(me, peer, row.getLastReadAt());
-            Optional<PrivateMessage> latest = messageMapper.findLatestBetween(me, peer);
-            MessagePreview preview = latest
-                    .map(m -> new MessagePreview(m.getContent(), m.getMsgType(), m.getCreated(),
-                            m.getFromUser().equals(me)))
-                    .orElse(null);
+            long unread = unreadMap.getOrDefault(peer, 0L);
+            PrivateMessage latest = lastMessage.get(peer);
+            MessagePreview preview = latest == null ? null
+                    : new MessagePreview(latest.getContent(), latest.getMsgType(), latest.getCreated(),
+                            latest.getFromUser().equals(me));
             UserProfile profile = profileMap.get(peer);
             result.add(new FriendVO(row.getId(), peer,
                     profile == null ? "" : profile.getNickname(),
@@ -94,6 +103,26 @@ public class FriendService {
             return a.username().compareTo(b.username());
         });
         return result;
+    }
+
+    /**
+     * 从批量捞回的行里，为每个对端挑出「就是最后一条」的那行。
+     * <p>{@code created IN (...)} 只是粗筛——同一毫秒内该会话的其它消息也会被带进来，
+     * 所以再按 {@code latestCreated} 精确对齐；同一毫秒真有多行时取先遇到的一行，
+     * 与原先 {@code ORDER BY created DESC LIMIT 1} 在并列时的任意行为一致。
+     */
+    private Map<String, PrivateMessage> pickLastMessages(List<PrivateMessage> messages, String me,
+                                                         Map<String, Long> latestCreated) {
+        Map<String, PrivateMessage> out = new HashMap<>();
+        for (PrivateMessage m : messages) {
+            String peer = m.getFromUser().equals(me) ? m.getToUser() : m.getFromUser();
+            Long at = latestCreated.get(peer);
+            if (at == null || m.getCreated() == null || !m.getCreated().equals(at)) {
+                continue;
+            }
+            out.putIfAbsent(peer, m);
+        }
+        return out;
     }
 
     public FriendRequestVO apply(String me, String target, String message) {
