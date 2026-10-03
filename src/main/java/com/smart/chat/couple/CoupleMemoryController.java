@@ -103,12 +103,6 @@ public class CoupleMemoryController {
 
     // ---------- 恋爱月报 / 数据总览 ----------
 
-    /** 恋爱月报：某个月（yyyy-MM，默认当月）双方互动盘点。 */
-    @GetMapping("/monthly-report")
-    public ApiResponse<CoupleMemoryService.MonthlyReportVO> monthlyReport(
-            @RequestParam(required = false) String month, HttpSession session) {
-        return ApiResponse.ok(memoryService.monthlyReport(Sessions.requireUser(session), month));
-    }
 
     // ---------- F46 第一次清单 ----------
 
@@ -132,9 +126,4 @@ public class CoupleMemoryController {
         return ApiResponse.ok();
     }
 
-    /** 数据总览：全部模块累计数字一览。 */
-    @GetMapping("/data-overview")
-    public ApiResponse<CoupleMemoryService.DataOverviewVO> dataOverview(HttpSession session) {
-        return ApiResponse.ok(memoryService.dataOverview(Sessions.requireUser(session)));
-    }
 }
