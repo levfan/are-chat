@@ -193,6 +193,16 @@
 - **待裁决的后端补口**：`VISIT_TIPS`/`RELATIVES_SAMPLE`、F374 加油卡与 F376 不说话卡的话术、F395 三句 Bank 话术（`turnedFunnyLine`/`guessTwinLine`/`guessDiffLine` 全仓零调用点）、`CatchVO.usedTodayMine`、`TodayVO` 系列 per-side 位是否补
 - **入口缺失**：`profileApi.friendsBirthdays`（已改批量，但仍无界面入口）、`coupleApi.relationshipOf`
 
+## 性能专项（v8 第一项，用户点名要做）
+
+- **联系人列表 2N 查询 + `private_message` 裸表**：先测再改。查表结构发现 `private_message` 自 V2 基线起只有 `PRIMARY KEY(id)`，此后 47 个迁移没加过任何二级索引——会话分页、最后一条、未读计数、全局搜索、标已读的 UPDATE 全在扫全表；`friend_request` 同样只有主键。
+  - V49 补四条索引；另加一个**只测我自己写的东西**的 20 万行基准库实测：未读计数 210ms → **28ms**；但「最后一条」那条**加了索引仍然 ~200ms**——因为谓词是 `(from_user=? AND to_user=?) OR (to_user=? AND from_user=?)`，OR 跨两个索引前缀，优化器用不上。
+  - 所以光补索引不够，`listFriends` 的每人 2 趟改成常量 5 趟：两趟各方向 `GROUP BY` 取时间点（实测合计 ~30ms 且与好友数无关）、一趟 `friend JOIN private_message` 聚合按各自 `last_read_at` 算未读（59 人一趟 48ms）、两趟按时间点回捞整行。基准数据下 59 个好友从约 12,400ms 降到 ~98ms。
+  - ⚠️ 我的第一版基准数据是错的：20 万行全塞在 alice↔bob 一对里，索引选择性=1，量出来「加索引没变化」。换成 400 个用户、目标会话 500 行之后才测出真实差异。**测性能先看数据分布是否符合现实**。
+  - 三条新 SQL 都有真库测试（`FriendListBatchQueryTest`，打 H2+Flyway 全量脚本，顺带证明 V49 在空库一路升到最新能跑）；单测另锁「三个好友也只发批量查询，逐条查询一旦被改回来就红」。真服务端点复算：`GET /api/friends` 200、21ms，`lastMessage` 预览字段完好。
+- 基线 611 → **615**（+3 真库 +1 单测）。
+- **待办（同项第二半）**：各批聚合 `build()` 的重算——实测 mapper 调用量 世界8 / 注意力9 / 回音壁10 / 欢笑9 / 传世9 / 聆听15 / 关卡14，其中关卡还额外含年度成就墙 9 次查询，即每个写接口约 23 次查询，而用户只是点了一下「加油」。治它要把重算子聚合挪出写响应（改契约 + 前端配合），需要定形态。
+
 ## 尚未完成（接续点）
 
 - 后端补口：`VISIT_TIPS`/`RELATIVES_SAMPLE` 是否下发；`profileApi.friendsBirthdays`、`coupleApi.relationshipOf` 要不要做入口
