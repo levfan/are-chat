@@ -48,11 +48,11 @@ class CoupleCeremonyServiceTest {
     @Mock
     private CoupleCeremonyCouponMapper couponMapper;
     @Mock
-    private CoupleCeremonyRecapMapper recapMapper;
-    @Mock
     private CoupleAnniversaryMapper anniversaryMapper;
     @Mock
     private CoupleCountdownMapper countdownMapper;
+    @Mock
+    private CouplePointLedgerMapper ledgerMapper;
     @Mock
     private ImPushService push;
 
@@ -235,6 +235,44 @@ class CoupleCeremonyServiceTest {
     // ========== F235 续约仪式 ==========
 
     @Test
+    void issuingACouponCostsPointsAndBlocksWhenBroke() {
+        stubSpace("alice");
+        List<CoupleCeremonyCoupon> coupons = new ArrayList<>();
+        List<CouplePointLedger> ledger = new ArrayList<>();
+        lenient().when(ledgerMapper.findBySpace("s1")).thenAnswer(inv -> List.copyOf(ledger));
+        lenient().when(couponMapper.insert(any(CoupleCeremonyCoupon.class))).thenAnswer(inv -> {
+            coupons.add(inv.getArgument(0));
+            return 1;
+        });
+        lenient().when(ledgerMapper.insert(any(CouplePointLedger.class))).thenAnswer(inv -> {
+            ledger.add(inv.getArgument(0));
+            return 1;
+        });
+
+        // 一分没有就发不出券，且一行都不许落库
+        assertThatThrownBy(() -> service.issueCoupon("alice", "陪我去海边"))
+                .isInstanceOf(BusinessException.class).hasMessageContaining("只有 0 分");
+        assertThat(coupons).isEmpty();
+        verify(couponMapper, never()).insert(any(CoupleCeremonyCoupon.class));
+
+        // 好事簿攒来的 12 分够发一张 10 分的券，券必须真落到台账的 SPEND 行
+        ledger.add(CouplePointLedger.of("s1", "alice", CouplePointLedger.TYPE_EARN, "好事簿：接我下班", 12));
+        service.issueCoupon("alice", "陪我去海边");
+        assertThat(coupons).hasSize(1);
+        assertThat(ledger).filteredOn(l -> CouplePointLedger.TYPE_SPEND.equals(l.getType())).hasSize(1);
+        CouplePointLedger spend = ledger.stream()
+                .filter(l -> CouplePointLedger.TYPE_SPEND.equals(l.getType())).findFirst().orElseThrow();
+        assertThat(spend.getFromUser()).isEqualTo("alice");
+        assertThat(spend.getPoints()).isEqualTo(CoupleCeremonyService.COUPON_COST);
+        assertThat(spend.getItem()).isEqualTo("发出愿望券：陪我去海边");
+
+        // 余额只剩 2 分，第二张发不出去
+        assertThatThrownBy(() -> service.issueCoupon("alice", "再一张"))
+                .isInstanceOf(BusinessException.class);
+        assertThat(coupons).hasSize(1);
+    }
+
+    @Test
     void renewRejectsNonDueDay() {
         stubSpace("alice");
         CoupleSpace space = space();
@@ -298,6 +336,10 @@ class CoupleCeremonyServiceTest {
     @Test
     void issueCouponValidatesTitle() {
         stubSpace("alice");
+        // 发券现在要先有积分余额，这里给够一张券的钱再验标题
+        lenient().when(ledgerMapper.findBySpace("s1")).thenReturn(List.of(
+                CouplePointLedger.of("s1", "alice", CouplePointLedger.TYPE_EARN, "好事簿：接我下班", 50)));
+        lenient().when(ledgerMapper.insert(any(CouplePointLedger.class))).thenReturn(1);
         assertThatThrownBy(() -> service.issueCoupon("alice", "  "))
                 .isInstanceOf(BusinessException.class).hasMessage("券面写点什么愿望吧");
         service.issueCoupon("alice", "一次说走就走的骑行");
@@ -306,73 +348,9 @@ class CoupleCeremonyServiceTest {
 
     // ========== F239 当日体感 ==========
 
-    @Test
-    void recapUpsertPushesOnceAndRewriteStaysSilent() {
-        stubSpace("alice");
-        List<CoupleCeremonyRecap> rows = new ArrayList<>();
-        when(recapMapper.find("s1", DAY, "alice")).thenAnswer(inv -> rows.stream()
-                .filter(r -> "alice".equals(r.getFromUser())).findFirst().orElse(null));
-        when(recapMapper.insert(any(CoupleCeremonyRecap.class))).thenAnswer(inv -> {
-            rows.add(inv.getArgument(0));
-            return 1;
-        });
-
-        service.recap("alice", null, "今天风很软");
-        verify(push).pushCoupleEvent(eq("ceremony-recap-mine"), eq("alice"), eq("bob"), any());
-
-        service.recap("alice", DAY, "改成了：今天风很软，像你");
-        verify(recapMapper, times(1)).insert(any(CoupleCeremonyRecap.class));
-        verify(recapMapper).updateById(any(CoupleCeremonyRecap.class));
-        verify(push, times(1)).pushCoupleEvent(eq("ceremony-recap-mine"), any(), any(), any());
-        assertThat(rows.get(0).getFeeling()).contains("像你");
-    }
-
     // ========== F237 史册 ==========
 
-    @Test
-    void chroniclePagesOnePerPastEdition() {
-        stubSpace("alice");
-        LocalDate start = LocalDate.now().minusYears(2);
-        CoupleCeremonyFounded founded = CoupleCeremonyFounded.of("s1", "露营纪念日", start.toString(), true);
-        founded.setId("f1");
-        when(foundedMapper.selectById("f1")).thenReturn(founded);
-
-        CoupleCeremonyService.ChronicleVO vo = service.chronicle("alice", "f1");
-        assertThat(vo.name()).isEqualTo("露营纪念日");
-        assertThat(vo.pages()).hasSize(3);
-        assertThat(vo.pages().get(0).day()).isEqualTo(LocalDate.now().toString());
-        assertThat(vo.pages().get(0).ritualTotal()).isZero();
-        assertThatThrownBy(() -> service.chronicle("alice", "zz"))
-                .isInstanceOf(BusinessException.class).hasMessage("这个小日子不存在");
-    }
-
     // ========== F231 老黄历聚合 ==========
-
-    @Test
-    void almanacMergesFoundedAnniversaryAndCountdownSorted() {
-        stubSpace("alice");
-        CoupleCeremonyFounded founded = CoupleCeremonyFounded.of("s1", "今天的小日子", DAY, true);
-        founded.setId("f1");
-        when(foundedMapper.findBySpace("s1")).thenReturn(List.of(founded));
-        CoupleAnniversary anniv = CoupleAnniversary.of("s1", "奶奶生日",
-                LocalDate.now().minusDays(1).toString(), true, "alice");
-        when(anniversaryMapper.findBySpace("s1")).thenReturn(List.of(anniv));
-        CoupleCountdown done = CoupleCountdown.of("s1", "alice", "已完成", DAY, "");
-        done.setDone(1);
-        CoupleCountdown upcoming = CoupleCountdown.of("s1", "alice", "发工资",
-                LocalDate.now().plusDays(5).toString(), "");
-        when(countdownMapper.findBySpace("s1")).thenReturn(List.of(done, upcoming));
-
-        CoupleCeremonyService.OverviewVO vo = service.overview("alice");
-        assertThat(vo.yi()).startsWith("今日宜：");
-        assertThat(vo.ji()).startsWith("今日忌：");
-        assertThat(vo.almanac()).extracting(CoupleCeremonyService.AlmanacVO::kind)
-                .containsExactly("founded", "countdown", "anniversary");
-        assertThat(vo.almanac().get(0).daysLeft()).isZero();
-        int stamp = LocalDate.now().getMonthValue() * 100 + LocalDate.now().getDayOfMonth();
-        boolean crownDay = stamp == 520 || stamp == 1231 || stamp == 101;
-        assertThat(vo.crown() != null).isEqualTo(crownDay);
-    }
 
     // ========== 通用 ==========
 

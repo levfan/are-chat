@@ -28,6 +28,9 @@ public class CoupleCeremonyService {
     static final int NAME_MAX = 60;
     static final int TEXT_MAX = 140;
     static final int COUPON_TITLE_MAX = 80;
+    /** 积分口径：发一张愿望券花 10 分，是裁剪后积分唯一的花分出口。 */
+    static final int COUPON_COST = 10;
+    static final String COUPON_SPEND_PREFIX = "发出愿望券：";
     static final int RITUAL_MAX = 3;
     static final int RENEW_EVERY_DAYS = 100;
     static final int[] POLICY_MILESTONES = {3, 6, 12};
@@ -40,7 +43,7 @@ public class CoupleCeremonyService {
     private final CoupleCeremonyPolicyMapper policyMapper;
     private final CoupleCeremonyRenewMapper renewMapper;
     private final CoupleCeremonyCouponMapper couponMapper;
-    private final CoupleCeremonyRecapMapper recapMapper;
+    private final CouplePointLedgerMapper ledgerMapper;
     private final CoupleAnniversaryMapper anniversaryMapper;
     private final CoupleCountdownMapper countdownMapper;
     private final ImPushService push;
@@ -48,7 +51,7 @@ public class CoupleCeremonyService {
     public CoupleCeremonyService(CoupleSpaceMapper spaceMapper, CoupleCeremonyFoundedMapper foundedMapper,
                                  CoupleCeremonyRitualMapper ritualMapper, CoupleCeremonyMarkMapper markMapper,
                                  CoupleCeremonyPolicyMapper policyMapper, CoupleCeremonyRenewMapper renewMapper,
-                                 CoupleCeremonyCouponMapper couponMapper, CoupleCeremonyRecapMapper recapMapper,
+                                CoupleCeremonyCouponMapper couponMapper, CouplePointLedgerMapper ledgerMapper,
                                  CoupleAnniversaryMapper anniversaryMapper, CoupleCountdownMapper countdownMapper,
                                  ImPushService push) {
         this.spaceMapper = spaceMapper;
@@ -58,7 +61,7 @@ public class CoupleCeremonyService {
         this.policyMapper = policyMapper;
         this.renewMapper = renewMapper;
         this.couponMapper = couponMapper;
-        this.recapMapper = recapMapper;
+        this.ledgerMapper = ledgerMapper;
         this.anniversaryMapper = anniversaryMapper;
         this.countdownMapper = countdownMapper;
         this.push = push;
@@ -71,9 +74,6 @@ public class CoupleCeremonyService {
 
     public record FoundedVO(String id, String name, String startDay, boolean repeatYear,
                             String nextDay, Long daysLeft, Integer edition, List<RitualVO> rituals) {
-    }
-
-    public record AlmanacVO(String kind, String title, String day, long daysLeft) {
     }
 
     public record PolicyVO(String month, String mine, String partner, int paidMonths,
@@ -91,25 +91,12 @@ public class CoupleCeremonyService {
                            String usedBy, Long created) {
     }
 
-    public record RecapVO(String day, String fromUser, boolean mine, String feeling) {
-    }
-
     public record CrownItemVO(String name, int marks) {
     }
 
-    public record CrownVO(Integer year, String open, List<CrownItemVO> top) {
-    }
-
-    public record OverviewVO(String day, String yi, String ji, List<FoundedVO> founded, List<AlmanacVO> almanac,
+    public record OverviewVO(String day, List<FoundedVO> founded,
                              List<String> nudges, PolicyVO policy, RenewVO renew,
-                             List<CouponVO> couponsOpen, List<CouponVO> couponsUsed,
-                             List<RecapVO> recapsToday, List<RecapVO> recapsLastYear, CrownVO crown) {
-    }
-
-    public record ChroniclePageVO(String day, int marked, int ritualTotal, List<RecapVO> feelings) {
-    }
-
-    public record ChronicleVO(String foundedId, String name, List<ChroniclePageVO> pages) {
+                             List<CouponVO> couponsOpen, List<CouponVO> couponsUsed) {
     }
 
     // ========== 读：仪式总览 ==========
@@ -122,12 +109,9 @@ public class CoupleCeremonyService {
         List<CoupleCeremonyRitual> allRituals = ritualMapper.findBySpace(space.getId());
         List<CoupleCeremonyMark> allMarks = markMapper.findBySpace(space.getId());
         List<FoundedVO> founded = foundedList(space, allRituals, allMarks, today);
-        return new OverviewVO(day, CoupleCeremonyBank.yi(space.getId(), day), CoupleCeremonyBank.ji(space.getId(), day),
-                founded, almanac(space, founded, today), nudges(space, founded, allRituals, allMarks, today),
+        return new OverviewVO(day, founded, nudges(space, founded, allRituals, allMarks, today),
                 policyState(space, me, day), renewState(space, me, today),
-                couponsOf(space, CoupleCeremonyCoupon.STATUS_OPEN), couponsOf(space, CoupleCeremonyCoupon.STATUS_USED),
-                recapsOf(space, me, day), recapsOf(space, me, today.minusYears(1).toString()),
-                crown(space, today, allRituals, allMarks));
+                couponsOf(space, CoupleCeremonyCoupon.STATUS_OPEN), couponsOf(space, CoupleCeremonyCoupon.STATUS_USED));
     }
 
     // ========== F230 建国纪念日 ==========
@@ -270,9 +254,27 @@ public class CoupleCeremonyService {
     public OverviewVO issueCoupon(String me, String title) {
         CoupleSpace space = requireSpace(me);
         String text = requireText(title, COUPON_TITLE_MAX, "券面写点什么愿望吧");
+        // 系统裁剪后积分唯一的花分出口：发券必须先有余额，否则「愿望」就成了空头支票
+        int balance = balance(space, me);
+        if (balance < COUPON_COST) {
+            throw new BusinessException(400, "发一张愿望券要 " + COUPON_COST + " 分，你只有 " + balance
+                    + " 分——先去好事簿记一笔 TA 为你做过的事吧");
+        }
         couponMapper.insert(CoupleCeremonyCoupon.of(space.getId(), text, me, ""));
+        ledgerMapper.insert(CouplePointLedger.of(space.getId(), me, CouplePointLedger.TYPE_SPEND,
+                COUPON_SPEND_PREFIX + text, COUPON_COST));
         push.pushCoupleEvent("ceremony-coupon", me, space.partnerOf(me), "TA 给你发了一张愿望券：" + text);
         return overview(me);
+    }
+
+    /** 本人积分余额 = 累计 EARN − 累计 SPEND。 */
+    private int balance(CoupleSpace space, String me) {
+        return ledgerMapper.findBySpace(space.getId()).stream()
+                .filter(l -> me.equals(l.getFromUser()))
+                .mapToInt(l -> CouplePointLedger.TYPE_EARN.equals(l.getType())
+                        ? (l.getPoints() == null ? 0 : l.getPoints())
+                        : -(l.getPoints() == null ? 0 : l.getPoints()))
+                .sum();
     }
 
     /** 核销一张愿望券（OPEN→USED，一人一次说了算）。 */
@@ -295,50 +297,7 @@ public class CoupleCeremonyService {
 
     // ========== F239 当日体感 ==========
 
-    /** 仪式当天留一句「此刻感觉」（一人一天一句，可改写）；次年末留同年今日对比展示。 */
-    public OverviewVO recap(String me, String day, String feeling) {
-        CoupleSpace space = requireSpace(me);
-        String text = requireText(feeling, TEXT_MAX, "此刻感觉写一句话吧");
-        String target = day == null || day.isBlank() ? LocalDate.now().toString() : normDay(day);
-        String partner = space.partnerOf(me);
-        CoupleCeremonyRecap existing = recapMapper.find(space.getId(), target, me);
-        if (existing == null) {
-            recapMapper.insert(CoupleCeremonyRecap.of(space.getId(), target, me, text));
-            if (recapMapper.find(space.getId(), target, partner) != null) {
-                push.pushCoupleEventBoth("ceremony-recap", me, space.getUserA(), space.getUserB(),
-                        "今天的感觉你们都记下了");
-            } else {
-                push.pushCoupleEvent("ceremony-recap-mine", me, partner, "TA 记下了今天的感觉，也留一句吧");
-            }
-        } else {
-            existing.setFeeling(text);
-            recapMapper.updateById(existing);
-        }
-        return overview(me);
-    }
-
     // ========== F237 小日子史册 ==========
-
-    /** 按节日聚合历年庆祝记录与感言，一年一页。 */
-    public ChronicleVO chronicle(String me, String foundedId) {
-        CoupleSpace space = requireSpace(me);
-        CoupleCeremonyFounded founded = requireFounded(space, foundedId);
-        LocalDate start = LocalDate.parse(founded.getStartDay());
-        LocalDate today = LocalDate.now();
-        List<CoupleCeremonyRitual> rituals = ritualMapper.findByFounded(space.getId(), founded.getId());
-        List<ChroniclePageVO> pages = new ArrayList<>();
-        int endYear = founded.repeats() ? today.getYear() : start.getYear();
-        for (int year = start.getYear(); year <= endYear; year++) {
-            String occDay = start.withYear(year).toString();
-            if (occDay.compareTo(today.toString()) > 0) {
-                continue;
-            }
-            int marked = (int) rituals.stream().filter(r -> markMapper.find(r.getId(), occDay) != null).count();
-            pages.add(new ChroniclePageVO(occDay, marked, rituals.size(), recapsOf(space, me, occDay)));
-        }
-        pages.sort(Comparator.comparing(ChroniclePageVO::day).reversed());
-        return new ChronicleVO(founded.getId(), founded.getName(), pages);
-    }
 
     // ========== 聚合装配 ==========
 
@@ -376,44 +335,6 @@ public class CoupleCeremonyService {
         }
         LocalDate candidate = start.withYear(today.getYear());
         return candidate.isBefore(today) ? candidate.plusYears(1) : candidate;
-    }
-
-    /** F231 老黄历：小日子+纪念日+倒数日统一倒数列表。 */
-    private List<AlmanacVO> almanac(CoupleSpace space, List<FoundedVO> founded, LocalDate today) {
-        List<AlmanacVO> list = new ArrayList<>();
-        for (FoundedVO vo : founded) {
-            if (vo.nextDay() != null) {
-                list.add(new AlmanacVO("founded", vo.name(), vo.nextDay(), vo.daysLeft()));
-            }
-        }
-        for (CoupleAnniversary anniv : anniversaryMapper.findBySpace(space.getId())) {
-            LocalDate day;
-            try {
-                day = LocalDate.parse(anniv.getEventDate());
-            } catch (DateTimeParseException e) {
-                continue;
-            }
-            LocalDate next = day;
-            if (anniv.getYearly() != null && anniv.getYearly() == 1) {
-                next = day.withYear(today.getYear());
-                if (next.isBefore(today)) {
-                    next = next.plusYears(1);
-                }
-            } else if (day.isBefore(today)) {
-                continue;
-            }
-            list.add(new AlmanacVO("anniversary", anniv.getTitle(), next.toString(),
-                    ChronoUnit.DAYS.between(today, next)));
-        }
-        for (CoupleCountdown cd : countdownMapper.findBySpace(space.getId())) {
-            if (cd.doneFlag() || cd.getTargetDay() == null || cd.getTargetDay().compareTo(today.toString()) < 0) {
-                continue;
-            }
-            list.add(new AlmanacVO("countdown", cd.getTitle(), cd.getTargetDay(),
-                    cd.daysLeft(today)));
-        }
-        list.sort(Comparator.comparingLong(AlmanacVO::daysLeft));
-        return list.size() > ALMANAC_MAX ? list.subList(0, ALMANAC_MAX) : list;
     }
 
     /** F233 补催：最近 3 天内到过却没过齐的小日子，各催一句。 */
@@ -552,48 +473,7 @@ public class CoupleCeremonyService {
         return list;
     }
 
-    private List<RecapVO> recapsOf(CoupleSpace space, String me, String day) {
-        List<RecapVO> list = new ArrayList<>();
-        CoupleCeremonyRecap mine = recapMapper.find(space.getId(), day, me);
-        CoupleCeremonyRecap partner = recapMapper.find(space.getId(), day, space.partnerOf(me));
-        if (mine != null) {
-            list.add(new RecapVO(day, me, true, mine.getFeeling()));
-        }
-        if (partner != null) {
-            list.add(new RecapVO(day, partner.getFromUser(), false, partner.getFeeling()));
-        }
-        return list;
-    }
-
-    /** F238 年度加冕：520/跨年当天，按当年打卡数评出最热闹的三个小日子。 */
-    private CrownVO crown(CoupleSpace space, LocalDate today, List<CoupleCeremonyRitual> allRituals,
-                          List<CoupleCeremonyMark> allMarks) {
-        int stamp = today.getMonthValue() * 100 + today.getDayOfMonth();
-        if (stamp != 520 && stamp != 1231 && stamp != 101) {
-            return null;
-        }
-        int year = stamp == 101 ? today.minusDays(1).getYear() : today.getYear();
-        Map<String, String> ritualFounded = new HashMap<>();
-        allRituals.forEach(r -> ritualFounded.put(r.getId(), r.getFoundedId()));
-        Map<String, Integer> counts = new HashMap<>();
-        for (CoupleCeremonyMark mark : allMarks) {
-            if (mark.getDay() != null && mark.getDay().startsWith(year + "-")) {
-                String foundedId = ritualFounded.get(mark.getRitualId());
-                if (foundedId != null) {
-                    counts.merge(foundedId, 1, Integer::sum);
-                }
-            }
-        }
-        Map<String, String> names = new HashMap<>();
-        foundedMapper.findBySpace(space.getId()).forEach(f -> names.put(f.getId(), f.getName()));
-        List<CrownItemVO> top = counts.entrySet().stream()
-                .filter(e -> names.containsKey(e.getKey()) && e.getValue() > 0)
-                .sorted(Map.Entry.<String, Integer>comparingByValue().reversed())
-                .limit(3)
-                .map(e -> new CrownItemVO(names.get(e.getKey()), e.getValue()))
-                .toList();
-        return new CrownVO(year, CoupleCeremonyBank.crownOpen(space.getId(), year), top);
-    }
+    
 
     // ========== 通用 ==========
 

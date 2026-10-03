@@ -99,20 +99,4 @@ public class CoupleCeremonyController {
     public ApiResponse<CoupleCeremonyService.OverviewVO> useCoupon(@RequestBody IdRequest req, HttpSession session) {
         return ApiResponse.ok(service.useCoupon(Sessions.requireUser(session), req.id()));
     }
-
-    /** F239 留一句「此刻感觉」（默认今天）。 */
-    public record RecapRequest(String day, String feeling) {
-    }
-
-    @PostMapping("/recap")
-    public ApiResponse<CoupleCeremonyService.OverviewVO> recap(@RequestBody RecapRequest req, HttpSession session) {
-        return ApiResponse.ok(service.recap(Sessions.requireUser(session), req.day(), req.feeling()));
-    }
-
-    /** F237 小日子史册：一年一页的庆祝记录与感言。 */
-    @GetMapping("/chronicle")
-    public ApiResponse<CoupleCeremonyService.ChronicleVO> chronicle(@RequestParam String foundedId,
-                                                                    HttpSession session) {
-        return ApiResponse.ok(service.chronicle(Sessions.requireUser(session), foundedId));
-    }
 }
