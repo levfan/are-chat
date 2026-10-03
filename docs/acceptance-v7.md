@@ -46,6 +46,7 @@
 18. **P2｜F376 新家第一晚「补话」被静默丢弃**：`moveNight()` 只在 `tick()` 真翻转（0→1）时才 `updateById`，所以点过之后再来写那句话只改了内存对象就返回——界面报「补上了」，重进页面什么都没有。改为补话也落库（note 与存库值不同才写），推送仍只在真翻转那一次发。前端跟着放开输入口（原先因此把输入口 `:disabled`，等于让用户永远补不进去）。
 19. **性能观察项（未改）**：`CoupleQuestService.build()` 里调 `wallOf()`，一次花 9 个查询，而 27 个写接口全部返回 `build()` 的整份聚合——用户点个「加油」「代记一笔」这种小动作，后端替他重算了整张年度成就墙。同型问题在 v7 各批聚合接口里普遍存在（批次三十一/三十二的 `build()` 也都是十几到几十个查询）。要治得改契约（把 wall 挪成懒读，前端已有 `GET /wall`），属结构改动，与联系人列表 2N 那条一起等重构口径定了统一处理。
 20. **P2｜F380 心愿本容量算错，400 的建议无效**：`addWish` 与 `wishQuotaLeft` 都按 `findByOwner(...).size()` 计数，把**已兑现（已揭晓）**的行也算进 PER_OWNER_MAX，于是记满后报 400「先兑现几条」，可兑现根本不腾格——用户照做还是记不进去。改为按「还在藏着的条数」（`secret()`，`revealedAt == null`）计，兑现即揭晓就不占保密名额，文案改「兑现一条就腾出一格」，前端显示的剩余格数同步变准。新用例锁住「记满→400→兑现一条→再记成功」这条链，且验证过还原旧写法该用例当场跑红（`expected: 1 but was: 0`）。
+21. **P2｜F395 笑点默契考的双判永远凑不齐**：`JokeVO.canGuess` 等于「不是我的那条」，于是一条冷笑话最多只收得到对方一票，而规格要的是「同一梗**两人各自**预判对方笑不笑，双判一致=默契+1」——`guessTwin` 恒为 0，这个功能从上线起就没成功过一次。改为判冰之前两边都能投（判过就有答案，再投不是盲猜）。前端那处「界面不递这一票」的注释与等待文案也跟着改成吃 `canGuess`。
 
 ## 误报账（查过、确认不是缺陷）
 - 心情卡「😍 恋爱中」点了没反应：`selected` 默认值就是 `LOVE`，再点是同一值，无变化属正常
@@ -150,8 +151,16 @@
 - 查出一个后端缺陷（缺陷账 20）：心愿本容量把已兑现的行也算进去，记满后 400 却叫用户「先兑现几条」——**兑现根本不腾格，这条建议是无效的**
 - 其余 11 条不一致的裁决：`CatchVO` 缺 `usedTodayMine` → 前端从服务端 `uses`（day 倒序，今日行必在最前）派生，**不留本地 ref、也不收输入口**，同时记为待补 VO 位；F383「前 1 天提醒」无定时任务且 `sensitiveRemindLine`/`wishSavedLine` 全仓零调用点 → 只渲染 `remindTomorrow`，不谎称已提醒；`monthUses` 是两人合计、`useCount` 是全历史（规格写「月度统计」）→ 照实标注；规格 F384 的 `uk(space,from_user,status)` 与 V47 DDL 的普通索引 `idx_catch_thread` 不符 → 后端早已按索引实现，接受；`ThreadVO.open` 恒 true 使后端一处分支走不到 → 记账不改（无用户可见影响）；同一 `WishVO` 在 `myWishes` 与 `revealedToMe` 里 `mine` 语义相反 → 兑现钮只挂前者；`dailyHint` 是「今天之前最近一句」而非昨天 → 文案照实；`TopicVO` 无 `statusLabel` → 前端只做文案镜像不参与判定；`mine/avoid` 后端无每日上限 → 前端不加闸门；F383 撤除权只允许代标人 → 按钮按 `!mineAsOwner`
 
+## 前端批次三十五 F390-F399 欢笑银行（v7 收官批）
+
+- 交付（分 4）：`feat 契约层 types+laughApi 17 方法` → `feat CoupleLaugh.vue 十卡（1059 行）` → `feat 落位 rituals/fun 子页签最末 + registry 164→174` → `test 14 用例（228→242）`
+- 主线程复核：`vue-tsc` 零错、`vitest` 242 全绿、`vite build` 成功（各自取退出码）；后端 11 个 record 共 **118 个字段**与前端 11 个 interface 逐字段（名+顺序）脚本比对 **0 不一致**；handler 定向静默审计 21 处 `return` 全是 `noData()`/`tooLong()`/`badDay()` 三个自带 warning 的小工具
+- 实时巡检：`ONLY_TABS=rituals ONLY_SUBS=fun ONLY_KEY_RE='couple-laugh-' FILL=1 MAX_CLICKS=20` → 10 卡 **0 error / 0 dead / 0 4xx**
+- 又抓出一个「功能永远不可能达成」的缺陷（缺陷账 21）：F395 的 `canGuess`
+- 端到端取证（这条最能说明问题）：alice 建一条冷笑话 → 回读 `canGuess=true`（自己那条也判得）→ alice 与 bob 各投一票 → `twin=true、predictCount=2`。**这是修之前永远拿不到的数字**。（顺带记一条环境坑：Windows 控制台会把 curl 内联 JSON 里的中文按 GBK 发出去，服务端回「应为合法 JSON」——改成 `--data-binary @utf8文件` 才对）
+- 其余 9 条不一致的裁决：F391 聚合缺值班人位（`today=null` 时只有文案）→ 输入口不禁、抢班 400 直透；F397 缺对方用户名 → 只读已加载的 `space.partner.username`，拿不到就 warning，**绝不兜成自评**；F394「月度中弹榜」无字段（attacks 钳 14、`year.hits` 是当年）→ 只做逐条与当年，不编造月度数；`addMoment` 的每天三条按**事发日**计（与注释「每人每天」口径不同，换旧日可绕）→ 记为已知口径，不改；`guessJoke` 无归属校验 → **不是缺陷**，规格就要两人各判一票（我一度按“盲考”加了归属校验，读了规格后回退，改的是 `canGuess`）；F395「默契+1」无台账不推事件，且 `turnedFunnyLine/guessTwinLine/guessDiffLine` 三句话术全仓零调用点 → 待裁决；幂等两套（witness/joke-judge 重复=400，daily/heal/hit/taken=静默幂等）→ 接受；批文说 /week /year 不在聚合但 `build()` 每写都重算 → 默认渲染聚合、懒读另存 ref 不被覆盖；`WeekVO.week==fromDay` 且七计数全是两人合计 → 文案照实
+
 ## 尚未完成（接续点）
 
-- 前端批次 欢笑银行（最后一批 10 个功能的界面，后端与 api 契约已就绪）
 - 后端补口：`VISIT_TIPS`/`RELATIVES_SAMPLE` 是否下发；`profileApi.friendsBirthdays`、`coupleApi.relationshipOf` 要不要做入口
 - 收官：全绿后升 `1.6.0-rc.1`（独立 commit）、双仓地图终稿、全量验收总结
