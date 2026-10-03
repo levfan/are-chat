@@ -40,12 +40,6 @@ public class CoupleDiningController {
         return ApiResponse.ok(service.throwTicket(Sessions.requireUser(session), req.dish(), req.reason()));
     }
 
-    /** F218 标记今日话题聊过了。 */
-    @PostMapping("/topic/mark")
-    public ApiResponse<CoupleDiningService.TodayVO> markTopic(HttpSession session) {
-        return ApiResponse.ok(service.markTopic(Sessions.requireUser(session)));
-    }
-
     /** F212 星评流水。 */
     @GetMapping("/rates")
     public ApiResponse<List<CoupleDiningService.RateVO>> rates(HttpSession session) {
@@ -82,60 +76,4 @@ public class CoupleDiningController {
         return ApiResponse.ok(service.removeNogo(Sessions.requireUser(session), id));
     }
 
-    /** F214-F217 本周饭桌看板：菜单格 + 拿手菜 + 搭伙车。 */
-    @GetMapping("/board")
-    public ApiResponse<CoupleDiningService.BoardVO> board(HttpSession session) {
-        return ApiResponse.ok(service.board(Sessions.requireUser(session)));
-    }
-
-    /** F214 排/改/擦某一天的正餐。 */
-    public record PlanRequest(String day, String dish) {
-    }
-
-    @PostMapping("/plan")
-    public ApiResponse<CoupleDiningService.BoardVO> setPlan(@RequestBody PlanRequest req, HttpSession session) {
-        return ApiResponse.ok(service.setPlan(Sessions.requireUser(session), req.day(), req.dish()));
-    }
-
-    /** F215 报本周拿手菜。 */
-    public record HomecookRequest(String dish, Integer score) {
-    }
-
-    @PostMapping("/homecook")
-    public ApiResponse<CoupleDiningService.BoardVO> reportHomecook(@RequestBody HomecookRequest req, HttpSession session) {
-        return ApiResponse.ok(service.reportHomecook(Sessions.requireUser(session), req.dish(), req.score()));
-    }
-
-    /** F216 点单机：心情换饮品。 */
-    @GetMapping("/drink")
-    public ApiResponse<CoupleDiningService.DrinkVO> drink(@RequestParam(required = false) String mood) {
-        return ApiResponse.ok(service.drink(mood));
-    }
-
-    /** F217 往搭伙车加菜。 */
-    public record CartRequest(String item, Integer qty) {
-    }
-
-    @PostMapping("/cart")
-    public ApiResponse<CoupleDiningService.BoardVO> cartAdd(@RequestBody CartRequest req, HttpSession session) {
-        return ApiResponse.ok(service.cartAdd(Sessions.requireUser(session), req.item(), req.qty()));
-    }
-
-    /** F217 给一道菜按锁，双方都锁即成行。 */
-    @PostMapping("/cart/{id}/lock")
-    public ApiResponse<CoupleDiningService.BoardVO> cartLock(@PathVariable String id, HttpSession session) {
-        return ApiResponse.ok(service.cartLock(Sessions.requireUser(session), id));
-    }
-
-    /** F217 拿掉自己加的未锁菜。 */
-    @DeleteMapping("/cart/{id}")
-    public ApiResponse<CoupleDiningService.BoardVO> cartRemove(@PathVariable String id, HttpSession session) {
-        return ApiResponse.ok(service.cartRemove(Sessions.requireUser(session), id));
-    }
-
-    /** F219 年度干饭账。 */
-    @GetMapping("/year")
-    public ApiResponse<CoupleDiningService.YearVO> year(@RequestParam(required = false) String year, HttpSession session) {
-        return ApiResponse.ok(service.yearReport(Sessions.requireUser(session), year));
-    }
 }

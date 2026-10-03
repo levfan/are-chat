@@ -40,16 +40,6 @@ class CoupleDiningServiceTest {
     @Mock
     private CoupleDineNogoMapper nogoMapper;
     @Mock
-    private CoupleDineWeekplanMapper planMapper;
-    @Mock
-    private CoupleDineHomecookMapper homecookMapper;
-    @Mock
-    private CoupleDineCartMapper cartMapper;
-    @Mock
-    private CoupleDineTopicMapper topicMapper;
-    @Mock
-    private CoupleBodyRedlineMapper redlineMapper;
-    @Mock
     private ImPushService push;
 
     @InjectMocks
@@ -72,24 +62,6 @@ class CoupleDiningServiceTest {
 
     private CoupleDineTicket ticket(String user, String dish) {
         return CoupleDineTicket.of("s1", DAY, user, dish, "");
-    }
-
-    @Test
-    void tonightTicketsCarryRedlineHits() {
-        stubSpace("alice");
-        stubSpace("bob");
-        List<CoupleDineTicket> rows = new ArrayList<>(List.of(
-                CoupleDineTicket.of("s1", DAY, "alice", "香菜牛肉", ""),
-                CoupleDineTicket.of("s1", DAY, "bob", "番茄炒蛋", "")));
-        lenient().when(ticketMapper.find(eq("s1"), any(), any())).thenAnswer(inv -> rows.stream()
-                .filter(r -> r.getFromUser().equals(inv.getArgument(2))).findFirst().orElse(null));
-        lenient().when(ticketMapper.findByDay(eq("s1"), any())).thenAnswer(inv -> List.copyOf(rows));
-        lenient().when(redlineMapper.findBySpace("s1")).thenReturn(
-                List.of(CoupleBodyRedline.of("s1", "香菜", CoupleBodyRedline.KIND_ALLERGY, "起疹子", "bob")));
-
-        CoupleDiningService.TodayVO vo = service.today("alice");
-        assertThat(vo.mine().redlines()).containsExactly("香菜");
-        assertThat(vo.partner().redlines()).isEmpty();
     }
 
     // ========== F210 饭票 ==========
@@ -218,160 +190,15 @@ class CoupleDiningServiceTest {
 
     // ========== F214 本周菜单 ==========
 
-    @Test
-    void planUsesMondayAnchorForWeekKey() {
-        stubSpace("alice");
-        String wed = LocalDate.now().with(java.time.DayOfWeek.MONDAY).plusDays(2).toString();
-        String monday = LocalDate.now().with(java.time.DayOfWeek.MONDAY).toString();
-        when(planMapper.find("s1", monday, wed)).thenReturn(null);
-        lenient().when(planMapper.findByWeek("s1", monday)).thenReturn(List.of());
-        lenient().when(homecookMapper.findByWeek("s1", monday)).thenReturn(List.of());
-        lenient().when(cartMapper.findByWeek("s1", monday)).thenReturn(List.of());
-
-        service.setPlan("alice", wed, "糖醋排骨");
-
-        ArgumentCaptor<CoupleDineWeekplan> cap = ArgumentCaptor.forClass(CoupleDineWeekplan.class);
-        verify(planMapper).insert(cap.capture());
-        assertThat(cap.getValue().getWeek()).isEqualTo(monday);
-        assertThat(cap.getValue().getDay()).isEqualTo(wed);
-    }
-
-    @Test
-    void blankPlanDishClearsSlot() {
-        stubSpace("alice");
-        String monday = LocalDate.now().with(java.time.DayOfWeek.MONDAY).toString();
-        CoupleDineWeekplan row = CoupleDineWeekplan.of("s1", monday, monday, "旧菜", "bob");
-        row.setId("p1");
-        when(planMapper.find("s1", monday, monday)).thenReturn(row);
-        when(planMapper.findByWeek("s1", monday)).thenReturn(List.of());
-        when(homecookMapper.findByWeek("s1", monday)).thenReturn(List.of());
-        when(cartMapper.findByWeek("s1", monday)).thenReturn(List.of());
-
-        service.setPlan("alice", monday, "  ");
-
-        verify(planMapper).deleteById("p1");
-    }
-
     // ========== F215 拿手菜 ==========
-
-    @Test
-    void homecookUpsertPushesPartner() {
-        stubSpace("alice");
-        String week = LocalDate.now().with(java.time.DayOfWeek.MONDAY).toString();
-        when(homecookMapper.find("s1", week, "alice")).thenReturn(null);
-        when(homecookMapper.findByWeek("s1", week)).thenReturn(List.of());
-        when(planMapper.findByWeek("s1", week)).thenReturn(List.of());
-        when(cartMapper.findByWeek("s1", week)).thenReturn(List.of());
-
-        service.reportHomecook("alice", "蛋炒饭", 7);
-
-        ArgumentCaptor<CoupleDineHomecook> cap = ArgumentCaptor.forClass(CoupleDineHomecook.class);
-        verify(homecookMapper).insert(cap.capture());
-        assertThat(cap.getValue().getScore()).isEqualTo(5);
-        verify(push).pushCoupleEvent(eq("dine-homecook"), any(), any(), any());
-    }
 
     // ========== F216 点单机 ==========
 
-    @Test
-    void drinkMapsMoodWithFallback() {
-        assertThat(service.drink("想庆祝").name()).contains("起泡");
-        assertThat(service.drink("不认识的心情").mood()).isEqualTo("开心");
-    }
-
     // ========== F217 搭伙车 ==========
-
-    @Test
-    void cartLocksOnlyWhenBothLocked() {
-        stubSpace("alice");
-        CoupleDineCart row = CoupleDineCart.of("s1", LocalDate.now().with(java.time.DayOfWeek.MONDAY).toString(),
-                "bob", "奶茶", 2);
-        row.setId("c1");
-        row.setLockedBy("bob");
-        when(cartMapper.selectById("c1")).thenReturn(row);
-        when(cartMapper.findByWeek(any(), any())).thenReturn(List.of());
-
-        service.cartLock("alice", "c1");
-
-        assertThat(row.getStatus()).isEqualTo(CoupleDineCart.STATUS_LOCKED);
-        verify(push).pushCoupleEventBoth(eq("dine-cart-locked"), any(), any(), any(), any());
-    }
-
-    @Test
-    void singleLockStaysOpen() {
-        stubSpace("alice");
-        CoupleDineCart row = CoupleDineCart.of("s1", "w", "alice", "炸鸡", 1);
-        row.setId("c1");
-        when(cartMapper.selectById("c1")).thenReturn(row);
-        when(cartMapper.findByWeek(any(), any())).thenReturn(List.of());
-
-        service.cartLock("alice", "c1");
-
-        assertThat(row.getStatus()).isEqualTo(CoupleDineCart.STATUS_OPEN);
-        verify(push, never()).pushCoupleEventBoth(any(), any(), any(), any(), any());
-    }
-
-    @Test
-    void cartRemoveGuardsOwnerAndStatus() {
-        stubSpace("alice");
-        CoupleDineCart other = CoupleDineCart.of("s1", "w", "bob", "可乐", 1);
-        other.setId("c1");
-        when(cartMapper.selectById("c1")).thenReturn(other);
-        assertThatThrownBy(() -> service.cartRemove("alice", "c1"))
-                .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("自己加的菜");
-
-        CoupleDineCart locked = CoupleDineCart.of("s1", "w", "alice", "薯条", 1);
-        locked.setId("c2");
-        locked.setStatus(CoupleDineCart.STATUS_LOCKED);
-        when(cartMapper.selectById("c2")).thenReturn(locked);
-        assertThatThrownBy(() -> service.cartRemove("alice", "c2"))
-                .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("锁定");
-    }
 
     // ========== F218 话题打卡 ==========
 
-    @Test
-    void markTopicIsIdempotent() {
-        stubSpace("alice");
-        when(topicMapper.find("s1", DAY)).thenReturn(CoupleDineTopic.of("s1", DAY, "bob"));
-        when(ticketMapper.find("s1", DAY, "alice")).thenReturn(null);
-        when(ticketMapper.find("s1", DAY, "bob")).thenReturn(null);
-        when(ticketMapper.findByDay("s1", DAY)).thenReturn(List.of());
-
-        service.markTopic("alice");
-
-        verify(topicMapper, never()).insert(any(CoupleDineTopic.class));
-    }
-
     // ========== F219 年度干饭账 ==========
-
-    @Test
-    void yearReportAggregatesCountsAndTopDishes() {
-        stubSpace("alice");
-        String year = String.valueOf(LocalDate.now().getYear());
-        CoupleDineRate r1 = CoupleDineRate.of("s1", year + "-03-01", "火锅", 5, "", "alice");
-        CoupleDineRate r2 = CoupleDineRate.of("s1", year + "-04-01", "火锅", 3, "", "bob");
-        CoupleDineRate r3 = CoupleDineRate.of("s1", year + "-05-01", "日料", 4, "", "alice");
-        CoupleDineRate lastYear = CoupleDineRate.of("s1", (LocalDate.now().getYear() - 1) + "-06-01", "烧烤", 5, "", "alice");
-        when(rateMapper.findBySpace("s1")).thenReturn(List.of(r1, r2, r3, lastYear));
-        when(nogoMapper.findBySpace("s1")).thenReturn(List.of());
-        CoupleDineTicket t1 = CoupleDineTicket.of("s1", year + "-03-01", "alice", "火锅", "");
-        when(ticketMapper.findBySpace("s1")).thenReturn(List.of(t1));
-        when(planMapper.findByYear("s1", year)).thenReturn(List.of(
-                CoupleDineWeekplan.of("s1", year + "-02-23", year + "-02-24", "排骨", "alice")));
-
-        CoupleDiningService.YearVO vo = service.yearReport("alice", null);
-
-        assertThat(vo.year()).isEqualTo(year);
-        assertThat(vo.rateCount()).isEqualTo(3);
-        assertThat(vo.avgStars()).isEqualTo(4.0);
-        assertThat(vo.topDishes().get(0).dish()).isEqualTo("火锅");
-        assertThat(vo.topDishes().get(0).times()).isEqualTo(2);
-        assertThat(vo.ticketCount()).isEqualTo(1);
-        assertThat(vo.plannedCount()).isEqualTo(1);
-    }
 
     // ========== 无空间 ==========
 
