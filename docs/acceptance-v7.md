@@ -160,6 +160,39 @@
 - 端到端取证（这条最能说明问题）：alice 建一条冷笑话 → 回读 `canGuess=true`（自己那条也判得）→ alice 与 bob 各投一票 → `twin=true、predictCount=2`。**这是修之前永远拿不到的数字**。（顺带记一条环境坑：Windows 控制台会把 curl 内联 JSON 里的中文按 GBK 发出去，服务端回「应为合法 JSON」——改成 `--data-binary @utf8文件` 才对）
 - 其余 9 条不一致的裁决：F391 聚合缺值班人位（`today=null` 时只有文案）→ 输入口不禁、抢班 400 直透；F397 缺对方用户名 → 只读已加载的 `space.partner.username`，拿不到就 warning，**绝不兜成自评**；F394「月度中弹榜」无字段（attacks 钳 14、`year.hits` 是当年）→ 只做逐条与当年，不编造月度数；`addMoment` 的每天三条按**事发日**计（与注释「每人每天」口径不同，换旧日可绕）→ 记为已知口径，不改；`guessJoke` 无归属校验 → **不是缺陷**，规格就要两人各判一票（我一度按“盲考”加了归属校验，读了规格后回退，改的是 `canGuess`）；F395「默契+1」无台账不推事件，且 `turnedFunnyLine/guessTwinLine/guessDiffLine` 三句话术全仓零调用点 → 待裁决；幂等两套（witness/joke-judge 重复=400，daily/heal/hit/taken=静默幂等）→ 接受；批文说 /week /year 不在聚合但 `build()` 每写都重算 → 默认渲染聚合、懒读另存 ref 不被覆盖；`WeekVO.week==fromDay` 且七计数全是两人合计 → 文案照实
 
+## 全量终检与收官（v7 迭代结束）
+
+### 全系统实时巡检（真后端 H2 + 真账号，注册表 174 卡逐按钮点）
+
+- **174 张卡全部点开，0 个「点了没反应」，0 个 5xx**，4xx 共 5 条，逐条裁决如下：
+  1. `couple-secure`「给 TA 存一枚」400 → 信任存币的业务前置（当日限额一类），`onDepositSecurity` 走 `ElMessage.error(e.message)`，中文可见 → **不是缺陷**
+  2. `couple-daily-life`「现在就要抱抱」400 → 同上，`onPingSos` 直透后端 message → **不是缺陷**
+  3. `couple-fun-talk`「出一题」404「恋爱词典还是空的，先去收录几个专属词汇吧」→ 数据前置，中文可见 → **不是缺陷**，但**可改进**：词典为空时那个按钮本就不该给（点了才知道没题）
+  4. `couple-chronicle`「再挖一张」404「考古层还是空的」→ 同上，**可改进**：空层时禁用而非报错
+  5. `couple-anniv-report`「翻开 TA 的生日记忆」404「TA 还没有填写生日」→ 该组件是走 store 的老写法，用 `ElMessage.info` 提示（不是 error），文案可见 → **不是缺陷**，同样可改进为按钮预判空态
+- 上面 3-5 三条是**同一类可改进项**（空数据时按钮仍可点，点了才吃一条提示）。它们不算「点了没反应」——有可见反馈；但比理想状态差一步。记在此处，不在 v7 里动，避免为改样式去碰已验收的六个老组件。
+
+### 交付总账
+
+- v7 后端 50 个功能（批次三十一~三十五，F350-F399）全部交付；v7 前端 50 个功能（五批 × 十卡）全部落位，registry 卡数 114 → **174**
+- 缺陷账 **21 条**，其中四条属「功能从上线起就没成功过一次」级别：实体 getter 歧义让两批 20 个功能整页 500（1）、读时自动签收吃掉「一键收全部」（16）、双点卡缺 per-side 位让界面说谎（17）、心愿本容量的 400 建议自相矛盾（20）、笑点默契考双判永远凑不齐（21）
+- 误报账若干：全部「查过、不是缺陷」的判定都留了复核命令与理由
+
+### 度量（v7 收官，口径可复现）
+
+- 后端：**57** 个 Controller / **793** 个映射方法 / **310** 张表（`couple_*` 297，Flyway V1-V48）/ **611** 用例（跳过 4）
+- 前端：**71** 个情侣组件与注册表文件 / **174** 张卡 / **242** 用例；版本 `1.6.0-rc.1`（功能冻结候选）
+- ⚠️ 两条度量坑（这次自己踩过，写死在此以免下轮重踩）：
+  - `grep -l "@RestController"` 数 Controller 会把 `GlobalExceptionHandler` 也算进去（它是 `@RestControllerAdvice`），57 会虚报成 58
+  - 扫 `db/V*.sql` 里的 `CREATE TABLE` 数表会**少数 3-5 张**（基线 `schema.sql` 建的、以及后来改过名的表都不在 V 脚本里）；表数一律以 `information_schema` 实测为准：`SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='PUBLIC'`
+
+### 仍待用户拍板（v8 入口）
+
+- **性能**：联系人列表每好友 2 次查询（未读数 + 最后一条），要合并需 groupwise-max 或跨 `friend`/`private_message` 聚合 JOIN；以及缺陷账 19 记的同型问题——各批聚合 `build()` 里含重算项（如人生关卡的年度成就墙一次 9 个查询，27 个写接口全走这条路），治它要改契约（挪懒读）
+- **DDD 分层重构**：口径未定（A 维护性 / B 性能 / C 规范性 / D 接受成本先挑小域试点），未动任何结构代码
+- **待裁决的后端补口**：`VISIT_TIPS`/`RELATIVES_SAMPLE`、F374 加油卡与 F376 不说话卡的话术、F395 三句 Bank 话术（`turnedFunnyLine`/`guessTwinLine`/`guessDiffLine` 全仓零调用点）、`CatchVO.usedTodayMine`、`TodayVO` 系列 per-side 位是否补
+- **入口缺失**：`profileApi.friendsBirthdays`（已改批量，但仍无界面入口）、`coupleApi.relationshipOf`
+
 ## 尚未完成（接续点）
 
 - 后端补口：`VISIT_TIPS`/`RELATIVES_SAMPLE` 是否下发；`profileApi.friendsBirthdays`、`coupleApi.relationshipOf` 要不要做入口
