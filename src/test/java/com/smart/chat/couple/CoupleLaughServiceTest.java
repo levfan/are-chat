@@ -350,6 +350,28 @@ class CoupleLaughServiceTest {
         assertThat(guesses).hasSize(2);
     }
 
+    @Test
+    void bothSidesCanPredictSoTwinIsReachable() {
+        service.addJoke("alice", "冰箱门开着");
+        String jokeId = jokes.get(0).getId();
+
+        // 讲的人也要能预判对方笑不笑：canGuess 原先等于「不是我的那条」，一条梗最多收到一票，
+        // 「双判一致=默契+1」永远凑不出来
+        var own = service.board("alice").jokes().stream()
+                .filter(j -> j.id().equals(jokeId)).findFirst().orElseThrow();
+        assertThat(own.canGuess()).isTrue();
+        assertThat(own.canJudge()).isFalse();
+
+        service.guessJoke("alice", jokeId, true);
+        service.guessJoke("bob", jokeId, true);
+        assertThat(service.board("alice").guesses().get(0).twin()).isTrue();
+
+        // 判过冰就有了答案，再投就不是盲猜：canGuess 关掉
+        var after = service.judgeJoke("bob", jokeId, false).jokes().stream()
+                .filter(j -> j.id().equals(jokeId)).findFirst().orElseThrow();
+        assertThat(after.canGuess()).isFalse();
+    }
+
     // ========== F396 大笑处方 ==========
 
     @Test

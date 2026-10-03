@@ -471,7 +471,9 @@ public class CoupleLaughService {
         List<JokeVO> jokes = jokeMapper.findBySpace(space.getId()).stream().limit(LIST_JOKE)
                 .map(j -> new JokeVO(j.getId(), nz(j.getDay()), me.equals(j.getFromUser()), nz(j.getContent()),
                         j.frozenFlag(), j.judged(), nz(j.getJudgedBy()),
-                        !me.equals(j.getFromUser()) && !j.judged(), !me.equals(j.getFromUser())))
+                        // canGuess 原先是「不是我的那条」——可 F395 要的是「同一梗两人各自预判对方笑不笑，双判一致=默契+1」，
+                        // 只许对方投就永远只有一票，双人一致永远凑不出来。改成判冰之前两边都能投（投过就不再是盲猜）。
+                        !me.equals(j.getFromUser()) && !j.judged(), !j.judged()))
                 .toList();
 
         List<CoupleLaughCringe> cringeRows = cringeMapper.findBySpace(space.getId());
