@@ -15,6 +15,8 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyCollection;
+import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
@@ -247,10 +249,15 @@ class FriendServiceTest {
         when(profileMapper.selectBatchIds(any())).thenReturn(java.util.List.of());
 
         PrivateMessage latest = PrivateMessage.of("bob", "alice", "晚上一起吃饭吗", PrivateMessage.TYPE_TEXT);
-        lenient().when(messageMapper.findLatestBetween("alice", "bob")).thenReturn(Optional.of(latest));
-        lenient().when(messageMapper.findLatestBetween("alice", "carol")).thenReturn(Optional.empty());
-        lenient().when(messageMapper.countUnread("alice", "bob", normal.getLastReadAt())).thenReturn(2L);
-        lenient().when(messageMapper.countUnread("alice", "carol", pinned.getLastReadAt())).thenReturn(0L);
+        // 批量口径：一次算出各对端最后一条的时间点，一趟 JOIN 算出各对端未读数，再按时间点回捞整行
+        lenient().when(messageMapper.findLatestCreatedPerPeer("alice"))
+                .thenReturn(java.util.Map.of("bob", latest.getCreated()));
+        lenient().when(messageMapper.findMessagesAtCreated(org.mockito.ArgumentMatchers.eq("alice"),
+                        org.mockito.ArgumentMatchers.anyList(), org.mockito.ArgumentMatchers.anyCollection()))
+                .thenReturn(List.of(latest));
+        lenient().when(friendMapper.selectUnreadCountsByPeer("alice"))
+                .thenReturn(List.of(java.util.Map.of("peer", "bob", "unread", 2L),
+                        java.util.Map.of("peer", "carol", "unread", 0L)));
         lenient().when(push.isOnline("bob")).thenReturn(true);
         lenient().when(push.isOnline("carol")).thenReturn(false);
 
@@ -270,6 +277,24 @@ class FriendServiceTest {
     }
 
     @Test
+    void listFriendsNeverFallsBackToPerPeerQueries() {
+        when(friendMapper.findAllByOwner("alice"))
+                .thenReturn(List.of(Friend.of("alice", "bob"), Friend.of("alice", "carol"), Friend.of("alice", "dave")));
+        lenient().when(messageMapper.findLatestCreatedPerPeer("alice")).thenReturn(java.util.Map.of());
+        lenient().when(messageMapper.findMessagesAtCreated(anyString(), anyList(), anyCollection())).thenReturn(List.of());
+        lenient().when(friendMapper.selectUnreadCountsByPeer("alice")).thenReturn(List.of());
+        lenient().when(profileMapper.selectBatchIds(any())).thenReturn(List.of());
+
+        service.listFriends("alice");
+
+        // 三个好友也只发批量查询：一旦有人把循环里的逐条查询加回来，这里就会红
+        verify(messageMapper, never()).findLatestBetween(anyString(), anyString());
+        verify(messageMapper, never()).countUnread(anyString(), anyString(), any());
+        verify(messageMapper).findLatestCreatedPerPeer("alice");
+        verify(friendMapper).selectUnreadCountsByPeer("alice");
+    }
+
+    @Test
     void listFriendsCarriesPeerNicknameFromProfile() {
         Friend row = Friend.of("alice", "bob");
         when(friendMapper.findAllByOwner("alice")).thenReturn(List.of(row));
@@ -278,9 +303,10 @@ class FriendServiceTest {
         bobProfile.setNickname("波波");
         bobProfile.setPresenceStatus("busy");
         when(profileMapper.selectBatchIds(any())).thenReturn(List.of(bobProfile));
-        lenient().when(messageMapper.findLatestBetween("alice", "bob")).thenReturn(Optional.empty());
-        lenient().when(messageMapper.countUnread(anyString(), anyString(), org.mockito.ArgumentMatchers.any()))
-                .thenReturn(0L);
+        lenient().when(messageMapper.findLatestCreatedPerPeer(anyString())).thenReturn(java.util.Map.of());
+        lenient().when(messageMapper.findMessagesAtCreated(anyString(), anyList(), anyCollection()))
+                .thenReturn(List.of());
+        lenient().when(friendMapper.selectUnreadCountsByPeer(anyString())).thenReturn(List.of());
         lenient().when(push.isOnline("bob")).thenReturn(false);
 
         List<FriendService.FriendVO> friends = service.listFriends("alice");
