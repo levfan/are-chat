@@ -31,45 +31,6 @@ public class CoupleFocusController {
         return ApiResponse.ok(service.today(Sessions.requireUser(session)));
     }
 
-    /** F360 报今晚放下的分钟数（0-180 钳制，note ≤40 字）。 */
-    public record NightRequest(Integer minutes, String note) {
-    }
-
-    @PostMapping("/night")
-    public ApiResponse<CoupleFocusService.TodayVO> night(@RequestBody NightRequest req, HttpSession session) {
-        return ApiResponse.ok(service.night(Sessions.requireUser(session), req.minutes(), req.note()));
-    }
-
-    /** F361 预约本周专属时段（title ≤60、hours 1-6 钳制、day 必须落在本周）。 */
-    public record SlotRequest(String title, Integer hours, String day) {
-    }
-
-    @PostMapping("/slot/propose")
-    public ApiResponse<CoupleFocusService.TodayVO> slotPropose(@RequestBody SlotRequest req, HttpSession session) {
-        return ApiResponse.ok(service.proposeSlot(Sessions.requireUser(session), req.title(), req.hours(), req.day()));
-    }
-
-    /** F361 对方点头确认本周时段（自己提议的不能自己确认）。 */
-    @PostMapping("/slot/confirm")
-    public ApiResponse<CoupleFocusService.TodayVO> slotConfirm(HttpSession session) {
-        return ApiResponse.ok(service.confirmSlot(Sessions.requireUser(session)));
-    }
-
-    /** F362 把一句话攒进队列（≤80 字，在途每人 ≤5）。 */
-    public record QueueRequest(String content) {
-    }
-
-    @PostMapping("/queue")
-    public ApiResponse<CoupleFocusService.TodayVO> queue(@RequestBody QueueRequest req, HttpSession session) {
-        return ApiResponse.ok(service.queueAdd(Sessions.requireUser(session), req.content()));
-    }
-
-    /** F362 一键收全部并回执已读。 */
-    @PostMapping("/queue/read")
-    public ApiResponse<CoupleFocusService.TodayVO> queueRead(HttpSession session) {
-        return ApiResponse.ok(service.queueRead(Sessions.requireUser(session)));
-    }
-
     /** F363 饭桌手机倒扣打卡（双方各点各的，双点=同桌成功）。 */
     @PostMapping("/meal")
     public ApiResponse<CoupleFocusService.TodayVO> meal(HttpSession session) {
@@ -82,12 +43,6 @@ public class CoupleFocusController {
         return ApiResponse.ok(service.gazeTick(Sessions.requireUser(session)));
     }
 
-    /** F365 不插电半小时打卡（双点成功，周连击读时算）。 */
-    @PostMapping("/unplug")
-    public ApiResponse<CoupleFocusService.TodayVO> unplug(HttpSession session) {
-        return ApiResponse.ok(service.unplugTick(Sessions.requireUser(session)));
-    }
-
     /** F366 递一张「回来啦」卡（每人每天 ≤2 张，note ≤40 字）。 */
     public record NudgeRequest(String note) {
     }
@@ -97,25 +52,4 @@ public class CoupleFocusController {
         return ApiResponse.ok(service.nudge(Sessions.requireUser(session), req.note()));
     }
 
-    /** F368 发起/应战半日无手机挑战（kind 只能 AM 或 PM）。 */
-    public record DetoxRequest(String kind) {
-    }
-
-    @PostMapping("/detox")
-    public ApiResponse<CoupleFocusService.TodayVO> detox(@RequestBody DetoxRequest req, HttpSession session) {
-        return ApiResponse.ok(service.detox(Sessions.requireUser(session), req.kind()));
-    }
-
-    /** F367 专注周报（周一锚聚合 + Bank 文案）。 */
-    @GetMapping("/weekly")
-    public ApiResponse<CoupleFocusService.WeeklyVO> weekly(HttpSession session) {
-        return ApiResponse.ok(service.weekly(Sessions.requireUser(session)));
-    }
-
-    /** F369 注意力年报（year 缺省当年）。 */
-    @GetMapping("/year")
-    public ApiResponse<CoupleFocusService.YearlyVO> year(
-            @RequestParam(required = false) String year, HttpSession session) {
-        return ApiResponse.ok(service.yearReport(Sessions.requireUser(session), year));
-    }
 }
