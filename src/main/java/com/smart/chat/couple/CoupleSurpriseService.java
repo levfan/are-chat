@@ -19,6 +19,10 @@ import java.util.concurrent.ThreadLocalRandom;
 @Service
 public class CoupleSurpriseService {
 
+    /** 积分口径：刮刮乐的券面被送券人真兑现了才计分，一次 +5。 */
+    static final int SCRATCH_POINTS = 5;
+    static final String SCRATCH_REASON_PREFIX = "刮刮乐兑现：";
+
     private final CoupleSpaceMapper spaceMapper;
     private final CoupleScratchMapper scratchMapper;
     private final CoupleMysteryBoxMapper boxMapper;
@@ -26,12 +30,14 @@ public class CoupleSurpriseService {
     private final CoupleMissExpressMapper missMapper;
     private final CoupleTreasureMapper treasureMapper;
     private final CoupleConfessionMapper confessionMapper;
+    private final CouplePointLedgerMapper ledgerMapper;
     private final ImPushService push;
 
     public CoupleSurpriseService(CoupleSpaceMapper spaceMapper, CoupleScratchMapper scratchMapper,
                                  CoupleMysteryBoxMapper boxMapper, CoupleSweetAlarmMapper alarmMapper,
                                  CoupleMissExpressMapper missMapper, CoupleTreasureMapper treasureMapper,
-                                 CoupleConfessionMapper confessionMapper, ImPushService push) {
+                                 CoupleConfessionMapper confessionMapper, CouplePointLedgerMapper ledgerMapper,
+                                 ImPushService push) {
         this.spaceMapper = spaceMapper;
         this.scratchMapper = scratchMapper;
         this.boxMapper = boxMapper;
@@ -39,6 +45,7 @@ public class CoupleSurpriseService {
         this.missMapper = missMapper;
         this.treasureMapper = treasureMapper;
         this.confessionMapper = confessionMapper;
+        this.ledgerMapper = ledgerMapper;
         this.push = push;
     }
 
@@ -119,6 +126,10 @@ public class CoupleSurpriseService {
         if (card.getRedeemedAt() == null) {
             card.setRedeemedAt(System.currentTimeMillis());
             scratchMapper.updateById(card);
+            // 积分重接三个入口之三：券是送的人兑现的，分记在送券人头上；
+            // 闸门就是这一层的 redeemedAt==null，重复点核销不会再补分
+            ledgerMapper.insert(CouplePointLedger.of(space.getId(), me,
+                    CouplePointLedger.TYPE_EARN, SCRATCH_REASON_PREFIX + card.getPrizeText(), SCRATCH_POINTS));
             push.pushCoupleEvent("scratch-redeemed", me, card.getOwner(),
                     "你抽中的「" + card.getPrizeText() + "」已兑现 🎫 承诺 +1，甜度 +1！");
         }

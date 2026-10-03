@@ -50,6 +50,8 @@ class CoupleSurpriseServiceTest {
     private CoupleConfessionMapper confessionMapper;
 
     @Mock
+    private CouplePointLedgerMapper ledgerMapper;
+    @Mock
     private ImPushService push;
 
     @InjectMocks
@@ -104,6 +106,34 @@ class CoupleSurpriseServiceTest {
         assertThat(card.isScratched()).isTrue();
         assertThat(card.getScratchedAt()).isNotNull();
         verify(push).pushCoupleEvent(eq("scratch-scratched"), eq("bob"), eq("alice"), any());
+    }
+
+    @Test
+    void redeemPaysTheGiverOnce() {
+        stubSpace("alice");
+        CoupleScratch card = CoupleScratch.of("s1", "2026-W40", "alice", "bob", "hug", "一个抱抱");
+        card.setScratched(true);
+        card.setScratchedAt(System.currentTimeMillis());
+        java.util.List<CouplePointLedger> ledger = new java.util.ArrayList<>();
+        when(scratchMapper.selectById(any())).thenReturn(card);
+        when(scratchMapper.updateById(any(CoupleScratch.class))).thenReturn(1);
+        when(ledgerMapper.insert(any(CouplePointLedger.class))).thenAnswer(inv -> {
+            ledger.add(inv.getArgument(0));
+            return 1;
+        });
+
+        service.redeemScratch("alice", card.getId());
+
+        // 券是送的人兑现的，分记在送券人 alice 头上，且必须真插进台账
+        assertThat(ledger).hasSize(1);
+        assertThat(ledger.get(0).getFromUser()).isEqualTo("alice");
+        assertThat(ledger.get(0).getType()).isEqualTo(CouplePointLedger.TYPE_EARN);
+        assertThat(ledger.get(0).getPoints()).isEqualTo(CoupleSurpriseService.SCRATCH_POINTS);
+        assertThat(ledger.get(0).getItem()).startsWith(CoupleSurpriseService.SCRATCH_REASON_PREFIX);
+
+        // 重复点核销： redeemedAt 闸门挡住，不再补分
+        service.redeemScratch("alice", card.getId());
+        assertThat(ledger).hasSize(1);
     }
 
     @Test
