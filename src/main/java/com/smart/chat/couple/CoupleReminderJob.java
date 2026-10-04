@@ -7,19 +7,11 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 import java.time.LocalDate;
-import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.stream.Collectors;
 
 /**
- * 情侣空间定时提醒：
- * 1）09:00 约定逾期提醒——扫描「待兑现且过了截止时间」的承诺卡，
- *    给被承诺的一方发可爱提醒「还有 N 件事你没做到哦~」（lastRemindDay 去重）；
- * 2）09:30 纪念日倒数提醒——扫描在在一起纪念日与共同日历里的纪念日，
- *    在提前 7 天 / 1 天 / 当天推送给双方（每天只跑一次，天然按天去重）。
+ * 情侣空间定时提醒：09:30 纪念日倒数——扫描在一起纪念日与共同日历里的纪念日，
+ * 在提前 7 天 / 1 天 / 当天推送给双方（每天只跑一次，天然按天去重）。
  */
 @Component
 public class CoupleReminderJob {
@@ -27,74 +19,14 @@ public class CoupleReminderJob {
     private static final Logger log = LoggerFactory.getLogger(CoupleReminderJob.class);
 
     private final CoupleSpaceMapper spaceMapper;
-    private final CouplePromiseMapper promiseMapper;
     private final CoupleAnniversaryMapper anniversaryMapper;
-    private final CoupleCareService careService;
-    private final CoupleMemoryService memoryService;
     private final ImPushService push;
 
-    public CoupleReminderJob(CoupleSpaceMapper spaceMapper, CouplePromiseMapper promiseMapper,
-                             CoupleAnniversaryMapper anniversaryMapper, CoupleCareService careService,
-                             CoupleMemoryService memoryService, ImPushService push) {
+    public CoupleReminderJob(CoupleSpaceMapper spaceMapper, CoupleAnniversaryMapper anniversaryMapper,
+                             ImPushService push) {
         this.spaceMapper = spaceMapper;
-        this.promiseMapper = promiseMapper;
         this.anniversaryMapper = anniversaryMapper;
-        this.careService = careService;
-        this.memoryService = memoryService;
         this.push = push;
-    }
-
-    /** 每天 09:00（Asia/Shanghai）提醒一次逾期未兑现的约定。 */
-    @Scheduled(cron = "0 0 9 * * ?", zone = "Asia/Shanghai")
-    public void remindOverdue() {
-        long now = System.currentTimeMillis();
-        String today = LocalDate.now().toString();
-        // 只提醒生效中的情侣空间：已解除的关系不再打扰
-        Set<String> activeSpaceIds = spaceMapper.findAllActive().stream()
-                .map(CoupleSpace::getId)
-                .collect(Collectors.toSet());
-        if (activeSpaceIds.isEmpty()) {
-            return;
-        }
-        List<CouplePromise> overdue = promiseMapper.findPendingWithDueBefore(now).stream()
-                .filter(p -> activeSpaceIds.contains(p.getSpaceId()))
-                .toList();
-        // 按承诺人聚合：一次性给出「还有 N 件事」的汇总提醒（没做到的人自己收提醒）
-        Map<String, List<String>> byPromiser = new LinkedHashMap<>();
-        int reminded = 0;
-        for (CouplePromise promise : overdue) {
-            if (today.equals(promise.getLastRemindDay())) {
-                continue;
-            }
-            promise.setLastRemindDay(today);
-            promiseMapper.updateById(promise);
-            byPromiser.computeIfAbsent(promise.getPromiser(), k -> new ArrayList<>())
-                    .add("「" + promise.getContent() + "」");
-            reminded++;
-        }
-        for (Map.Entry<String, List<String>> entry : byPromiser.entrySet()) {
-            List<String> items = entry.getValue();
-            String joined = String.join("、", items);
-            String detail = items.size() == 1
-                    ? "还有 1 件事你没做到哦~：" + joined + " 😉"
-                    : "还有 " + items.size() + " 件事你没做到哦~：" + joined;
-            push.pushCoupleEvent("promise-overdue", "system", entry.getKey(), detail);
-        }
-        if (reminded > 0) {
-            log.info("情侣约定逾期提醒完成：提醒 {} 条约定", reminded);
-        }
-    }
-
-    /** 每天 10:00（Asia/Shanghai）情绪急救箱：TA 连续 2 天低落时提醒对方哄一哄。 */
-    @Scheduled(cron = "0 0 10 * * ?", zone = "Asia/Shanghai")
-    public void remindLowMoods() {
-        careService.remindLowMoods();
-    }
-
-    /** 每天 09:45（Asia/Shanghai）倒数日提醒：期待的事倒数 7/3/1/0 天时提醒双方。 */
-    @Scheduled(cron = "0 45 9 * * ?", zone = "Asia/Shanghai")
-    public void remindCountdowns() {
-        memoryService.remindCountdowns();
     }
 
     /** 每天 09:30（Asia/Shanghai）检查纪念日倒数：提前 7 天 / 1 天 / 当天各提醒一次。 */

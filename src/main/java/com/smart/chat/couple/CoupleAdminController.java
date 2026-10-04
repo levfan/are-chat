@@ -17,32 +17,27 @@ import java.util.List;
 
 /**
  * F45 管理看板：情侣空间运营总览（仅管理员）。
+ * 统计项只保留仍在线的功能：贴贴动作与好事簿，其余随功能下线一并移除。
  */
 @RestController
 @RequestMapping("/api/couple/admin")
 public class CoupleAdminController {
 
-    public record CoupleStatsVO(long activeSpaces, long dissolvedSpaces, long avgDays, long totalLetters,
-                                long totalActions, long totalPromisesDone, long totalCapsules,
-                                long spacesCreatedThisMonth) {
+    public record CoupleStatsVO(long activeSpaces, long dissolvedSpaces, long avgDays, long totalActions,
+                                long totalDeeds, long spacesCreatedThisMonth) {
     }
 
     private final CoupleSpaceMapper spaceMapper;
-    private final CoupleLetterMapper letterMapper;
     private final CoupleActionMapper actionMapper;
-    private final CouplePromiseMapper promiseMapper;
-    private final CoupleCapsuleMapper capsuleMapper;
+    private final CoupleEchoDeedMapper deedMapper;
     private final AppUserService userService;
 
     @SuppressWarnings("java:S107")
-    public CoupleAdminController(CoupleSpaceMapper spaceMapper, CoupleLetterMapper letterMapper,
-                                 CoupleActionMapper actionMapper, CouplePromiseMapper promiseMapper,
-                                 CoupleCapsuleMapper capsuleMapper, AppUserService userService) {
+    public CoupleAdminController(CoupleSpaceMapper spaceMapper, CoupleActionMapper actionMapper,
+                                 CoupleEchoDeedMapper deedMapper, AppUserService userService) {
         this.spaceMapper = spaceMapper;
-        this.letterMapper = letterMapper;
         this.actionMapper = actionMapper;
-        this.promiseMapper = promiseMapper;
-        this.capsuleMapper = capsuleMapper;
+        this.deedMapper = deedMapper;
         this.userService = userService;
     }
 
@@ -78,7 +73,6 @@ public class CoupleAdminController {
                         .toLocalDate().toString().startsWith(monthPrefix))
                 .count();
         return ApiResponse.ok(new CoupleStatsVO(active, dissolved, avgDays,
-                letterMapper.selectCount(null), actionMapper.selectCount(null),
-                promiseMapper.selectCount(null), capsuleMapper.selectCount(null), createdThisMonth));
+                actionMapper.selectCount(null), deedMapper.selectCount(null), createdThisMonth));
     }
 }
