@@ -3,12 +3,12 @@ package com.smart.chat.couple.application;
 import com.smart.chat.couple.domain.streak.BondStreak;
 import com.smart.chat.couple.domain.streak.MakeupPolicy;
 import com.smart.chat.couple.domain.streak.StreakTier;
-import com.smart.chat.couple.infrastructure.persistence.CoupleActionMapper;
-import com.smart.chat.couple.infrastructure.persistence.CoupleActionPO;
-import com.smart.chat.couple.infrastructure.persistence.CoupleBondDayMapper;
-import com.smart.chat.couple.infrastructure.persistence.CoupleBondDayPO;
-import com.smart.chat.couple.infrastructure.persistence.CouplePointLedgerMapper;
-import com.smart.chat.couple.infrastructure.persistence.CouplePointLedgerPO;
+import com.smart.chat.couple.domain.bond.ActionRepository;
+import com.smart.chat.couple.domain.bond.BondAction;
+import com.smart.chat.couple.domain.streak.BondDayRepository;
+import com.smart.chat.couple.domain.streak.BondDay;
+import com.smart.chat.couple.domain.points.PointLedgerRepository;
+import com.smart.chat.couple.domain.points.PointEntry;
 import com.smart.chat.couple.domain.space.CoupleSpaceRepository;
 import com.smart.chat.couple.domain.space.CoupleSpace;
 import com.smart.chat.messaging.domain.CoupleEventPublisher;
@@ -57,18 +57,18 @@ public class CoupleStreakService {
     }
 
     private final CoupleSpaceRepository spaceRepository;
-    private final CoupleBondDayMapper bondDayMapper;
-    private final CoupleActionMapper actionMapper;
-    private final CouplePointLedgerMapper ledgerMapper;
+    private final BondDayRepository bondDayRepository;
+    private final ActionRepository actionRepository;
+    private final PointLedgerRepository ledgerRepository;
     private final CoupleEventPublisher push;
 
-    public CoupleStreakService(CoupleSpaceRepository spaceRepository, CoupleBondDayMapper bondDayMapper,
-                               CoupleActionMapper actionMapper, CouplePointLedgerMapper ledgerMapper,
+    public CoupleStreakService(CoupleSpaceRepository spaceRepository, BondDayRepository bondDayRepository,
+                               ActionRepository actionRepository, PointLedgerRepository ledgerRepository,
                                CoupleEventPublisher push) {
         this.spaceRepository = spaceRepository;
-        this.bondDayMapper = bondDayMapper;
-        this.actionMapper = actionMapper;
-        this.ledgerMapper = ledgerMapper;
+        this.bondDayRepository = bondDayRepository;
+        this.actionRepository = actionRepository;
+        this.ledgerRepository = ledgerRepository;
         this.push = push;
     }
 
@@ -82,14 +82,14 @@ public class CoupleStreakService {
     public StreakBoardVO boardOf(CoupleSpace space, String me) {
         seedCreationDay(space);
         // 打卡表只扫一遍：连续状态与补签标记都从同一份行集合派生
-        List<CoupleBondDayPO> rows = bondDayMapper.findBySpace(space.id());
+        List<BondDay> rows = bondDayRepository.findBySpace(space.id());
         BondStreak streak = BondStreak.of(dayTexts(rows), LocalDate.now());
         LocalDate today = LocalDate.now();
         Set<String> days = streak.dayStrings();
         Set<String> makeupDays = new HashSet<>();
-        for (CoupleBondDayPO row : rows) {
-            if (row.makeupFlag()) {
-                makeupDays.add(row.getDay());
+        for (BondDay row : rows) {
+            if (row.makeup()) {
+                makeupDays.add(row.day());
             }
         }
 
@@ -119,7 +119,7 @@ public class CoupleStreakService {
 
     /** 已确认的打卡日集合算出的连续状态（其它服务只读复用）。 */
     public BondStreak streakOf(String spaceId) {
-        return BondStreak.of(dayTexts(bondDayMapper.findBySpace(spaceId)), LocalDate.now());
+        return BondStreak.of(dayTexts(bondDayRepository.findBySpace(spaceId)), LocalDate.now());
     }
 
     // ========== 写 ==========
@@ -130,13 +130,13 @@ public class CoupleStreakService {
      */
     public void markTodayAfterAction(CoupleSpace space, String actor) {
         String today = LocalDate.now().toString();
-        if (bondDayMapper.find(space.id(), today) != null) {
+        if (bondDayRepository.find(space.id(), today).isPresent()) {
             return;
         }
         if (usersActiveSince(space.id(), startOfToday()).size() < 2) {
             return;
         }
-        int[] span = appendDay(space, today, CoupleBondDayPO.SOURCE_AUTO, null);
+        int[] span = appendDay(space, today, BondDay.SOURCE_AUTO, null);
         push.pushCoupleEventBoth("streak-checkin", actor, space.userA(), space.userB(),
                 "今天也贴到了 🔥 连续 " + span[1] + " 天");
         pushCrossedTiers(space, actor, span[0], span[1]);
@@ -148,12 +148,11 @@ public class CoupleStreakService {
         LocalDate target = rule(() -> MakeupPolicy.parseDay(day));
         LocalDate today = LocalDate.now();
         String text = target.toString();
-        guard(() -> MakeupPolicy.assertAllowed(target, today, bondDayMapper.find(space.id(), text) != null,
+        guard(() -> MakeupPolicy.assertAllowed(target, today, bondDayRepository.find(space.id(), text).isPresent(),
                 makeupUsedThisMonth(space.id(), today), balance(space, me)));
 
-        ledgerMapper.insert(CouplePointLedgerPO.of(space.id(), me, CouplePointLedgerPO.TYPE_SPEND,
-                "补签 " + text, MakeupPolicy.COST));
-        int[] span = appendDay(space, text, CoupleBondDayPO.SOURCE_MAKEUP, me);
+        ledgerRepository.append(PointEntry.spend(space.id(), me, "补签 " + text, MakeupPolicy.COST));
+        int[] span = appendDay(space, text, BondDay.SOURCE_MAKEUP, me);
         push.pushCoupleEventBoth("streak-makeup", me, space.userA(), space.userB(),
                 "补上了 " + text + " 的打卡 ✍️ 花了 " + MakeupPolicy.COST + " 分，现在连续 " + span[1] + " 天");
         pushCrossedTiers(space, me, span[0], span[1]);
@@ -167,10 +166,10 @@ public class CoupleStreakService {
      * 只扫打卡表一次：after 是在 before 的集合上加上这一天算出来的，不必回查数据库。
      */
     private int[] appendDay(CoupleSpace space, String day, String source, String operator) {
-        List<CoupleBondDayPO> before = bondDayMapper.findBySpace(space.id());
+        List<BondDay> before = bondDayRepository.findBySpace(space.id());
         LocalDate today = LocalDate.now();
         int prev = BondStreak.of(dayTexts(before), today).longestStreak();
-        bondDayMapper.insert(CoupleBondDayPO.of(space.id(), day, source, operator));
+        bondDayRepository.append(BondDay.confirm(space.id(), day, source, operator));
         List<String> after = dayTexts(before);
         after.add(day);
         int now = Math.max(prev, BondStreak.of(after, today).longestStreak());
@@ -195,31 +194,31 @@ public class CoupleStreakService {
         if (createdDay.compareTo(LocalDate.now().toString()) > 0) {
             return;
         }
-        if (bondDayMapper.find(space.id(), createdDay) == null) {
-            bondDayMapper.insert(CoupleBondDayPO.of(space.id(), createdDay, CoupleBondDayPO.SOURCE_AUTO, null));
+        if (bondDayRepository.find(space.id(), createdDay).isEmpty()) {
+            bondDayRepository.append(BondDay.confirm(space.id(), createdDay, BondDay.SOURCE_AUTO, null));
         }
     }
 
-    private List<String> dayTexts(List<CoupleBondDayPO> rows) {
+    private List<String> dayTexts(List<BondDay> rows) {
         List<String> days = new ArrayList<>();
-        for (CoupleBondDayPO row : rows) {
-            days.add(row.getDay());
+        for (BondDay row : rows) {
+            days.add(row.day());
         }
         return days;
     }
 
     private int makeupUsedThisMonth(String spaceId, LocalDate today) {
         YearMonth month = YearMonth.from(today);
-        return (int) bondDayMapper.countMakeupBetween(spaceId, month.atDay(1).toString(),
+        return (int) bondDayRepository.countMakeupBetween(spaceId, month.atDay(1).toString(),
                 month.atEndOfMonth().toString());
     }
 
     /** 当天 00:00 起的贴贴流水里出现过哪些人（只取当天，不把全历史拉进内存）。 */
     private Set<String> usersActiveSince(String spaceId, long fromMs) {
         Set<String> users = new HashSet<>();
-        for (CoupleActionPO action : actionMapper.findSince(spaceId, fromMs)) {
-            if (action.getUsername() != null) {
-                users.add(action.getUsername());
+        for (BondAction action : actionRepository.listSentSince(spaceId, fromMs)) {
+            if (action.username() != null) {
+                users.add(action.username());
             }
         }
         return users;
@@ -231,11 +230,9 @@ public class CoupleStreakService {
 
     /** 本人积分余额 = 累计 EARN − 累计 SPEND（与愿望券本同一口径）。 */
     private int balance(CoupleSpace space, String me) {
-        return ledgerMapper.findBySpace(space.id()).stream()
-                .filter(l -> me.equals(l.getFromUser()))
-                .mapToInt(l -> CouplePointLedgerPO.TYPE_EARN.equals(l.getType())
-                        ? (l.getPoints() == null ? 0 : l.getPoints())
-                        : -(l.getPoints() == null ? 0 : l.getPoints()))
+        return ledgerRepository.findBySpace(space.id()).stream()
+                .filter(l -> me.equals(l.fromUser()))
+                .mapToInt(l -> l.earned() ? l.points() : -l.points())
                 .sum();
     }
 

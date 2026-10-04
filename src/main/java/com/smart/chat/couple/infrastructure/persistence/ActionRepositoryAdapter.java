@@ -48,6 +48,16 @@ public class ActionRepositoryAdapter implements ActionRepository {
         return actionMapper.lastCreatedAt(spaceId, kind);
     }
 
+    @Override
+    public List<BondAction> listSentSince(String spaceId, long fromMillis) {
+        return actionMapper.findSince(spaceId, fromMillis).stream().map(ActionRepositoryAdapter::toDomain).toList();
+    }
+
+    @Override
+    public long countAll() {
+        return actionMapper.selectCount(null);
+    }
+
     private static CoupleActionPO toPo(BondAction action) {
         CoupleActionPO po = new CoupleActionPO();
         po.setId(action.id());

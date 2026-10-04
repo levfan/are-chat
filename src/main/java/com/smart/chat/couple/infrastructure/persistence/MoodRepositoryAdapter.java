@@ -32,6 +32,27 @@ public class MoodRepositoryAdapter implements MoodRepository {
         return moodMapper.findBySpace(spaceId).stream().map(MoodRepositoryAdapter::toDomain).toList();
     }
 
+    @Override
+    public void save(Mood mood) {
+        CoupleMoodPO existing = moodMapper.selectById(mood.id());
+        if (existing == null) {
+            CoupleMoodPO po = new CoupleMoodPO();
+            po.setId(mood.id());
+            po.setSpaceId(mood.spaceId());
+            po.setUsername(mood.username());
+            po.setMoodDay(mood.moodDay());
+            po.setMood(mood.mood());
+            po.setNote(mood.note());
+            po.setCreated(mood.created());
+            moodMapper.insert(po);
+            return;
+        }
+        existing.setMood(mood.mood());
+        existing.setNote(mood.note());
+        existing.setUpdatedAt(mood.updatedAt());
+        moodMapper.updateById(existing);
+    }
+
     private static Mood toDomain(CoupleMoodPO po) {
         return Mood.restore(po.getId(), po.getSpaceId(), po.getUsername(), po.getMoodDay(), po.getMood(),
                 po.getNote(), po.getCreated(), po.getUpdatedAt());

@@ -16,6 +16,12 @@ public interface ActionRepository {
     /** 该空间全部动作（新→旧，动作流与今日计数都用它）。 */
     List<BondAction> listBySpace(String spaceId);
 
+    /** 某时刻（含）之后的贴贴流水——打卡判定只看当天，不必把全历史拉进内存。 */
+    List<BondAction> listSentSince(String spaceId, long fromMillis);
+
+    /** 全部空间的贴贴流水条数（运营看板 F45 的全站口径）。 */
+    long countAll();
+
     /** 某类动作在这个空间累计多少次（里程碑踩线用）。 */
     long countByKind(String spaceId, String kind);
 

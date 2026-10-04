@@ -1,11 +1,9 @@
 package com.smart.chat.couple.application;
 
+import com.smart.chat.couple.domain.invite.Invite;
+import com.smart.chat.couple.domain.invite.InviteRepository;
 import com.smart.chat.couple.domain.space.CoupleSpace;
 import com.smart.chat.couple.domain.space.CoupleSpaceRepository;
-import com.smart.chat.couple.infrastructure.persistence.CoupleInviteMapper;
-import com.smart.chat.couple.infrastructure.persistence.CoupleInvitePO;
-import com.smart.chat.couple.domain.space.CoupleSpaceRepository;
-import com.smart.chat.couple.domain.space.CoupleSpace;
 import com.smart.chat.identity.domain.AccountDirectory;
 import com.smart.chat.messaging.domain.CoupleEventPublisher;
 import com.smart.chat.messaging.domain.FriendshipChecker;
@@ -33,6 +31,8 @@ import static org.mockito.Mockito.when;
 /**
  * 邀请建立情侣空间（需求 1）的守卫：同意之后必须由<b>聚合</b>开出空间、
  * 双方按字典序落进 userA/userB，且「有一方已经在别的空间」这道闸门要真的拦下来。
+ * 邀请的状态机（谁能处理、只能处理一次）现在由 {@link Invite} 自己守，
+ * 所以这里断言的是聚合落定后的状态 + 交回仓储的那次 save。
  */
 @ExtendWith(MockitoExtension.class)
 class CoupleInviteAcceptTest {
@@ -42,7 +42,7 @@ class CoupleInviteAcceptTest {
     @Mock
     private CoupleSpaceRepository spaceRepository;
     @Mock
-    private CoupleInviteMapper inviteMapper;
+    private InviteRepository inviteRepository;
     @Mock
     private FriendshipChecker friendships;
     @Mock
@@ -55,15 +55,18 @@ class CoupleInviteAcceptTest {
     @InjectMocks
     private CoupleService service;
 
-    private CoupleInvitePO invite(String from, String to) {
-        CoupleInvitePO invite = CoupleInvitePO.of(from, to, "在一起吧");
-        invite.setId(INVITE_ID);
-        return invite;
+    private Invite invite(String from, String to) {
+        return Invite.restore(INVITE_ID, from, to, "在一起吧", Invite.STATUS_PENDING,
+                System.currentTimeMillis(), null);
+    }
+
+    private Invite inviteIn(String from, String to, String status) {
+        return Invite.restore(INVITE_ID, from, to, "在一起吧", status, System.currentTimeMillis(), null);
     }
 
     private CoupleSpace activeSpace(String a, String b) {
-        CoupleSpace space = CoupleSpace.restore("s1", a, b, CoupleSpace.STATUS_ACTIVE, System.currentTimeMillis(), null, null, null, null, null, null, null);
-        return space;
+        return CoupleSpace.restore("s1", a, b, CoupleSpace.STATUS_ACTIVE, System.currentTimeMillis(),
+                null, null, null, null, null, null, null);
     }
 
     private void stubNoSpaceForAnyone() {
@@ -82,8 +85,8 @@ class CoupleInviteAcceptTest {
 
     @Test
     void acceptingOpensTheSpaceThroughTheAggregateWithSortedMembers() {
-        CoupleInvitePO stored = invite("zed", "alice");
-        when(inviteMapper.selectById(INVITE_ID)).thenReturn(stored);
+        Invite stored = invite("zed", "alice");
+        when(inviteRepository.findById(INVITE_ID)).thenReturn(Optional.of(stored));
         stubNoSpaceForAnyone();
         stubRepositoryCreatesSpace("alice");
 
@@ -99,22 +102,21 @@ class CoupleInviteAcceptTest {
         assertThat(opened.isActive()).isTrue();
         assertThat(vo.partner().username()).isEqualTo("zed");
         // 建空间只有一条路：经聚合交给仓储端口
-        assertThat(stored.getStatus()).isEqualTo(CoupleInvitePO.STATUS_ACCEPTED);
-        verify(inviteMapper).updateById(stored);
+        assertThat(stored.status()).isEqualTo(Invite.STATUS_ACCEPTED);
+        verify(inviteRepository).save(stored);
         verify(push).pushCoupleEvent(eq("invite-accepted"), eq("alice"), eq("zed"), anyString());
     }
 
     @Test
     void onlyTheRecipientCanAcceptAndOnlyOnce() {
-        when(inviteMapper.selectById(INVITE_ID)).thenReturn(invite("zed", "alice"));
+        when(inviteRepository.findById(INVITE_ID)).thenReturn(Optional.of(invite("zed", "alice")));
         stubNoSpaceForAnyone();
 
         assertThatThrownBy(() -> service.accept("zed", INVITE_ID))
                 .isInstanceOf(BusinessException.class).hasMessage("只能处理发给自己的邀请");
 
-        CoupleInvitePO handled = invite("zed", "alice");
-        handled.setStatus(CoupleInvitePO.STATUS_ACCEPTED);
-        when(inviteMapper.selectById(INVITE_ID)).thenReturn(handled);
+        when(inviteRepository.findById(INVITE_ID)).thenReturn(
+                Optional.of(inviteIn("zed", "alice", Invite.STATUS_ACCEPTED)));
         assertThatThrownBy(() -> service.accept("alice", INVITE_ID))
                 .isInstanceOf(BusinessException.class).hasMessage("该邀请已经处理过了");
         verify(spaceRepository, never()).save(any(CoupleSpace.class));
@@ -122,7 +124,7 @@ class CoupleInviteAcceptTest {
 
     @Test
     void acceptingRefusesWhenEitherSideAlreadyHasASpace() {
-        when(inviteMapper.selectById(INVITE_ID)).thenReturn(invite("zed", "alice"));
+        when(inviteRepository.findById(INVITE_ID)).thenReturn(Optional.of(invite("zed", "alice")));
         when(spaceRepository.findActiveByMember("alice")).thenReturn(Optional.of(activeSpace("alice", "bob")));
 
         assertThatThrownBy(() -> service.accept("alice", INVITE_ID))
@@ -139,19 +141,28 @@ class CoupleInviteAcceptTest {
 
         assertThatThrownBy(() -> service.invite("alice", "bob", "在一起"))
                 .isInstanceOf(BusinessException.class).hasMessage("只能邀请自己的好友，先去通讯录加个好友吧");
-        verify(inviteMapper, never()).insert(any(CoupleInvitePO.class));
+        verify(inviteRepository, never()).save(any(Invite.class));
     }
 
     @Test
-    void dissolvingIsOneWayAndAnnouncesToThePartner() {
-        CoupleSpace space = activeSpace("alice", "bob");
-        when(spaceRepository.findActiveByMember("bob")).thenReturn(Optional.of(space));
+    void rejectingAndCancelingAreBothOneWayAndAnnounceOnlyToTheSender() {
+        Invite toMe = invite("zed", "alice");
+        when(inviteRepository.findById(INVITE_ID)).thenReturn(Optional.of(toMe));
+        service.reject("alice", INVITE_ID);
+        assertThat(toMe.status()).isEqualTo(Invite.STATUS_REJECTED);
+        verify(push).pushCoupleEvent(eq("invite-rejected"), eq("alice"), eq("zed"),
+                eq("TA 婉拒了情侣空间邀请，做朋友也很好"));
 
-        service.dissolve("bob");
+        Invite fromMe = invite("alice", "zed");
+        when(inviteRepository.findById(INVITE_ID)).thenReturn(Optional.of(fromMe));
+        service.cancel("alice", INVITE_ID);
+        assertThat(fromMe.status()).isEqualTo(Invite.STATUS_CANCELED);
+        // 撤回不推事件：现役口径就是只落库不打扰
+        verify(push, never()).pushCoupleEvent(eq("invite-canceled"), anyString(), anyString(), anyString());
 
-        assertThat(space.status()).isEqualTo(CoupleSpace.STATUS_DISSOLVED);
-        assertThat(space.dissolvedAt()).isNotNull();
-        verify(spaceRepository).save(space);
-        verify(push).pushCoupleEvent(eq("dissolved"), eq("bob"), eq("alice"), anyString());
+        Invite someoneElses = invite("zed", "bob");
+        when(inviteRepository.findById(INVITE_ID)).thenReturn(Optional.of(someoneElses));
+        assertThatThrownBy(() -> service.cancel("alice", INVITE_ID))
+                .isInstanceOf(BusinessException.class).hasMessage("只能撤回自己发出的邀请");
     }
 }

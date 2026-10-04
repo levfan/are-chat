@@ -1,19 +1,23 @@
 package com.smart.chat.couple.application;
 
-import com.smart.chat.couple.infrastructure.persistence.CoupleActionPO;
-import com.smart.chat.couple.infrastructure.persistence.CoupleActionMapper;
-import com.smart.chat.couple.infrastructure.persistence.CoupleAnniversaryMapper;
-import com.smart.chat.couple.infrastructure.persistence.CoupleCatchSafewordUsePO;
-import com.smart.chat.couple.infrastructure.persistence.CoupleCatchSafewordUseMapper;
-import com.smart.chat.couple.infrastructure.persistence.CoupleEchoDeedPO;
-import com.smart.chat.couple.infrastructure.persistence.CoupleEchoDeedMapper;
-import com.smart.chat.couple.infrastructure.persistence.CoupleInviteMapper;
-import com.smart.chat.couple.infrastructure.persistence.CoupleMoodPO;
-import com.smart.chat.couple.infrastructure.persistence.CoupleMoodMapper;
-import com.smart.chat.couple.infrastructure.persistence.CouplePointLedgerPO;
-import com.smart.chat.couple.infrastructure.persistence.CouplePointLedgerMapper;
-import com.smart.chat.couple.infrastructure.persistence.CoupleQuestOvertimePO;
-import com.smart.chat.couple.infrastructure.persistence.CoupleQuestOvertimeMapper;
+
+import com.smart.chat.couple.domain.bond.ActionRepository;
+import com.smart.chat.couple.domain.bond.BondAction;
+import com.smart.chat.couple.domain.anniversary.AnniversaryRepository;
+
+import com.smart.chat.couple.domain.safeword.SafewordUse;
+import com.smart.chat.couple.domain.safeword.SafewordUseRepository;
+import com.smart.chat.couple.domain.deed.Deed;
+import com.smart.chat.couple.domain.deed.DeedRepository;
+import com.smart.chat.couple.domain.invite.InviteRepository;
+
+import com.smart.chat.couple.domain.mood.Mood;
+import com.smart.chat.couple.domain.mood.MoodRepository;
+import com.smart.chat.couple.domain.points.PointEntry;
+import com.smart.chat.couple.domain.points.PointLedgerRepository;
+
+import com.smart.chat.couple.domain.quest.QuestOvertime;
+import com.smart.chat.couple.domain.quest.QuestOvertimeRepository;
 import com.smart.chat.couple.domain.space.CoupleSpace;
 import com.smart.chat.couple.domain.space.CoupleSpaceRepository;
 import com.smart.chat.identity.application.AppUserService;
@@ -50,21 +54,21 @@ class CoupleIntimacyTest {
     @Mock
     private CoupleSpaceRepository spaceRepository;
     @Mock
-    private CoupleInviteMapper inviteMapper;
+    private InviteRepository inviteRepository;
     @Mock
-    private CoupleAnniversaryMapper anniversaryMapper;
+    private AnniversaryRepository anniversaryRepository;
     @Mock
-    private CoupleMoodMapper moodMapper;
+    private MoodRepository moodRepository;
     @Mock
-    private CoupleActionMapper actionMapper;
+    private ActionRepository actionRepository;
     @Mock
-    private CoupleEchoDeedMapper deedMapper;
+    private DeedRepository deedRepository;
     @Mock
-    private CoupleQuestOvertimeMapper overtimeMapper;
+    private QuestOvertimeRepository overtimeRepository;
     @Mock
-    private CoupleCatchSafewordUseMapper safewordUseMapper;
+    private SafewordUseRepository safewordUseRepository;
     @Mock
-    private CouplePointLedgerMapper ledgerMapper;
+    private PointLedgerRepository ledgerRepository;
     @Mock
     private FriendMapper friendMapper;
     @Mock
@@ -83,13 +87,13 @@ class CoupleIntimacyTest {
     void setUp() {
         CoupleSpace space = CoupleSpace.restore("s1", "alice", "bob", CoupleSpace.STATUS_ACTIVE, 0L, null, null, null, null, null, null, null);
         lenient().when(spaceRepository.findActiveByMember(any())).thenReturn(Optional.of(space));
-        lenient().when(moodMapper.findBySpace("s1")).thenReturn(List.of());
-        lenient().when(actionMapper.findBySpace("s1")).thenReturn(List.of());
-        lenient().when(deedMapper.findBySpace("s1")).thenReturn(List.of());
-        lenient().when(overtimeMapper.findBySpace("s1")).thenReturn(List.of());
-        lenient().when(safewordUseMapper.findBySpace("s1")).thenReturn(List.of());
-        lenient().when(ledgerMapper.findBySpace("s1")).thenReturn(List.of());
-        lenient().when(anniversaryMapper.findBySpace("s1")).thenReturn(List.of());
+        lenient().when(moodRepository.listBySpace("s1")).thenReturn(List.of());
+        lenient().when(actionRepository.listBySpace("s1")).thenReturn(List.of());
+        lenient().when(deedRepository.findBySpace("s1")).thenReturn(List.of());
+        lenient().when(overtimeRepository.listBySpace("s1")).thenReturn(List.of());
+        lenient().when(safewordUseRepository.listBySpace("s1")).thenReturn(List.of());
+        lenient().when(ledgerRepository.findBySpace("s1")).thenReturn(List.of());
+        lenient().when(anniversaryRepository.findBySpace("s1")).thenReturn(List.of());
     }
 
     /** 毫秒时间戳按系统时区落到某天，用于造「同一天双方都贴过」的数据。 */
@@ -101,45 +105,41 @@ class CoupleIntimacyTest {
     @Test
     void scoreWeightsComeOnlyFromRetainedCards() {
         // 心情 3 条 ×1
-        List<CoupleMoodPO> moods = new ArrayList<>();
-        moods.add(CoupleMoodPO.of("s1", "alice", DAY, "HAPPY", null));
-        moods.add(CoupleMoodPO.of("s1", "alice", LocalDate.now().minusDays(1).toString(), "CALM", null));
-        moods.add(CoupleMoodPO.of("s1", "bob", DAY, "SAD", null));
-        when(moodMapper.findBySpace("s1")).thenReturn(moods);
+        List<Mood> moods = new ArrayList<>();
+        moods.add(Mood.restore("m1", "s1", "alice", DAY, "HAPPY", null, System.currentTimeMillis(), null));
+        moods.add(Mood.restore("m2", "s1", "alice", LocalDate.now().minusDays(1).toString(), "CALM", null,
+                System.currentTimeMillis(), null));
+        moods.add(Mood.restore("m3", "s1", "bob", DAY, "SAD", null, System.currentTimeMillis(), null));
+        when(moodRepository.listBySpace("s1")).thenReturn(moods);
 
         // 贴贴双向往来 1 天 ×2：今天两人都贴了，昨天只有 alice 贴（单向不计）
-        List<CoupleActionPO> actions = new ArrayList<>();
-        actions.add(CoupleActionPO.of("s1", "alice", "HUG"));
-        actions.get(0).setCreated(atOffsetDays(0));
-        CoupleActionPO bobToday = CoupleActionPO.of("s1", "bob", "POKE");
-        bobToday.setCreated(atOffsetDays(0));
-        actions.add(bobToday);
-        CoupleActionPO aliceOnly = CoupleActionPO.of("s1", "alice", "KISS");
-        aliceOnly.setCreated(atOffsetDays(3));
-        actions.add(aliceOnly);
-        when(actionMapper.findBySpace("s1")).thenReturn(actions);
+        List<BondAction> actions = new ArrayList<>();
+        actions.add(BondAction.restore("a1", "s1", "alice", "HUG", atOffsetDays(0)));
+        actions.add(BondAction.restore("a2", "s1", "bob", "POKE", atOffsetDays(0)));
+        actions.add(BondAction.restore("a3", "s1", "alice", "KISS", atOffsetDays(3)));
+        when(actionRepository.listBySpace("s1")).thenReturn(actions);
 
         // 好事簿 2 条 ×2
-        when(deedMapper.findBySpace("s1")).thenReturn(List.of(
-                CoupleEchoDeedPO.of("s1", "alice", "接我下班", DAY),
-                CoupleEchoDeedPO.of("s1", "bob", "帮我吹头", DAY)));
+        when(deedRepository.findBySpace("s1")).thenReturn(List.of(
+                Deed.restore("d1", "s1", "alice", "接我下班", DAY, 0, System.currentTimeMillis(), null),
+                Deed.restore("d2", "s1", "bob", "帮我吹头", DAY, 0, System.currentTimeMillis(), null)));
 
         // 留灯 1 次 ×3（另一行只预报了加班没留灯，不算）
-        CoupleQuestOvertimePO lit = CoupleQuestOvertimePO.of("s1", DAY, "alice", 22, "赶年结");
-        lit.leaveLamp("bob", "灯给你留着");
-        when(overtimeMapper.findBySpace("s1")).thenReturn(List.of(
-                lit, CoupleQuestOvertimePO.of("s1", LocalDate.now().minusDays(1).toString(), "bob", 20, "")));
+        QuestOvertime lit = QuestOvertime.restore("q1", "s1", DAY, "alice", 22, "赶年结", "灯给你留着", "bob",
+                System.currentTimeMillis(), null);
+        when(overtimeRepository.listBySpace("s1")).thenReturn(List.of(lit,
+                QuestOvertime.restore("q2", "s1", LocalDate.now().minusDays(1).toString(), "bob", 20, "", null, null,
+                        System.currentTimeMillis(), null)));
 
         // 安全词复盘 1 次 ×2（另一次没补复盘，不算）
-        CoupleCatchSafewordUsePO reflected = CoupleCatchSafewordUsePO.of("s1", DAY, "alice");
-        reflected.setReflect("当时是怕被丢下");
-        when(safewordUseMapper.findBySpace("s1")).thenReturn(List.of(reflected,
-                CoupleCatchSafewordUsePO.of("s1", LocalDate.now().minusDays(1).toString(), "bob")));
+        SafewordUse reflected = SafewordUse.restore("u1", DAY, "alice", "当时是怕被丢下");
+        when(safewordUseRepository.listBySpace("s1")).thenReturn(List.of(reflected,
+                SafewordUse.restore("u2", LocalDate.now().minusDays(1).toString(), "bob", null)));
 
         // 台账赚分 ×1：SPEND 不参与进账
-        when(ledgerMapper.findBySpace("s1")).thenReturn(List.of(
-                CouplePointLedgerPO.of("s1", "alice", CouplePointLedgerPO.TYPE_EARN, "好事簿：接我下班", 9),
-                CouplePointLedgerPO.of("s1", "alice", CouplePointLedgerPO.TYPE_SPEND, "发出愿望券：看一次海", 10)));
+        when(ledgerRepository.findBySpace("s1")).thenReturn(List.of(
+                PointEntry.earn("s1", "alice", "好事簿：接我下班", 9),
+                PointEntry.spend("s1", "alice", "发出愿望券：看一次海", 10)));
 
         CoupleService.IntimacyVO vo = service.intimacy("alice");
         CoupleService.IntimacyBreakdown d = vo.breakdown();
@@ -160,14 +160,10 @@ class CoupleIntimacyTest {
 
     @Test
     void oneSidedBondDayDoesNotCount() {
-        List<CoupleActionPO> actions = new ArrayList<>();
-        CoupleActionPO a = CoupleActionPO.of("s1", "alice", "HUG");
-        a.setCreated(atOffsetDays(0));
-        actions.add(a);
-        CoupleActionPO b = CoupleActionPO.of("s1", "alice", "POKE");
-        b.setCreated(atOffsetDays(1));
-        actions.add(b);
-        when(actionMapper.findBySpace("s1")).thenReturn(actions);
+        List<BondAction> actions = new ArrayList<>();
+        actions.add(BondAction.restore("a1", "s1", "alice", "HUG", atOffsetDays(0)));
+        actions.add(BondAction.restore("a2", "s1", "alice", "POKE", atOffsetDays(1)));
+        when(actionRepository.listBySpace("s1")).thenReturn(actions);
 
         CoupleService.IntimacyVO vo = service.intimacy("alice");
 
@@ -178,12 +174,12 @@ class CoupleIntimacyTest {
 
     @Test
     void levelLadderKeepsThePreTrimThresholds() {
-        when(ledgerMapper.findBySpace("s1")).thenReturn(List.of(
-                CouplePointLedgerPO.of("s1", "alice", CouplePointLedgerPO.TYPE_EARN, "凑数", 50)));
+        when(ledgerRepository.findBySpace("s1")).thenReturn(List.of(
+                PointEntry.earn("s1", "alice", "凑数", 50)));
         assertThat(service.intimacy("alice").level()).isEqualTo(2);
 
-        when(ledgerMapper.findBySpace("s1")).thenReturn(List.of(
-                CouplePointLedgerPO.of("s1", "alice", CouplePointLedgerPO.TYPE_EARN, "凑数", 1300)));
+        when(ledgerRepository.findBySpace("s1")).thenReturn(List.of(
+                PointEntry.earn("s1", "alice", "凑数", 1300)));
         CoupleService.IntimacyVO top = service.intimacy("alice");
         assertThat(top.level()).isEqualTo(7);
         assertThat(top.title()).isEqualTo("相守一生");

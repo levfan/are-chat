@@ -20,6 +20,9 @@ public interface QuestOvertimeRepository {
     /** 某天两人的全部预报（看板读双方视角，口径与原 findByDay 一致）。 */
     List<QuestOvertime> listByDay(String spaceId, String day);
 
+    /** 该空间全部预报（心动值的「留灯数」从这里数，只要数量不要内容）。 */
+    List<QuestOvertime> listBySpace(String spaceId);
+
     /** 存回聚合：id 不存在整行插入，已存在只回写 until_hour / note / lamp / lamp_by / updated_at。 */
     void save(QuestOvertime overtime);
 }

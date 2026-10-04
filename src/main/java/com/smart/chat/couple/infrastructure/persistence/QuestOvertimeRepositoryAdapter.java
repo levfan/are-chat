@@ -61,6 +61,11 @@ public class QuestOvertimeRepositoryAdapter implements QuestOvertimeRepository {
     }
 
     /** 聚合负责维护的列：预报内容 + 灯卡 + 更新时间（改期与留灯各自只真的改动其中一部分，其余沿用载入值）。 */
+    @Override
+    public List<QuestOvertime> listBySpace(String spaceId) {
+        return overtimeMapper.findBySpace(spaceId).stream().map(QuestOvertimeRepositoryAdapter::toDomain).toList();
+    }
+
     private static void applyOwnedFields(CoupleQuestOvertimePO po, QuestOvertime overtime) {
         po.setUntilHour(overtime.untilHour());
         po.setNote(overtime.note());

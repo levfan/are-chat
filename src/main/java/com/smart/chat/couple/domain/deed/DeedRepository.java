@@ -11,8 +11,14 @@ import java.util.Optional;
  */
 public interface DeedRepository {
 
+    /** 全部空间的好事条数（运营看板 F45 的全站口径）。 */
+    long countAll();
+
     /** 按 id 取一条（不带空间过滤——归属闸门是用例的事，见 {@code CoupleEchoService.starDeed}）。 */
     Optional<Deed> findById(String deedId);
+
+    /** 该空间的全部好事（心动值按条数供数，只要数量不要内容）。 */
+    List<Deed> findBySpace(String spaceId);
 
     /** 某人记下的全部好事，新的在前（列表截断上限属于用例，不在这里）。 */
     List<Deed> listByRecorder(String spaceId, String fromUser);

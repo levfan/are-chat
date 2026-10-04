@@ -1,12 +1,12 @@
 package com.smart.chat.couple.application;
 
 import com.smart.chat.couple.domain.streak.StreakTier;
-import com.smart.chat.couple.infrastructure.persistence.CoupleActionMapper;
-import com.smart.chat.couple.infrastructure.persistence.CoupleActionPO;
-import com.smart.chat.couple.infrastructure.persistence.CoupleBondDayMapper;
-import com.smart.chat.couple.infrastructure.persistence.CoupleBondDayPO;
-import com.smart.chat.couple.infrastructure.persistence.CouplePointLedgerMapper;
-import com.smart.chat.couple.infrastructure.persistence.CouplePointLedgerPO;
+import com.smart.chat.couple.domain.bond.ActionRepository;
+import com.smart.chat.couple.domain.bond.BondAction;
+import com.smart.chat.couple.domain.streak.BondDayRepository;
+import com.smart.chat.couple.domain.streak.BondDay;
+import com.smart.chat.couple.domain.points.PointLedgerRepository;
+import com.smart.chat.couple.domain.points.PointEntry;
 import com.smart.chat.couple.domain.space.CoupleSpaceRepository;
 import com.smart.chat.couple.domain.space.CoupleSpace;
 import com.smart.chat.messaging.domain.CoupleEventPublisher;
@@ -53,11 +53,11 @@ class CoupleStreakServiceTest {
     @Mock
     private CoupleSpaceRepository spaceRepository;
     @Mock
-    private CoupleBondDayMapper bondDayMapper;
+    private BondDayRepository bondDayRepository;
     @Mock
-    private CoupleActionMapper actionMapper;
+    private ActionRepository actionRepository;
     @Mock
-    private CouplePointLedgerMapper ledgerMapper;
+    private PointLedgerRepository ledgerRepository;
     @Mock
     private CoupleEventPublisher push;
 
@@ -66,31 +66,31 @@ class CoupleStreakServiceTest {
 
     /** 内存假表：断言落在真实副作用上。 */
     private final class Bag {
-        private final List<CoupleBondDayPO> days = new ArrayList<>();
-        private final List<CoupleActionPO> actions = new ArrayList<>();
-        private final List<CouplePointLedgerPO> ledger = new ArrayList<>();
+        private final List<BondDay> days = new ArrayList<>();
+        private final List<BondAction> actions = new ArrayList<>();
+        private final List<PointEntry> ledger = new ArrayList<>();
 
         Bag stub() {
-            lenient().when(bondDayMapper.findBySpace(SPACE)).thenAnswer(inv -> List.copyOf(days));
-            lenient().when(bondDayMapper.find(eq(SPACE), anyString())).thenAnswer(inv -> days.stream()
-                    .filter(d -> d.getDay().equals(inv.getArgument(1))).findFirst().orElse(null));
-            lenient().when(bondDayMapper.insert(any(CoupleBondDayPO.class))).thenAnswer(inv -> {
+            lenient().when(bondDayRepository.findBySpace(SPACE)).thenAnswer(inv -> List.copyOf(days));
+            lenient().when(bondDayRepository.find(eq(SPACE), anyString())).thenAnswer(inv -> days.stream()
+                    .filter(d -> d.day().equals(inv.getArgument(1))).findFirst());
+            lenient().doAnswer(inv -> {
                 days.add(inv.getArgument(0));
-                return 1;
-            });
-            lenient().when(bondDayMapper.countMakeupBetween(eq(SPACE), anyString(), anyString()))
-                    .thenAnswer(inv -> days.stream().filter(CoupleBondDayPO::makeupFlag)
-                            .filter(d -> d.getDay().compareTo(inv.getArgument(1, String.class)) >= 0
-                                    && d.getDay().compareTo(inv.getArgument(2, String.class)) <= 0).count());
-            lenient().when(actionMapper.findSince(eq(SPACE), anyLong())).thenAnswer(inv -> {
+                return null;
+            }).when(bondDayRepository).append(any(BondDay.class));
+            lenient().when(bondDayRepository.countMakeupBetween(eq(SPACE), anyString(), anyString()))
+                    .thenAnswer(inv -> days.stream().filter(BondDay::makeup)
+                            .filter(d -> d.day().compareTo(inv.getArgument(1, String.class)) >= 0
+                                    && d.day().compareTo(inv.getArgument(2, String.class)) <= 0).count());
+            lenient().when(actionRepository.listSentSince(eq(SPACE), anyLong())).thenAnswer(inv -> {
                 long from = inv.getArgument(1, Long.class);
-                return actions.stream().filter(a -> a.getCreated() != null && a.getCreated() >= from).toList();
+                return actions.stream().filter(a -> a.created() != null && a.created() >= from).toList();
             });
-            lenient().when(ledgerMapper.findBySpace(SPACE)).thenAnswer(inv -> List.copyOf(ledger));
-            lenient().when(ledgerMapper.insert(any(CouplePointLedgerPO.class))).thenAnswer(inv -> {
+            lenient().when(ledgerRepository.findBySpace(SPACE)).thenAnswer(inv -> List.copyOf(ledger));
+            lenient().doAnswer(inv -> {
                 ledger.add(inv.getArgument(0));
-                return 1;
-            });
+                return null;
+            }).when(ledgerRepository).append(any(PointEntry.class));
             return this;
         }
 
@@ -99,29 +99,27 @@ class CoupleStreakServiceTest {
         }
 
         void checkin(String day, String source, String operator) {
-            days.add(CoupleBondDayPO.of(SPACE, day, source, operator));
+            days.add(BondDay.confirm(SPACE, day, source, operator));
         }
 
         void acted(String who, long at) {
-            CoupleActionPO action = CoupleActionPO.of(SPACE, who, CoupleActionPO.KIND_HUG);
-            action.setCreated(at);
-            actions.add(action);
+            actions.add(BondAction.restore("act-" + who + "-" + at, SPACE, who, BondAction.KIND_HUG, at));
         }
 
         void earned(String who, int points) {
-            ledger.add(CouplePointLedgerPO.of(SPACE, who, CouplePointLedgerPO.TYPE_EARN, "好事簿", points));
+            ledger.add(PointEntry.earn(SPACE, who, "好事簿", points));
         }
 
         long autoRows() {
-            return days.stream().filter(d -> CoupleBondDayPO.SOURCE_AUTO.equals(d.getSource())).count();
+            return days.stream().filter(d -> BondDay.SOURCE_AUTO.equals(d.source())).count();
         }
 
         long makeupRows() {
-            return days.stream().filter(CoupleBondDayPO::makeupFlag).count();
+            return days.stream().filter(BondDay::makeup).count();
         }
 
         long spendRows() {
-            return ledger.stream().filter(l -> CouplePointLedgerPO.TYPE_SPEND.equals(l.getType())).count();
+            return ledger.stream().filter(l -> "SPEND".equals(l.type())).count();
         }
     }
 
@@ -159,8 +157,8 @@ class CoupleStreakServiceTest {
     @Test
     void crossingThreeConsecutiveDaysUnlocksTheBubbleOnce() {
         Bag bag = new Bag().stub();
-        bag.checkin(TWO_DAYS_AGO, CoupleBondDayPO.SOURCE_AUTO, null);
-        bag.checkin(YESTERDAY, CoupleBondDayPO.SOURCE_AUTO, null);
+        bag.checkin(TWO_DAYS_AGO, BondDay.SOURCE_AUTO, null);
+        bag.checkin(YESTERDAY, BondDay.SOURCE_AUTO, null);
         long now = System.currentTimeMillis();
         bag.acted("alice", now);
         bag.acted("bob", now);
@@ -172,7 +170,7 @@ class CoupleStreakServiceTest {
         verify(push, never()).pushCoupleEventBoth(eq("streak-unlocked"), eq("alice"), eq("alice"), eq("bob"),
                 contains(StreakTier.BACKGROUND.label()));
         assertThat(bag.days).hasSize(3);
-        assertThat(bag.days.stream().filter(d -> TODAY.equals(d.getDay())).count()).isEqualTo(1);
+        assertThat(bag.days.stream().filter(d -> TODAY.equals(d.day())).count()).isEqualTo(1);
     }
 
     @Test
@@ -180,18 +178,18 @@ class CoupleStreakServiceTest {
         Bag bag = new Bag().stub();
         bag.stubSpace(space());
         bag.earned("alice", 30);
-        bag.checkin(TWO_DAYS_AGO, CoupleBondDayPO.SOURCE_AUTO, null);
-        bag.checkin(FOUR_DAYS_AGO, CoupleBondDayPO.SOURCE_AUTO, null);
+        bag.checkin(TWO_DAYS_AGO, BondDay.SOURCE_AUTO, null);
+        bag.checkin(FOUR_DAYS_AGO, BondDay.SOURCE_AUTO, null);
 
         CoupleStreakService.StreakBoardVO board = service.makeup("alice", THREE_DAYS_AGO);
 
         assertThat(bag.makeupRows()).isEqualTo(1);
         assertThat(bag.spendRows()).isEqualTo(1);
-        CouplePointLedgerPO spend = bag.ledger.stream()
-                .filter(l -> CouplePointLedgerPO.TYPE_SPEND.equals(l.getType())).findFirst().orElseThrow();
-        assertThat(spend.getPoints()).isEqualTo(20);
-        assertThat(spend.getItem()).startsWith("补签 ");
-        assertThat(spend.getFromUser()).isEqualTo("alice");
+        PointEntry spend = bag.ledger.stream()
+                .filter(l -> "SPEND".equals(l.type())).findFirst().orElseThrow();
+        assertThat(spend.points()).isEqualTo(20);
+        assertThat(spend.item()).startsWith("补签 ");
+        assertThat(spend.fromUser()).isEqualTo("alice");
         assertThat(board.longestStreak()).isEqualTo(3);
         verify(push).pushCoupleEventBoth(eq("streak-makeup"), eq("alice"), eq("alice"), eq("bob"), anyString());
     }
@@ -206,7 +204,7 @@ class CoupleStreakServiceTest {
                 .isInstanceOf(BusinessException.class).hasMessageContaining("只能补最近 7 天");
         assertThatThrownBy(() -> service.makeup("alice", TODAY))
                 .isInstanceOf(BusinessException.class).hasMessageContaining("今天还不能补");
-        bag.checkin(YESTERDAY, CoupleBondDayPO.SOURCE_AUTO, null);
+        bag.checkin(YESTERDAY, BondDay.SOURCE_AUTO, null);
         assertThatThrownBy(() -> service.makeup("alice", YESTERDAY))
                 .isInstanceOf(BusinessException.class).hasMessageContaining("已经打过卡");
         assertThatThrownBy(() -> service.makeup("alice", "20261001"))
@@ -232,9 +230,9 @@ class CoupleStreakServiceTest {
         Bag bag = new Bag().stub();
         bag.stubSpace(space());
         bag.earned("alice", 200);
-        bag.checkin(YESTERDAY, CoupleBondDayPO.SOURCE_MAKEUP, "alice");
-        bag.checkin(TWO_DAYS_AGO, CoupleBondDayPO.SOURCE_MAKEUP, "alice");
-        bag.checkin(THREE_DAYS_AGO, CoupleBondDayPO.SOURCE_MAKEUP, "alice");
+        bag.checkin(YESTERDAY, BondDay.SOURCE_MAKEUP, "alice");
+        bag.checkin(TWO_DAYS_AGO, BondDay.SOURCE_MAKEUP, "alice");
+        bag.checkin(THREE_DAYS_AGO, BondDay.SOURCE_MAKEUP, "alice");
 
         assertThatThrownBy(() -> service.makeup("alice", FOUR_DAYS_AGO))
                 .isInstanceOf(BusinessException.class).hasMessageContaining("这个月已经补过 3 次");
@@ -245,8 +243,8 @@ class CoupleStreakServiceTest {
     void boardExposesTiersStripAndMakeupAffordability() {
         Bag bag = new Bag().stub();
         bag.stubSpace(space());
-        bag.checkin(YESTERDAY, CoupleBondDayPO.SOURCE_AUTO, null);
-        bag.checkin(TWO_DAYS_AGO, CoupleBondDayPO.SOURCE_AUTO, null);
+        bag.checkin(YESTERDAY, BondDay.SOURCE_AUTO, null);
+        bag.checkin(TWO_DAYS_AGO, BondDay.SOURCE_AUTO, null);
         bag.earned("alice", 5);
 
         CoupleStreakService.StreakBoardVO board = service.board("alice");
@@ -268,7 +266,7 @@ class CoupleStreakServiceTest {
     void boardCanMakeupWhenYesterdayMissedAndPointsEnough() {
         Bag bag = new Bag().stub();
         bag.stubSpace(space());
-        bag.checkin(TWO_DAYS_AGO, CoupleBondDayPO.SOURCE_AUTO, null);
+        bag.checkin(TWO_DAYS_AGO, BondDay.SOURCE_AUTO, null);
         bag.earned("alice", 40);
 
         CoupleStreakService.StreakBoardVO board = service.board("alice");

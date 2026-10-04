@@ -14,6 +14,9 @@ public interface MoodRepository {
     /** 某人某天的那一条心情（每人每空间每天一行，没记就是空）。 */
     Optional<Mood> findBySpaceAndUserOn(String spaceId, String username, String day);
 
+    /** 存回聚合：没有这一行就整条插入，已有则只回写 mood / note / updated_at（谁哪天记的不改）。 */
+    void save(Mood mood);
+
     /** 空间内全部心情记录（双人曲线/情绪同步率从这里算；量级每天 ≤2 条，可控）。 */
     List<Mood> listBySpace(String spaceId);
 }

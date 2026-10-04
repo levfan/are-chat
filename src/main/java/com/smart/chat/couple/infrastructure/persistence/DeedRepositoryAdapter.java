@@ -32,6 +32,11 @@ public class DeedRepositoryAdapter implements DeedRepository {
     }
 
     @Override
+    public List<Deed> findBySpace(String spaceId) {
+        return deedMapper.findBySpace(spaceId).stream().map(DeedRepositoryAdapter::toDomain).toList();
+    }
+
+    @Override
     public List<Deed> listByRecorder(String spaceId, String fromUser) {
         return deedMapper.findByUser(spaceId, fromUser).stream().map(DeedRepositoryAdapter::toDomain).toList();
     }
@@ -69,6 +74,11 @@ public class DeedRepositoryAdapter implements DeedRepository {
         po.setCreated(deed.created());
         po.setUpdatedAt(deed.updatedAt());
         return po;
+    }
+
+    @Override
+    public long countAll() {
+        return deedMapper.selectCount(null);
     }
 
     private static Deed toDomain(CoupleEchoDeedPO po) {

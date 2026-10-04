@@ -1,7 +1,7 @@
 package com.smart.chat.couple.api;
 
-import com.smart.chat.couple.infrastructure.persistence.CoupleActionMapper;
-import com.smart.chat.couple.infrastructure.persistence.CoupleEchoDeedMapper;
+import com.smart.chat.couple.domain.bond.ActionRepository;
+import com.smart.chat.couple.domain.deed.DeedRepository;
 import com.smart.chat.couple.domain.space.CoupleSpace;
 import com.smart.chat.couple.domain.space.CoupleSpaceRepository;
 import com.smart.chat.identity.domain.AccountDirectory;
@@ -32,16 +32,16 @@ public class CoupleAdminController {
     }
 
     private final CoupleSpaceRepository spaceRepository;
-    private final CoupleActionMapper actionMapper;
-    private final CoupleEchoDeedMapper deedMapper;
+    private final ActionRepository actionRepository;
+    private final DeedRepository deedRepository;
     private final AccountDirectory accounts;
 
     @SuppressWarnings("java:S107")
-    public CoupleAdminController(CoupleSpaceRepository spaceRepository, CoupleActionMapper actionMapper,
-                                 CoupleEchoDeedMapper deedMapper, AccountDirectory accounts) {
+    public CoupleAdminController(CoupleSpaceRepository spaceRepository, ActionRepository actionRepository,
+                                 DeedRepository deedRepository, AccountDirectory accounts) {
         this.spaceRepository = spaceRepository;
-        this.actionMapper = actionMapper;
-        this.deedMapper = deedMapper;
+        this.actionRepository = actionRepository;
+        this.deedRepository = deedRepository;
         this.accounts = accounts;
     }
 
@@ -77,6 +77,6 @@ public class CoupleAdminController {
                         .toLocalDate().toString().startsWith(monthPrefix))
                 .count();
         return ApiResponse.ok(new CoupleStatsVO(active, dissolved, avgDays,
-                actionMapper.selectCount(null), deedMapper.selectCount(null), createdThisMonth));
+                actionRepository.countAll(), deedRepository.countAll(), createdThisMonth));
     }
 }
