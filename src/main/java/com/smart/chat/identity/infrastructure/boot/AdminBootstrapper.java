@@ -1,11 +1,10 @@
 package com.smart.chat.identity.infrastructure.boot;
 
-import com.smart.chat.identity.infrastructure.persistence.AppUser;
-import com.smart.chat.identity.infrastructure.persistence.AppUserMapper;
-import com.smart.chat.identity.infrastructure.security.PasswordHasher;
-import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.smart.chat.bootstrap.properties.AdminProperties;
 import com.smart.chat.identity.domain.ProfileProvisioner;
+import com.smart.chat.identity.domain.account.Account;
+import com.smart.chat.identity.domain.account.AccountRepository;
+import com.smart.chat.identity.infrastructure.security.PasswordHasher;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.ApplicationArguments;
@@ -13,12 +12,17 @@ import org.springframework.boot.ApplicationRunner;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
+import java.util.Optional;
 
 /**
  * 启动引导（取代已删除的 DemoUserSeeder，模拟用户一律不能登录）：
  * 1. 存量库里的旧演示账号（alice / bob / carol，13800000001~3）标记为 DISABLED——不能再登录；
  * 2. 库里没有任何管理员时，按 arechat.admin.username / password（默认 admin / admin123456，
  *    生产用环境变量 ARECHAT_ADMIN_PASSWORD 覆盖）创建一个真实管理员账号，用于审批注册申请。
+ * <p>
+ * 战术改造后它经 {@link AccountRepository} 说话，不再自己拼 PO：禁用走
+ * {@link Account#moveToStatus}、提权走 {@link Account#grantAdminRole}，
+ * 与业务写路径共用同一套「聚合持有的列才回写」的纪律。
  */
 @Component
 public class AdminBootstrapper implements ApplicationRunner {
@@ -28,14 +32,17 @@ public class AdminBootstrapper implements ApplicationRunner {
     /** 历史版本播种的演示账号：手机号固定，逐条禁用 */
     private static final List<String> DEMO_PHONES = List.of("13800000001", "13800000002", "13800000003");
 
-    private final AppUserMapper userMapper;
+    /** 管理员占位手机号：仅供数据库唯一约束使用，不参与登录，因此不过手机号格式闸 */
+    static final String ADMIN_PLACEHOLDER_PHONE = "00000000000";
+
+    private final AccountRepository accounts;
     private final ProfileProvisioner profileProvisioner;
     private final PasswordHasher passwordHasher;
     private final AdminProperties adminProperties;
 
-    public AdminBootstrapper(AppUserMapper userMapper, ProfileProvisioner profileProvisioner,
-                             PasswordHasher passwordHasher, AdminProperties adminProperties) {
-        this.userMapper = userMapper;
+    public AdminBootstrapper(AccountRepository accounts, ProfileProvisioner profileProvisioner,
+                            PasswordHasher passwordHasher, AdminProperties adminProperties) {
+        this.accounts = accounts;
         this.profileProvisioner = profileProvisioner;
         this.passwordHasher = passwordHasher;
         this.adminProperties = adminProperties;
@@ -48,44 +55,36 @@ public class AdminBootstrapper implements ApplicationRunner {
     }
 
     private void disableLegacyDemoUsers() {
-        List<AppUser> demos = userMapper.selectList(new LambdaQueryWrapper<AppUser>()
-                .in(AppUser::getPhone, DEMO_PHONES)
-                .eq(AppUser::getStatus, AppUser.STATUS_ACTIVE));
-        for (AppUser demo : demos) {
-            demo.setStatus(AppUser.STATUS_DISABLED);
-            userMapper.updateById(demo);
+        List<Account> demos = accounts.listActiveAmongPhones(DEMO_PHONES);
+        for (Account demo : demos) {
+            demo.moveToStatus(Account.STATUS_DISABLED);
+            accounts.save(demo);
         }
         if (!demos.isEmpty()) {
             log.warn("已禁用 {} 个旧版演示账号（模拟用户不能登录）：{}", demos.size(),
-                    demos.stream().map(AppUser::getUsername).toList());
+                    demos.stream().map(Account::username).toList());
         }
     }
 
     private void ensureAdmin() {
-        if (userMapper.countAdmins() > 0) {
+        if (accounts.countAdmins() > 0) {
             return;
         }
         String username = adminProperties.username().trim().toLowerCase();
-        if (userMapper.findByUsername(username).isPresent()) {
+        Optional<Account> existing = accounts.findByUsername(username);
+        if (existing.isPresent()) {
             // 同名账号已存在：直接提升为管理员（例如老库的管理员本人）
-            AppUser existing = userMapper.findByUsername(username).orElseThrow();
-            existing.setRole(AppUser.ROLE_ADMIN);
-            userMapper.updateById(existing);
+            Account account = existing.get();
+            account.grantAdminRole();
+            accounts.save(account);
             log.info("已把既有账号 {} 提升为管理员", username);
             return;
         }
         // 管理员账号使用占位手机号（登录只用用户名 + 密码），真实用户手机号不会与其冲突
-        AppUser admin = AppUser.of(ADMIN_PLACEHOLDER_PHONE, username,
-                passwordHasher.encode(adminProperties.password()), username, "c0", AppUser.ROLE_ADMIN);
-        userMapper.insert(admin);
-        ensureProfile(admin);
+        Account admin = Account.bootstrap(ADMIN_PLACEHOLDER_PHONE, username,
+                passwordHasher.encode(adminProperties.password()), Account.ROLE_ADMIN);
+        accounts.save(admin);
+        profileProvisioner.provision(admin.username(), admin.nickname(), admin.avatar());
         log.info("已创建管理员账号 {}（默认密码见 arechat.admin.password 配置，请尽快修改）", username);
-    }
-
-    /** 管理员占位手机号：仅供数据库唯一约束使用，不参与登录 */
-    static final String ADMIN_PLACEHOLDER_PHONE = "00000000000";
-
-    private void ensureProfile(AppUser user) {
-        profileProvisioner.provision(user.getUsername(), user.getNickname(), user.getAvatar());
     }
 }
