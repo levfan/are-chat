@@ -11,10 +11,16 @@ public final class Safeword {
     public static final int WORD_MAX = 20;
     public static final int NOTE_MAX = 60;
 
+    private final String id;
+    private final String spaceId;
+    private final String fromUser;
     private final String word;
     private final String note;
 
-    private Safeword(String word, String note) {
+    private Safeword(String id, String spaceId, String fromUser, String word, String note) {
+        this.id = id;
+        this.spaceId = spaceId;
+        this.fromUser = fromUser;
         this.word = word;
         this.note = note;
     }
@@ -32,7 +38,12 @@ public final class Safeword {
         if (trimmed.length() > NOTE_MAX) {
             throw new RuleViolation("用了之后希望最多 " + NOTE_MAX + " 字");
         }
-        return new Safeword(text, trimmed.isEmpty() ? null : trimmed);
+        return new Safeword(null, null, null, text, trimmed.isEmpty() ? null : trimmed);
+    }
+
+    /** 从存储重建：不校验——历史词必须读得出来，带上归属（谁的词、哪个空间）供看板投影。 */
+    public static Safeword restore(String id, String spaceId, String fromUser, String word, String note) {
+        return new Safeword(id, spaceId, fromUser, word, note);
     }
 
     /** 喊停的前提：词已经约好 */
@@ -40,6 +51,18 @@ public final class Safeword {
         if (agreed == null) {
             throw new RuleViolation("先约一个安全词，才喊得出口 🛑");
         }
+    }
+
+    public String id() {
+        return id;
+    }
+
+    public String spaceId() {
+        return spaceId;
+    }
+
+    public String fromUser() {
+        return fromUser;
     }
 
     public String word() {

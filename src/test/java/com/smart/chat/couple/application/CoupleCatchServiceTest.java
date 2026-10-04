@@ -1,9 +1,9 @@
 package com.smart.chat.couple.application;
 
-import com.smart.chat.couple.infrastructure.persistence.CoupleCatchSafewordPO;
-import com.smart.chat.couple.infrastructure.persistence.CoupleCatchSafewordMapper;
-import com.smart.chat.couple.infrastructure.persistence.CoupleCatchSafewordUsePO;
-import com.smart.chat.couple.infrastructure.persistence.CoupleCatchSafewordUseMapper;
+import com.smart.chat.couple.domain.safeword.Safeword;
+import com.smart.chat.couple.domain.safeword.SafewordRepository;
+import com.smart.chat.couple.domain.safeword.SafewordUse;
+import com.smart.chat.couple.domain.safeword.SafewordUseRepository;
 import com.smart.chat.couple.domain.space.CoupleSpace;
 import com.smart.chat.couple.domain.space.CoupleSpaceRepository;
 import com.smart.chat.sharedkernel.web.BusinessException;
@@ -20,6 +20,7 @@ import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -27,12 +28,16 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
  * 安全词与暂停复盘（保留卡 `couple-catch-safeword`）单测。
  * 断言锁的是「真的落了一行、真的推给了对的人」，而不是返回值回显。
+ * <p>
+ * 战术改造后 Service 只依赖仓储端口，所以这里把 mock 从 Mapper 换成端口，
+ * 用内存里的领域对象复刻 upsert 语义；期望值（数据、事件名、文案）与改造前一字未改。
  */
 @ExtendWith(MockitoExtension.class)
 class CoupleCatchServiceTest {
@@ -40,9 +45,9 @@ class CoupleCatchServiceTest {
     @Mock
     private CoupleSpaceRepository spaceRepository;
     @Mock
-    private CoupleCatchSafewordMapper safewordMapper;
+    private SafewordRepository safewordRepository;
     @Mock
-    private CoupleCatchSafewordUseMapper useMapper;
+    private SafewordUseRepository useRepository;
     @Mock
     private ImPushService push;
 
@@ -51,8 +56,8 @@ class CoupleCatchServiceTest {
 
     private static final String DAY = LocalDate.now().toString();
 
-    private final List<CoupleCatchSafewordPO> words = new ArrayList<>();
-    private final List<CoupleCatchSafewordUsePO> uses = new ArrayList<>();
+    private final List<Safeword> words = new ArrayList<>();
+    private final List<SafewordUse> uses = new ArrayList<>();
 
     @BeforeEach
     void setUp() {
@@ -60,26 +65,52 @@ class CoupleCatchServiceTest {
         lenient().when(spaceRepository.findActiveByMember("alice")).thenReturn(Optional.of(space));
         lenient().when(spaceRepository.findActiveByMember("bob")).thenReturn(Optional.of(space));
 
-        lenient().when(safewordMapper.findBySpace("s1")).thenAnswer(inv -> List.copyOf(words));
-        lenient().when(safewordMapper.find(eq("s1"), any())).thenAnswer(inv -> words.stream()
-                .filter(w -> w.getFromUser().equals(inv.getArgument(1))).findFirst().orElse(null));
-        lenient().when(safewordMapper.insert(any(CoupleCatchSafewordPO.class))).thenAnswer(inv -> {
-            words.add(inv.getArgument(0));
-            return 1;
-        });
-        lenient().when(safewordMapper.updateById(any(CoupleCatchSafewordPO.class))).thenReturn(1);
+        lenient().when(safewordRepository.listBySpace("s1")).thenAnswer(inv -> List.copyOf(words));
+        lenient().when(safewordRepository.findBySpaceAndUser(eq("s1"), any())).thenAnswer(inv -> words.stream()
+                .filter(w -> w.fromUser().equals(inv.getArgument(1))).findFirst());
+        lenient().doAnswer(inv -> {
+            String fromUser = inv.getArgument(1);
+            Safeword agreed = inv.getArgument(2);
+            int idx = -1;
+            for (int i = 0; i < words.size(); i++) {
+                if (words.get(i).fromUser().equals(fromUser)) {
+                    idx = i;
+                    break;
+                }
+            }
+            Safeword stored = Safeword.restore(idx >= 0 ? words.get(idx).id() : UUID.randomUUID().toString(),
+                    "s1", fromUser, agreed.word(), agreed.note());
+            if (idx >= 0) {
+                words.set(idx, stored);
+            } else {
+                words.add(stored);
+            }
+            return null;
+        }).when(safewordRepository).save(eq("s1"), any(), any());
 
-        lenient().when(useMapper.findBySpace("s1")).thenAnswer(inv -> List.copyOf(uses));
-        lenient().when(useMapper.find(eq("s1"), any(), any())).thenAnswer(inv -> uses.stream()
-                .filter(u -> u.getDay().equals(inv.getArgument(1)) && u.getUserName().equals(inv.getArgument(2)))
-                .findFirst().orElse(null));
-        lenient().when(useMapper.insert(any(CoupleCatchSafewordUsePO.class))).thenAnswer(inv -> {
-            uses.add(inv.getArgument(0));
-            return 1;
-        });
-        lenient().when(useMapper.updateById(any(CoupleCatchSafewordUsePO.class))).thenReturn(1);
-        lenient().when(useMapper.selectById(any())).thenAnswer(inv -> uses.stream()
-                .filter(u -> u.getId().equals(inv.getArgument(0, String.class))).findFirst().orElse(null));
+        lenient().when(useRepository.listBySpace("s1")).thenAnswer(inv -> List.copyOf(uses));
+        lenient().when(useRepository.findBySpaceAndDayAndUser(eq("s1"), any(), any())).thenAnswer(inv -> uses.stream()
+                .filter(u -> u.by().equals(inv.getArgument(1)) && u.day().equals(inv.getArgument(2)))
+                .findFirst());
+        lenient().when(useRepository.findByIdInSpace(eq("s1"), any())).thenAnswer(inv -> uses.stream()
+                .filter(u -> u.id().equals(inv.getArgument(1, String.class)))
+                .findFirst().map(u -> SafewordUse.restore(u.id(), u.day(), u.by(), u.reflect())));
+        lenient().doAnswer(inv -> {
+            SafewordUse pause = inv.getArgument(1);
+            int idx = -1;
+            for (int i = 0; i < uses.size(); i++) {
+                if (uses.get(i).id().equals(pause.id())) {
+                    idx = i;
+                    break;
+                }
+            }
+            if (idx >= 0) {
+                uses.set(idx, SafewordUse.restore(pause.id(), pause.day(), pause.by(), pause.reflect()));
+            } else {
+                uses.add(pause);
+            }
+            return null;
+        }).when(useRepository).save(eq("s1"), any());
     }
 
     @Test
@@ -96,10 +127,9 @@ class CoupleCatchServiceTest {
     void safewordSetPushesPartnerAndWritesRow() {
         service.setSafeword("alice", "暂停", null);
 
-        ArgumentCaptor<CoupleCatchSafewordPO> captor = ArgumentCaptor.forClass(CoupleCatchSafewordPO.class);
-        verify(safewordMapper).insert(captor.capture());
-        assertThat(captor.getValue().getSpaceId()).isEqualTo("s1");
-        assertThat(captor.getValue().getFromUser()).isEqualTo("alice");
+        ArgumentCaptor<Safeword> captor = ArgumentCaptor.forClass(Safeword.class);
+        verify(safewordRepository).save(eq("s1"), eq("alice"), captor.capture());
+        assertThat(captor.getValue().word()).isEqualTo("暂停");
         verify(push).pushCoupleEvent(eq("catch-safeword"), eq("alice"), eq("bob"), any());
     }
 
@@ -128,7 +158,7 @@ class CoupleCatchServiceTest {
     void safewordReflectOnlyByPersonWhoCalledIt() {
         service.setSafeword("alice", "暂停", null);
         service.useSafeword("alice");
-        String useId = uses.get(0).getId();
+        String useId = uses.get(0).id();
 
         assertThatThrownBy(() -> service.reflectUse("bob", useId, "我不该追"))
                 .isInstanceOf(BusinessException.class)
@@ -145,13 +175,16 @@ class CoupleCatchServiceTest {
     void reflectIsPersistedNotJustEchoedBack() {
         service.setSafeword("alice", "暂停", null);
         service.useSafeword("alice");
-        String useId = uses.get(0).getId();
+        String useId = uses.get(0).id();
 
         service.reflectUse("alice", useId, "下次先说我去倒杯水");
 
-        // 只看返回值回显的话，坏代码（改了内存对象却没 update）也能过
-        verify(useMapper).updateById(any(CoupleCatchSafewordUsePO.class));
-        assertThat(uses.get(0).getReflect()).isEqualTo("下次先说我去倒杯水");
+        // 只看返回值回显的话，坏代码（改了内存对象却没写回端口）也能过。
+        // save 被调两次：useSafeword 落一条喊停 + reflectUse 写回复盘；复盘那次的聚合带着文字。
+        ArgumentCaptor<SafewordUse> captor = ArgumentCaptor.forClass(SafewordUse.class);
+        verify(useRepository, times(2)).save(eq("s1"), captor.capture());
+        assertThat(captor.getAllValues().get(1).reflect()).isEqualTo("下次先说我去倒杯水");
+        assertThat(uses.get(0).reflect()).isEqualTo("下次先说我去倒杯水");
     }
 
     @Test
@@ -159,6 +192,6 @@ class CoupleCatchServiceTest {
         assertThatThrownBy(() -> service.reflectUse("alice", "nope", "x")).isInstanceOf(BusinessException.class);
         when(spaceRepository.findActiveByMember("carol")).thenReturn(Optional.empty());
         assertThatThrownBy(() -> service.board("carol")).isInstanceOf(BusinessException.class);
-        verify(useMapper, never()).insert(any(CoupleCatchSafewordUsePO.class));
+        verify(useRepository, never()).save(any(), any());
     }
 }

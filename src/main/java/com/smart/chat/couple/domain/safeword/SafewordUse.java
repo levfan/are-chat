@@ -2,6 +2,8 @@ package com.smart.chat.couple.domain.safeword;
 
 import com.smart.chat.couple.domain.RuleViolation;
 
+import java.util.UUID;
+
 /**
  * 一次暂停：喊停的人当天只能喊一次；事后复盘只有喊停本人能补，而且必须写点东西。
  * 「别把安全词用成口头禅」和「复盘要 TA 自己写」都是这套约定的语义，属于领域。
@@ -24,6 +26,11 @@ public final class SafewordUse {
 
     public static SafewordUse shout(String id, String day, String by) {
         return new SafewordUse(id, day, by, null);
+    }
+
+    /** 新起一次暂停：现场发 id，复盘留空等事后补。 */
+    public static SafewordUse shout(String day, String by) {
+        return new SafewordUse(UUID.randomUUID().toString(), day, by, null);
     }
 
     public static SafewordUse restore(String id, String day, String by, String reflect) {
