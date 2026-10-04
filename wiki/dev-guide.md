@@ -20,7 +20,31 @@
 | `mvn -q compile` | 提交前必跑的最低验证 |
 | `mvn test` | 全量测试；测试库固定 H2（`src/test/resources/application.yml` 覆盖 datasource，MODE=MySQL），Flyway 与生产走同一批 V 脚本——**改了表必须跑 `mvn test` 验证脚本在 H2 可执行** |
 
-测试布局：`src/test/java/com/smart/chat/`，已有 auth / im / room / upload / couple 各模块测试与 `SmartChatApplicationTest` 上下文冒烟，当前基线 381 用例（批次二十后，`mvn test` 全绿）。新 Service 的核心算法（判定/统计/轮换）建议补单测。
+测试布局：`src/test/java/com/smart/chat/`，已有 auth / im / room / upload / couple 各模块测试与 `SmartChatApplicationTest` 上下文冒烟，当前基线 **202 用例**（2026-10-05 实测 `mvn -o test` → `Tests run: 202, Failures: 0, Errors: 0`，`BUILD SUCCESS`）。新 Service 的核心算法（判定/统计/轮换）建议补单测。
+
+## 接口访问日志
+
+`/api/**` 上每个请求固定留两行日志，同 `[req N]` 前缀串起来（`bootstrap/config/RequestLogFilter`，装配与开关在 `RequestLogConfig` / `RequestLogProperties`，取舍理由见 [ADR-0006](../docs/adr/0006-request-log-filter.md)）：
+
+```
+[req 4] --> POST /api/auth/login user=- query=- body={"account":"admin","password":"..."}
+[req 4] <-- POST /api/auth/login user=admin 200 36ms 成功 body={"code":0,"data":{...},"message":"ok"}
+```
+
+| 栏 | 口径 |
+|---|---|
+| 进入行 | 方法、路径、`user`（会话里的登录名，未登录 `-`）、`query`、请求体原文 |
+| 完成行 | 方法、路径、`user`、HTTP 状态、耗时、`成功`/`失败`、响应体原文 |
+| 成功/失败判据 | HTTP 状态 `<400` 记成功。全仓没有 Controller 直接 `return ApiResponse.error(...)`，业务失败一律经 `GlobalExceptionHandler` 落成 4xx/5xx，所以状态码不会把业务失败记成成功 |
+| 开关 | `arechat.request-log.enabled`（缺省即开启，关掉要显式写 `false`） |
+| 正文上限 | `arechat.request-log.max-body-chars`（默认 4000 字符，超出打 `...(截断,共 N 字符)`；同时是响应体旁路缓冲的字节上限） |
+
+不覆盖的三类：`POST /api/files` 的 multipart 正文（只打说明，不把附件字节读进内存）、非 JSON 的二进制响应（如 `/api/files/{id}/download`，只打状态与耗时）、WebSocket `/ws/chat/{name}`（`@ServerEndpoint` 不走 Servlet 过滤链，要日志得在 `ChatEndpoint` 另行埋点）。
+
+两条排查用口径：
+
+- 入参在**处理器执行之前**就已落日志，所以请求卡死或进程中途挂掉时，进入行是唯一证据；只有 JSON 且 `Content-Length ≤ 1MB` 才读原文，分块传输与超限都原样透传不碰流。
+- 日志**不脱敏**（明文口令与私密正文都会进来），这是用户拍定的口径，风险与止损见 ADR-0006 第 4 节。
 
 ## 开发硬性流程摘要（一句话一步）
 

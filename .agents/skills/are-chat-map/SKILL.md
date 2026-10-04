@@ -16,7 +16,7 @@ whenToUse: are-chat 后端开工前加载；新增/删除模块、表、接口�
 - 鉴权：登录态在 HttpSession；`com.smart.chat.common.Sessions.requireUser(session)` 取当前用户名
 - 统一返回：`ApiResponse.ok(data)` / 业务异常 `BusinessException(code, message)`
 - 构建：`mvn -q compile`；测试 `mvn test`（何时必跑见第六节）
-- 规模快照（2026-10-04 情侣空间裁剪后）：couple 包 74 个文件 / 13 个情侣 Controller / 57 个情侣映射 / 19 张 `couple_*` 表（迁移链到 V51）/ `mvn -o test` 158 用例基线 / 37 个情侣 WS 事件。**注意**：本行只描述情侣空间，非情侣模块（auth/im/room/upload/system）的规模未变；逐端点与逐表清单见 `wiki/api.md`、`wiki/database.md`，裁剪决策见 `docs/couple-trim-ranking.md`
+- 规模快照（2026-10-04 情侣空间裁剪后）：couple 包 74 个文件 / 13 个情侣 Controller / 57 个情侣映射 / 19 张 `couple_*` 表（迁移链到 V51）/ 全仓 `mvn -o test` **202 用例**基线（2026-10-05 实测）/ 37 个情侣 WS 事件。**注意**：本行只描述情侣空间，非情侣模块（auth/im/room/upload/system）的规模未变；逐端点与逐表清单见 `wiki/api.md`、`wiki/database.md`，裁剪决策见 `docs/couple-trim-ranking.md`
 
 ### 目录与关键文件
 
@@ -56,8 +56,10 @@ are-chat/                             # 单模块 Maven（无多 module），坐
 
 ```
 Vue 组件 → api/<域>Api → http.ts(get/postJson/putJson/delete，withCredentials)
-  → Controller(/api/**) → Sessions.requireUser → Service(requireSpace / partnerOf)
+  → Filter RequestLogFilter(/api/*，进入行打方法/路径/user/query/入参原文)
+  → LoginInterceptor(会话校验) → Controller(/api/**) → Sessions.requireUser → Service(requireSpace / partnerOf)
   → Mapper(BaseMapperCompat default 方法 + LambdaQueryWrapper) → MariaDB(生产)/H2(测试)
+  ← Filter 完成行打状态/耗时/成功或失败/响应体原文（口径与排除项见 docs/adr/0006）
 Service → ImPushService.pushCoupleEvent(Both) ─┬→ WS 帧 {type:'couple', event, detail}
                                                 └→ couple_notify 落库（CoupleNotifyRecorder，F41 通知中心）
 前端 im store 收 WS → 派发 `arechat:couple` 自定义事件 → couple store handleCoupleEvent 按 event 刷新 + 通知铃铛
@@ -66,7 +68,7 @@ Service → ImPushService.pushCoupleEvent(Both) ─┬→ WS 帧 {type:'couple',
 ### 命令速查
 
 - 编译门禁：`mvn -q compile`（提交前必跑）
-- 全量测试：`mvn test`（当前基线 409 用例）；单类：`mvn test -Dtest=CoupleListenServiceTest`
+- 全量测试：`mvn test`（**当前基线 202 用例**，2026-10-05 实测 `Tests run: 202, Failures: 0, Errors: 0` + `BUILD SUCCESS`；旧的 158/381/409 三个写法都是过时快照）；单类：`mvn test -Dtest=CoupleListenServiceTest`
 - 运行：`mvn spring-boot:run`（8080）；打包 `mvn -q -B package` 后按 Dockerfile/deploy 部署
 - 数表：`grep -c "^CREATE TABLE" src/main/resources/schema.sql`
 
@@ -82,7 +84,7 @@ Service → ImPushService.pushCoupleEvent(Both) ─┬→ WS 帧 {type:'couple',
 | `platform` | 通用域 | system + notify + tools | 公告管理端点已从 identity 归位到 `AnnouncementAdminController`，路由 `/api/admin/announcements*` 一字未改 |
 | `filestorage` | 通用域 | upload | 4 个文件，未做战术改造 |
 | `sharedkernel` | 共享内核 | common + `BaseMapperCompat` | 只放 ApiResponse / BusinessException / Sessions / GlobalExceptionHandler + ORM 基类；**禁止再往里塞业务类型** |
-| `bootstrap` | 装配层 | config | WebConfig / WebSocketConfig / FastJsonWebConfig / MybatisPlusConfig / LoginInterceptor + 5 个 `*Properties`；业务只许 import `bootstrap.properties.*`，import 装配类即违规 |
+| `bootstrap` | 装配层 | config | WebConfig / WebSocketConfig / FastJsonWebConfig / MybatisPlusConfig / LoginInterceptor + 接口访问日志三件套（RequestLogFilter / CachedBodyRequest / LoggedResponse，注册在 RequestLogConfig，开关见 RequestLogProperties）+ 6 个 `*Properties`；业务只许 import `bootstrap.properties.*`，import 装配类即违规。取舍理由 `docs/adr/0006-request-log-filter.md` |
 
 `SmartChatApplication` 留在根包，`@MapperScan(basePackages = "com.smart.chat")` 与 `@ConfigurationPropertiesScan` 的扫描面没变，所以搬包不影响运行时装配。**新功能照 `docs/ddd/02-layering.md` 的归属判据落层，不要退回旧的平铺写法。**
 
