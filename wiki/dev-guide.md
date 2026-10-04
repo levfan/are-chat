@@ -49,7 +49,7 @@
 ## 开发硬性流程摘要（一句话一步）
 
 1. 开工：先读 `.agents/skills/are-chat-map/SKILL.md` 与本 [wiki](Home.md)，按触达领域加载专项 skill。
-2. 编码：照抄 couple 包四层模板（Entity→Mapper→Service→Controller），静态 Bank 只增不改顺序。
+2. 编码：照抄 `docs/ddd/05-tactical-playbook.md` 的五种模板（PO→Mapper→领域类型+端口→适配器→Service 编排→Controller），Service 一律注入端口；静态 Bank 只增不改顺序。
 3. 自检：过 git-commit skill 的「架构师 Code Review 五项」清单。
 4. 构建：`mvn -q compile`；动过测试/表则 `mvn test` 全绿。
 5. 提交：按改动性质分组、一类一 commit；`V*.sql`+`schema.sql` 永远独立成 db commit；信息 `type(scope): 中文描述`。

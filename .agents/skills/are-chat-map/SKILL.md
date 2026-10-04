@@ -11,12 +11,12 @@ whenToUse: are-chat 后端开工前加载；新增/删除模块、表、接口�
 ## 一、技术栈与运行
 
 - Java 25 + Spring Boot 4.1.1（Web/MVC，无独立前台，会话用 `HttpSession`）
-- ORM：MyBatis-Plus 3.5.17（BaseMapper 统一继承 `com.smart.chat.im.BaseMapperCompat`）
+- ORM：MyBatis-Plus 3.5.17（BaseMapper 统一继承 `com.smart.chat.sharedkernel.persistence.BaseMapperCompat`）
 - 数据库：生产 MariaDB 10.11 / 测试 H2 MODE=MySQL；结构由 Flyway 管理（`spring.flyway.locations=classpath:db`，禁用 spring.sql.init）
-- 鉴权：登录态在 HttpSession；`com.smart.chat.common.Sessions.requireUser(session)` 取当前用户名
+- 鉴权：登录态在 HttpSession；`com.smart.chat.sharedkernel.web.Sessions.requireUser(session)` 取当前用户名
 - 统一返回：`ApiResponse.ok(data)` / 业务异常 `BusinessException(code, message)`
 - 构建：`mvn -q compile`；测试 `mvn test`（何时必跑见第六节）
-- 规模快照（2026-10-05 v8 第一批后）：couple 包 108 个文件 / 17 个情侣 Controller / 70 个情侣映射 / 22 张 `couple_*` 表（迁移链到 V52）/ 全仓 `mvn -o test` **267 用例**基线（2026-10-05 实测 `Tests run: 267, Failures: 0, Errors: 0, Skipped: 0` + BUILD SUCCESS）/ 44 个情侣 WS 事件 / 4 条定时任务。**注意**：本行只描述情侣空间，非情侣模块（auth/im/room/upload/system）的规模未变；逐端点与逐表清单见 `wiki/api.md`、`wiki/database.md`，裁剪决策见 `docs/couple-trim-ranking.md`，v8 新增功能的需求与取舍见 `docs/adr/0007-couple-v8-streak-question-wish.md`
+- 规模快照（2026-10-05 v8 第一批后）：couple 包 108 个文件 / 17 个情侣 Controller / 70 个情侣映射 / 22 张 `couple_*` 表（迁移链到 V52）/ 全仓 `mvn -o test` **563 用例**基线（2026-10-05 DDD 战术收口后实测 `Tests run: 563, Failures: 0, Errors: 0, Skipped: 0` + BUILD SUCCESS）/ 44 个情侣 WS 事件 / 4 条定时任务。**注意**：本行只描述情侣空间，非情侣模块（auth/im/room/upload/system）的规模未变；逐端点与逐表清单见 `wiki/api.md`、`wiki/database.md`，裁剪决策见 `docs/couple-trim-ranking.md`，v8 新增功能的需求与取舍见 `docs/adr/0007-couple-v8-streak-question-wish.md`
 
 ### 目录与关键文件
 
@@ -58,7 +58,8 @@ are-chat/                             # 单模块 Maven（无多 module），坐
 Vue 组件 → api/<域>Api → http.ts(get/postJson/putJson/delete，withCredentials)
   → Filter RequestLogFilter(/api/*，进入行打方法/路径/user/query/入参原文)
   → LoginInterceptor(会话校验) → Controller(/api/**) → Sessions.requireUser → Service(requireSpace / partnerOf)
-  → Mapper(BaseMapperCompat default 方法 + LambdaQueryWrapper) → MariaDB(生产)/H2(测试)
+  → Repository 端口（domain 声明）→ *RepositoryAdapter → Mapper(BaseMapperCompat default 方法 + LambdaQueryWrapper) → MariaDB(生产)/H2(测试)
+     ★ Service 与 Controller 都不许 import 本上下文的 *PO/*Mapper，守卫第 5 条会红
   ← Filter 完成行打状态/耗时/成功或失败/响应体原文（口径与排除项见 docs/adr/0006）
 Service → ImPushService.pushCoupleEvent(Both) ─┬→ WS 帧 {type:'couple', event, detail}
                                                 └→ couple_notify 落库（CoupleNotifyRecorder，F41 通知中心）
@@ -68,7 +69,7 @@ Service → ImPushService.pushCoupleEvent(Both) ─┬→ WS 帧 {type:'couple',
 ### 命令速查
 
 - 编译门禁：`mvn -q compile`（提交前必跑）
-- 全量测试：`mvn test`（**当前基线 267 用例**，2026-10-05 实测 `Tests run: 267, Failures: 0, Errors: 0, Skipped: 0` + `BUILD SUCCESS`；旧的 158/202/381/409 几个写法都是过时快照）；单类：`mvn test -Dtest=CoupleStreakServiceTest`
+- 全量测试：`mvn test`（**当前基线 563 用例**，2026-10-05 实测 `Tests run: 563, Failures: 0, Errors: 0, Skipped: 0` + `BUILD SUCCESS`；旧的 158/202/267/381/409 几个写法都是过时快照）；单类：`mvn test -Dtest=CoupleStreakServiceTest`
 - 运行：`mvn spring-boot:run`（8080）；打包 `mvn -q -B package` 后按 Dockerfile/deploy 部署
 - 数表：`grep -c "^CREATE TABLE" src/main/resources/schema.sql`
 
@@ -78,11 +79,11 @@ Service → ImPushService.pushCoupleEvent(Both) ─┬→ WS 帧 {type:'couple',
 
 | 上下文 | 域分类 | 由旧包合成 | 现状 |
 |---|---|---|---|
-| `couple` | **核心域** | couple | api(17 Controller) / application(15 Service) / **domain**（space 聚合 + repository 端口、intimacy 策略、coupon/safeword/comfort 规则、**v8 新增 streak/question/wish/memory**）/ infrastructure(persistence 22 PO+22 Mapper+仓储适配器、content 9 库、scheduler 4 Job、notify、account) |
-| `messaging` | 支撑域 | im + room（合并后那条 im/room 互依赖自然消失） | domain 有 7 个发布语言端口（CoupleEventPublisher / PresenceReader / AnnouncementBroadcaster / PeerProfileReader / FriendshipChecker / OutboundNotifySink / NotifySinkRegistry），transport 归 infrastructure |
+| `couple` | **核心域** | couple | api(17 Controller) / application(16 Service) / **domain 52 文件**：22 张表逐张有聚合或薄实体 + 22 个 `*Repository` 端口（space/intimacy/bond/mood/comfort/safeword/dine/chore/quest/coupon/wish/streak/question/deed/surprise/pin/invite/anniversary/points/notify/memory）/ infrastructure(persistence 22 PO+22 Mapper+22 适配器、content 9 库、scheduler 4 Job、notify、account)。**战术改造已收口**（2026-10-05）：Service 一律经端口取数，业务判定与话术在领域 |
+| `messaging` | 支撑域 | im + room（合并后那条 im/room 互依赖自然消失） | domain 24 文件：7 个发布语言端口（CoupleEventPublisher / PresenceReader / AnnouncementBroadcaster / PeerProfileReader / FriendshipChecker / OutboundNotifySink / NotifySinkRegistry）+ 7 张表的聚合与端口（`friend.Friend`/`FriendRequest`/`FriendshipGate`、`conversation.PrivateMessage`、`pin.Conversation`+`ConversationPin`、`profile.UserProfile`、`reaction.MessageReaction`、`star.MessageStar`），实体一律 `*PO`，transport 归 infrastructure。**已收口** |
 | `identity` | 通用域 | auth | **零出向上下文依赖**的纯上游；**战术改造已收口**（2026-10-05）：`domain` 有 `account.Account` 聚合（格式规则在无状态策略 `account.AccountRules`：手机号/用户名/昵称/密码，文案原话照搬）、`registration.RegistrationApplication` 状态机（PENDING→APPROVED/REJECTED 单向，重复处理 409「该申请已处理过（X）」，拒绝原因按 varchar(200) 截断）、`audit.AdminAudit` 薄流水实体、`verification.SmsCode` 验证码规则（重发 60s / 5 分钟 / 试错 5 次）、`RuleViolation`（带对外状态码）；仓储端口 `AccountRepository`/`RegistrationApplicationRepository`/`AdminAuditRepository` 各配一个 `*RepositoryAdapter`（更新只回写聚合纳管的列，app_user 的 `signature`/`presence_status` 由 user_profile 那边负责）；`application` 只剩编排 + `DomainRules` 翻译器，**不再 import 本上下文 persistence**；实体是 `AppUserPO`/`RegistrationApplicationPO`/`AdminAuditPO`，表名列名未动。另有 AccountDirectory（别人问账号只用它，含 Account 最小视图）与 AccountCascade / ProfileProvisioner / WelcomeMessenger / AdminAlerter / AdminNotifyChannel 五个「我需要别人配合」的端口 |
-| `platform` | 通用域 | system + notify + tools | 公告管理端点已从 identity 归位到 `AnnouncementAdminController`，路由 `/api/admin/announcements*` 一字未改 |
-| `filestorage` | 通用域 | upload | 4 个文件，未做战术改造 |
+| `platform` | 通用域 | system + notify + tools | 公告管理端点已从 identity 归位到 `AnnouncementAdminController`，路由 `/api/admin/announcements*` 一字未改。**已收口**（2026-10-05）：`domain/announcement/Announcement` 发布/关闭单向状态机 + 同一时刻只一条生效、`AnnouncementRead` 薄流水、`domain/notify` 渠道配置端口，2 个端口 2 个适配器，实体 `AnnouncementPO`/`AnnouncementReadPO` |
+| `filestorage` | 通用域 | upload | **已收口**（2026-10-05）：`domain/file/` 有 `UploadedFile` 实体 + `FileNaming`（名字清洗）/`UploadAdmission`（扩展名黑名单，现役口径）/`StoragePath`（内容寻址与防目录穿越）三个策略对象 + `UploadedFileRepository` 端口；`DuplicateKeyException` 由适配器翻成领域事实 `ContentAlreadyStored`，Spring 异常不外泄；实体 `UploadedFilePO` |
 | `sharedkernel` | 共享内核 | common + `BaseMapperCompat` | 只放 ApiResponse / BusinessException / Sessions / GlobalExceptionHandler + ORM 基类；**禁止再往里塞业务类型** |
 | `bootstrap` | 装配层 | config | WebConfig / WebSocketConfig / FastJsonWebConfig / MybatisPlusConfig / LoginInterceptor + 接口访问日志三件套（RequestLogFilter / CachedBodyRequest / LoggedResponse，注册在 RequestLogConfig，开关见 RequestLogProperties）+ 6 个 `*Properties`；业务只许 import `bootstrap.properties.*`，import 装配类即违规。取舍理由 `docs/adr/0006-request-log-filter.md` |
 
@@ -97,7 +98,7 @@ Service → ImPushService.pushCoupleEvent(Both) ─┬→ WS 帧 {type:'couple',
 
 数据约定：所有表主键为 36 位 UUID 字符串；时间统一毫秒 bigint（`created`/`updated_at`）；用户名列 `utf8mb4_bin` 区分大小写。CoupleSpace 双方固定 `userA`/`userB`（字典序小者为 A），`partnerOf(me)` 取对方。
 
-分层模式（新功能照抄）：实体 `@Data @TableName` + `@TableId(IdType.INPUT)` + 静态 `of()` + 常量 → Mapper `extends BaseMapperCompat<T>` 且常用查询写 default 方法 → Service 构造注入、VO 用嵌套 `record`、`requireSpace(me)` 取空间 → Controller `@RequestMapping("/api/couple/...")`、请求体用 record、每方法一句 javadoc。
+分层模式（新功能照抄，判据见 `docs/ddd/05-tactical-playbook.md`）：表映射 `XxxPO`（`@Data @TableName` + `@TableId(IdType.INPUT)`，只有映射不加业务方法）→ Mapper `extends BaseMapperCompat<XxxPO>`，常用查询写 default 方法 → `domain/<集合>/Xxx` 领域类型（私有构造 + `restore()` 不校验 + 带语义的工厂校验并抛 `RuleViolation`，访问器用记录式短名 `id()`）→ `domain/<集合>/XxxRepository` 端口（参数与返回值只允许领域类型与 JDK 类型）→ `infrastructure/persistence/XxxRepositoryAdapter`（PO↔领域翻译只在这里；更新**只回写聚合纳管的列**）→ Service 注入**端口不是 Mapper**、VO 用嵌套 `record`、`requireSpace(me)` 经 `CoupleSpaceRepository` 取聚合、领域异常经 `application/DomainRules.rule|guard` 翻译成 400/403/404/409 → Controller `@RequestMapping("/api/couple/...")`、请求体用 record、每方法一句 javadoc。
 
 ### 3.1 现役 14 张卡与它们的落点
 

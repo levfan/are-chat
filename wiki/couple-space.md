@@ -85,11 +85,12 @@
 `CoupleCities`（双城城市库）、`CoupleCeremonyBank`、`CoupleDiningBank` 以及 `CoupleChatBank`/`Codex`/`Cozy`/`Focus`/`Growth`/`Laugh`/`Legacy`/`Play` 等已随功能彻底无引用而删除。
 被裁掉的 `CoupleQuestions`（今日一问题库 105 题）在 v8 按新口径重建为 `CoupleQuestionBank`：题干全部改成"今天"口径、题号与题干一起落库存快照，旧库与旧表（`couple_answer`/`couple_answer_reaction`）不复活。
 
-## 分层模板（加新卡照抄）
+## 分层模板（加新卡照抄，判据见 `docs/ddd/05-tactical-playbook.md`）
 
-1. 实体：`@Data @TableName` + `@TableId(IdType.INPUT)` + 静态 `of()` 工厂 + 常量（`*_MAX`、`STATUS_*`）。
+1. 表映射 `XxxPO`：`@Data @TableName` + `@TableId(IdType.INPUT)` + 静态 `of()` 工厂 + 常量（`*_MAX`、`STATUS_*`）。
    **`Integer`/`Long` 位字段禁止配 `isXxx()` 布尔 helper**（与 Lombok 的 `getXxx()` 撞成歧义 getter，MyBatis 反射会随机抛 `ambiguous type`，实测让整页 500）——位判断一律命名 `xxxFlag()`。
-2. Mapper：`@Mapper interface X extends BaseMapperCompat<T>`，常用查询写 default 方法。
-3. Service：构造注入（final 字段 + 构造器），VO 用嵌套 `record`，写接口返回整份聚合 VO 让前端整体替换。
-4. Controller：`@RestController @RequestMapping("/api/couple/xxx")`，请求体用 record，每方法一句 javadoc（`wiki/api.md` 的端点说明就是抓这句生成的）。
-5. 新增/删除表必须走 Flyway 增量脚本并同步 `schema.sql`（见 `.agents/skills/db-migration`）；新增 WS 事件必须同步前端 `stores/couple.ts` 的 case。
+2. Mapper：`@Mapper interface XxxMapper extends BaseMapperCompat<XxxPO>`，常用查询写 default 方法；Mapper 不感知领域类型。
+3. 领域：`domain/<集合>/Xxx` 聚合或薄实体（私有构造 + `restore()` 不校验 + 工厂校验抛 `RuleViolation`，访问器用 `id()` 这类短名）+ `XxxRepository` 端口；`infrastructure/persistence/XxxRepositoryAdapter` 做 PO↔领域翻译，更新只回写聚合纳管的列。
+4. Service：注入**端口不是 Mapper**，VO 用嵌套 `record`，写接口返回整份聚合 VO 让前端整体替换；业务判定与话术在领域，异常经 `DomainRules.rule|guard` 翻译。
+5. Controller：`@RestController @RequestMapping("/api/couple/xxx")`，请求体用 record，每方法一句 javadoc（`wiki/api.md` 的端点说明就是抓这句生成的）。
+6. 新增/删除表必须走 Flyway 增量脚本并同步 `schema.sql`（见 `.agents/skills/db-migration`）；新增 WS 事件必须同步前端 `stores/couple.ts` 的 case。
