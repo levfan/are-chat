@@ -1,9 +1,9 @@
 package com.smart.chat.couple.application;
 
+import com.smart.chat.couple.domain.pin.UserPin;
+import com.smart.chat.couple.domain.pin.UserPinRepository;
 import com.smart.chat.couple.domain.space.CoupleSpace;
 import com.smart.chat.couple.domain.space.CoupleSpaceRepository;
-import com.smart.chat.couple.infrastructure.persistence.CoupleUserPinPO;
-import com.smart.chat.couple.infrastructure.persistence.CoupleUserPinMapper;
 import com.smart.chat.sharedkernel.web.BusinessException;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -21,14 +21,15 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.lenient;
-import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
  * 常用收藏（F207）核心逻辑单测：去空白/去重/超 6 拒存/超长键拒存、
- * 首次 insert 再次 updateById 的 upsert、双方列表互不串、无空间 404。
+ * 反复保存改的还是同一行（insert/update 的分流见 UserPinRepositoryAdapterTest）、
+ * 双方列表互不串、无空间 404。
+ * 假表建在 {@link UserPinRepository} 这一层，PO 与 Mapper 不出现在用例里。
  */
 @ExtendWith(MockitoExtension.class)
 class CouplePinServiceTest {
@@ -36,7 +37,7 @@ class CouplePinServiceTest {
     @Mock
     private CoupleSpaceRepository spaceRepository;
     @Mock
-    private CoupleUserPinMapper pinMapper;
+    private UserPinRepository pinRepository;
     @InjectMocks
     private CouplePinService service;
 
@@ -51,8 +52,8 @@ class CouplePinServiceTest {
     @Test
     void savePinsTrimsDedupesAndRejectsOverLimit() {
         stubSpace("alice");
-        lenient().when(pinMapper.find("s1", "alice")).thenReturn(null);
-        lenient().when(pinMapper.find("s1", "bob")).thenReturn(null);
+        lenient().when(pinRepository.findBySpaceAndUser("s1", "alice")).thenReturn(Optional.empty());
+        lenient().when(pinRepository.findBySpaceAndUser("s1", "bob")).thenReturn(Optional.empty());
 
         var vo = service.savePins("alice", Arrays.asList(" meeting ", "meeting", "", null, "host"));
         assertThat(vo.mine()).containsExactly("meeting", "host");
@@ -69,29 +70,35 @@ class CouplePinServiceTest {
     @Test
     void savePinsUpsertsInsertThenUpdate() {
         stubSpace("alice");
-        lenient().when(pinMapper.find("s1", "bob")).thenReturn(null);
-        CoupleUserPinPO existing = CoupleUserPinPO.of("s1", "alice", "dining");
-        when(pinMapper.find("s1", "alice")).thenReturn(null, existing);
+        UserPin[] stored = new UserPin[1];
+        lenient().when(pinRepository.findBySpaceAndUser("s1", "alice"))
+                .thenAnswer(inv -> Optional.ofNullable(stored[0]));
+        lenient().when(pinRepository.findBySpaceAndUser("s1", "bob")).thenReturn(Optional.empty());
+        lenient().doAnswer(inv -> {
+            stored[0] = inv.getArgument(0);
+            return null;
+        }).when(pinRepository).save(any(UserPin.class));
 
         var first = service.savePins("alice", List.of("dining"));
         assertThat(first.mine()).containsExactly("dining");
-        ArgumentCaptor<CoupleUserPinPO> cap = ArgumentCaptor.forClass(CoupleUserPinPO.class);
-        verify(pinMapper).insert(cap.capture());
-        assertThat(cap.getValue().getPins()).isEqualTo("dining");
-        assertThat(cap.getValue().getFromUser()).isEqualTo("alice");
+        ArgumentCaptor<UserPin> cap = ArgumentCaptor.forClass(UserPin.class);
+        verify(pinRepository).save(cap.capture());
+        assertThat(cap.getValue().joined()).isEqualTo("dining");
+        assertThat(cap.getValue().fromUser()).isEqualTo("alice");
 
         var second = service.savePins("alice", List.of("dining", "cozy"));
-        verify(pinMapper, times(1)).insert(any(CoupleUserPinPO.class));
-        verify(pinMapper).updateById(existing);
-        assertThat(existing.getPins()).isEqualTo("dining,cozy");
+        verify(pinRepository, times(2)).save(cap.capture());
+        assertThat(cap.getAllValues().get(1).id()).as("第二次改的还是同一行，没有另起一行").isEqualTo(cap.getAllValues().get(0).id());
+        assertThat(cap.getAllValues().get(1).joined()).isEqualTo("dining,cozy");
         assertThat(second.mine()).containsExactly("dining", "cozy");
     }
 
     @Test
     void pinsReturnsBothSides() {
         stubSpace("alice");
-        when(pinMapper.find("s1", "alice")).thenReturn(CoupleUserPinPO.of("s1", "alice", "meeting,host"));
-        when(pinMapper.find("s1", "bob")).thenReturn(null);
+        when(pinRepository.findBySpaceAndUser("s1", "alice"))
+                .thenReturn(Optional.of(UserPin.restore("p1", "s1", "alice", "meeting,host", 1L, 1L)));
+        when(pinRepository.findBySpaceAndUser("s1", "bob")).thenReturn(Optional.empty());
 
         var vo = service.pins("alice");
         assertThat(vo.mine()).containsExactly("meeting", "host");
