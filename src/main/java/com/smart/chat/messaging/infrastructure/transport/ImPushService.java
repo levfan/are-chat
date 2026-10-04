@@ -1,5 +1,9 @@
 package com.smart.chat.messaging.infrastructure.transport;
 
+import com.smart.chat.messaging.domain.AnnouncementBroadcaster;
+import com.smart.chat.messaging.domain.CoupleEventPublisher;
+import com.smart.chat.messaging.domain.NotifySinkRegistry;
+import com.smart.chat.messaging.domain.OutboundNotifySink;
 import com.smart.chat.messaging.infrastructure.persistence.PrivateMessage;
 import com.alibaba.fastjson2.JSON;
 import com.smart.chat.messaging.infrastructure.transport.ChatSessionRegistry;
@@ -10,7 +14,7 @@ import org.springframework.stereotype.Component;
  * 复用聊天室的连接注册表（同一端点允许多端在线）。
  */
 @Component
-public class ImPushService {
+public class ImPushService implements CoupleEventPublisher, AnnouncementBroadcaster, NotifySinkRegistry {
 
     public record DmPayload(String type, String msgId, String from, String to,
                             String content, String msgType, String replyToId, Boolean edited, Long created) {
@@ -169,15 +173,16 @@ public class ImPushService {
         }
     }
 
-    /** 通知存档回调（可选注入：couple 模块存在时生效）。 */
-    public interface CoupleNotifySink {
-        void record(String event, String actor, String toUser, String detail);
+    private volatile OutboundNotifySink notifySink;
+
+    /** 由 CoupleNotifyRecorder 在启动时注册（存档规则归 couple，钩子接口归 messaging）。 */
+    @Override
+    public void register(OutboundNotifySink sink) {
+        this.notifySink = sink;
     }
 
-    private volatile CoupleNotifySink notifySink;
-
-    /** 由 CoupleNotifyRecorder 在启动时注册。 */
-    public void setNotifySink(CoupleNotifySink sink) {
-        this.notifySink = sink;
+    @Override
+    public void publishAnnouncement(String announcementId, String content) {
+        pushAll(new AnnouncementPayload("announcement", announcementId, content));
     }
 }

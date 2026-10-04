@@ -9,7 +9,7 @@ import com.smart.chat.messaging.infrastructure.persistence.PrivateMessageMapper;
 import com.smart.chat.messaging.infrastructure.persistence.UserProfile;
 import com.smart.chat.messaging.infrastructure.persistence.UserProfileMapper;
 import com.smart.chat.messaging.infrastructure.transport.ImPushService;
-import com.smart.chat.identity.application.AppUserService;
+import com.smart.chat.identity.domain.AccountDirectory;
 import com.smart.chat.sharedkernel.web.BusinessException;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -53,7 +53,7 @@ class FriendServiceTest {
     private ImPushService push;
 
     @Mock
-    private AppUserService userService;
+    private AccountDirectory accounts;
 
     @InjectMocks
     private FriendService service;
@@ -61,10 +61,10 @@ class FriendServiceTest {
     /** 合法用户目录：默认「输入规范化 + 用户存在」，各用例可按需覆盖 */
     @org.junit.jupiter.api.BeforeEach
     void stubUserDirectory() {
-        lenient().when(userService.normalizeUsername(anyString()))
+        lenient().when(accounts.normalizeUsername(anyString()))
                 .thenAnswer(inv -> inv.getArgument(0, String.class).trim().toLowerCase());
-        lenient().when(userService.exists(anyString())).thenReturn(true);
-        lenient().when(userService.search(anyString(), anyString(), org.mockito.ArgumentMatchers.anyInt()))
+        lenient().when(accounts.exists(anyString())).thenReturn(true);
+        lenient().when(accounts.search(anyString(), anyString(), org.mockito.ArgumentMatchers.anyInt()))
                 .thenReturn(java.util.List.of());
     }
 
@@ -104,7 +104,7 @@ class FriendServiceTest {
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("不能添加自己");
         // 未注册的账号不是合法用户
-        when(userService.exists("路人甲")).thenReturn(false);
+        when(accounts.exists("路人甲")).thenReturn(false);
         assertThatThrownBy(() -> service.apply("alice", "路人甲", null))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("查无此人");

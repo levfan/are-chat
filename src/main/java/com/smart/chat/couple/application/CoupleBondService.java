@@ -8,7 +8,7 @@ import com.smart.chat.couple.infrastructure.persistence.CoupleMoodReactionMapper
 import com.smart.chat.couple.infrastructure.persistence.CoupleSpace;
 import com.smart.chat.couple.infrastructure.persistence.CoupleSpaceMapper;
 import com.smart.chat.sharedkernel.web.BusinessException;
-import com.smart.chat.messaging.infrastructure.transport.ImPushService;
+import com.smart.chat.messaging.domain.CoupleEventPublisher;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
@@ -47,11 +47,11 @@ public class CoupleBondService {
     private final CoupleActionMapper actionMapper;
     private final CoupleMoodReactionMapper moodReactionMapper;
     private final CoupleMoodMapper moodMapper;
-    private final ImPushService push;
+    private final CoupleEventPublisher push;
 
     public CoupleBondService(CoupleSpaceMapper spaceMapper, CoupleActionMapper actionMapper,
                              CoupleMoodReactionMapper moodReactionMapper, CoupleMoodMapper moodMapper,
-                             ImPushService push) {
+                             CoupleEventPublisher push) {
         this.spaceMapper = spaceMapper;
         this.actionMapper = actionMapper;
         this.moodReactionMapper = moodReactionMapper;

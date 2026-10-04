@@ -8,7 +8,7 @@ import com.smart.chat.couple.infrastructure.persistence.CoupleCatchSafewordUseMa
 import com.smart.chat.couple.infrastructure.persistence.CoupleSpace;
 import com.smart.chat.couple.infrastructure.persistence.CoupleSpaceMapper;
 import com.smart.chat.sharedkernel.web.BusinessException;
-import com.smart.chat.messaging.infrastructure.transport.ImPushService;
+import com.smart.chat.messaging.domain.CoupleEventPublisher;
 import org.springframework.stereotype.Service;
 
 import java.time.DayOfWeek;
@@ -30,12 +30,12 @@ public class CoupleCatchService {
     private final CoupleSpaceMapper spaceMapper;
     private final CoupleCatchSafewordMapper safewordMapper;
     private final CoupleCatchSafewordUseMapper useMapper;
-    private final ImPushService push;
+    private final CoupleEventPublisher push;
 
     private static final int LIST_USE = 20;
 
     public CoupleCatchService(CoupleSpaceMapper spaceMapper, CoupleCatchSafewordMapper safewordMapper,
-                              CoupleCatchSafewordUseMapper useMapper, ImPushService push) {
+                              CoupleCatchSafewordUseMapper useMapper, CoupleEventPublisher push) {
         this.spaceMapper = spaceMapper;
         this.safewordMapper = safewordMapper;
         this.useMapper = useMapper;

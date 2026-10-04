@@ -12,7 +12,7 @@ import com.smart.chat.messaging.infrastructure.persistence.PrivateMessage;
 import com.smart.chat.messaging.infrastructure.persistence.PrivateMessageMapper;
 import com.smart.chat.messaging.infrastructure.throttle.MessageRateLimiter;
 import com.smart.chat.messaging.infrastructure.transport.ImPushService;
-import com.smart.chat.identity.application.AppUserService;
+import com.smart.chat.identity.domain.AccountDirectory;
 import com.smart.chat.sharedkernel.web.BusinessException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -71,7 +71,7 @@ public class PrivateMessageService {
     private final MessageStarMapper starMapper;
     private final ImPushService push;
     /** 合法用户目录：手机号注册产生的账号 */
-    private final AppUserService userService;
+    private final AccountDirectory accounts;
     /** 86 敏感词过滤 */
     private final ModerationService moderation;
     /** 87 发送限流（防刷屏） */
@@ -81,14 +81,14 @@ public class PrivateMessageService {
 
     public PrivateMessageService(PrivateMessageMapper messageMapper, FriendMapper friendMapper,
                                  MessageReactionMapper reactionMapper, MessageStarMapper starMapper,
-                                 ImPushService push, AppUserService userService, ModerationService moderation,
+                                 ImPushService push, AccountDirectory accounts, ModerationService moderation,
                                  MessageRateLimiter rateLimiter, ConversationPinMapper pinMapper) {
         this.messageMapper = messageMapper;
         this.friendMapper = friendMapper;
         this.reactionMapper = reactionMapper;
         this.starMapper = starMapper;
         this.push = push;
-        this.userService = userService;
+        this.accounts = accounts;
         this.moderation = moderation;
         this.rateLimiter = rateLimiter;
         this.pinMapper = pinMapper;
@@ -99,11 +99,11 @@ public class PrivateMessageService {
         rateLimiter.check(me);
         String rawPeer = peer == null ? "" : peer.trim();
         // 用户名统一小写；对方必须是手机号注册过的合法用户
-        String peerName = userService.normalizeUsername(rawPeer);
+        String peerName = accounts.normalizeUsername(rawPeer);
         if (peerName.equals(me)) {
             throw new BusinessException(400, "不能给自己发私信");
         }
-        if (!userService.exists(peerName)) {
+        if (!accounts.exists(peerName)) {
             throw new BusinessException(400, "查无此人：对方还没有用手机号注册");
         }
         if (friendMapper.findByOwnerAndFriend(me, peerName).isEmpty()) {
@@ -437,7 +437,7 @@ public class PrivateMessageService {
 
     /** 置顶：仅双方可见的会话级置顶，一个会话一条，后者覆盖前者。 */
     public PinVO pin(String me, String peer, String msgId) {
-        String peerName = userService.normalizeUsername(peer);
+        String peerName = accounts.normalizeUsername(peer);
         requireConversation(me, peerName);
         PrivateMessage message = requireParticipantMessage(me, msgId);
         if (PrivateMessage.STATUS_RECALLED.equals(message.getStatus())) {
@@ -453,7 +453,7 @@ public class PrivateMessageService {
     }
 
     public void unpin(String me, String peer) {
-        String peerName = userService.normalizeUsername(peer);
+        String peerName = accounts.normalizeUsername(peer);
         requireConversation(me, peerName);
         String userA = me.compareTo(peerName) <= 0 ? me : peerName;
         String userB = me.compareTo(peerName) <= 0 ? peerName : me;
@@ -463,7 +463,7 @@ public class PrivateMessageService {
 
     /** 当前会话置顶（无则返回 null，由 Optional 表达） */
     public java.util.Optional<PinVO> currentPin(String me, String peer) {
-        String peerName = userService.normalizeUsername(peer);
+        String peerName = accounts.normalizeUsername(peer);
         String userA = me.compareTo(peerName) <= 0 ? me : peerName;
         String userB = me.compareTo(peerName) <= 0 ? peerName : me;
         return pinMapper.findForConversation(userA, userB).map(pin -> new PinVO(pin.getMsgId(), pin.getCreatedBy()));
@@ -483,7 +483,7 @@ public class PrivateMessageService {
     /** 清空双方会话全部消息（危险操作，前端二次确认后调用），返回删除条数 */
     @Transactional
     public long clearConversation(String me, String peer) {
-        String peerName = userService.normalizeUsername(peer);
+        String peerName = accounts.normalizeUsername(peer);
         requireConversation(me, peerName);
         int deleted = messageMapper.deleteConversation(me, peerName);
         unpin(me, peerName);
@@ -494,7 +494,7 @@ public class PrivateMessageService {
 
     /** 会话内图片/文件附件（最近 100 条，倒序） */
     public List<AttachmentVO> attachments(String me, String peer, String type) {
-        String peerName = userService.normalizeUsername(peer);
+        String peerName = accounts.normalizeUsername(peer);
         requireConversation(me, peerName);
         String msgType = "file".equals(type) ? PrivateMessage.TYPE_FILE : PrivateMessage.TYPE_IMAGE;
         List<PrivateMessage> rows = messageMapper.findAttachments(me, peerName, msgType);

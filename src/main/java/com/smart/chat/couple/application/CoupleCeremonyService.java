@@ -7,7 +7,7 @@ import com.smart.chat.couple.infrastructure.persistence.CouplePointLedgerMapper;
 import com.smart.chat.couple.infrastructure.persistence.CoupleSpace;
 import com.smart.chat.couple.infrastructure.persistence.CoupleSpaceMapper;
 import com.smart.chat.sharedkernel.web.BusinessException;
-import com.smart.chat.messaging.infrastructure.transport.ImPushService;
+import com.smart.chat.messaging.domain.CoupleEventPublisher;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
@@ -34,10 +34,10 @@ public class CoupleCeremonyService {
     private final CoupleSpaceMapper spaceMapper;
     private final CoupleCeremonyCouponMapper couponMapper;
     private final CouplePointLedgerMapper ledgerMapper;
-    private final ImPushService push;
+    private final CoupleEventPublisher push;
 
     public CoupleCeremonyService(CoupleSpaceMapper spaceMapper, CoupleCeremonyCouponMapper couponMapper,
-                                 CouplePointLedgerMapper ledgerMapper, ImPushService push) {
+                                 CouplePointLedgerMapper ledgerMapper, CoupleEventPublisher push) {
         this.spaceMapper = spaceMapper;
         this.couponMapper = couponMapper;
         this.ledgerMapper = ledgerMapper;

@@ -33,6 +33,11 @@ public class AccountDirectoryAdapter implements AccountDirectory {
     }
 
     @Override
+    public java.util.List<Account> search(String keyword, String exclude, int limit) {
+        return userService.search(keyword, exclude, limit).stream().map(AppUser::view).toList();
+    }
+
+    @Override
     public void updateNickname(String username, String nickname) {
         userService.updateNickname(username, nickname);
     }

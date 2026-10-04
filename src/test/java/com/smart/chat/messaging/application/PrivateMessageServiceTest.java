@@ -11,7 +11,7 @@ import com.smart.chat.messaging.infrastructure.persistence.MessageStarMapper;
 import com.smart.chat.messaging.infrastructure.persistence.PrivateMessage;
 import com.smart.chat.messaging.infrastructure.persistence.PrivateMessageMapper;
 import com.smart.chat.messaging.infrastructure.transport.ImPushService;
-import com.smart.chat.identity.application.AppUserService;
+import com.smart.chat.identity.domain.AccountDirectory;
 import com.smart.chat.sharedkernel.web.BusinessException;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -51,7 +51,7 @@ class PrivateMessageServiceTest {
     private ImPushService push;
 
     @Mock
-    private AppUserService userService;
+    private AccountDirectory accounts;
 
     @Mock
     private com.smart.chat.messaging.application.ModerationService moderation;
@@ -68,9 +68,9 @@ class PrivateMessageServiceTest {
     /** 合法用户目录：默认「输入规范化 + 用户存在」，个别用例可覆盖 */
     @org.junit.jupiter.api.BeforeEach
     void stubUserDirectory() {
-        lenient().when(userService.normalizeUsername(org.mockito.ArgumentMatchers.anyString()))
+        lenient().when(accounts.normalizeUsername(org.mockito.ArgumentMatchers.anyString()))
                 .thenAnswer(inv -> inv.getArgument(0, String.class).trim().toLowerCase());
-        lenient().when(userService.exists(org.mockito.ArgumentMatchers.anyString())).thenReturn(true);
+        lenient().when(accounts.exists(org.mockito.ArgumentMatchers.anyString())).thenReturn(true);
         // 86 敏感词过滤默认放行（返回原文）；限流默认不触发（void 方法空实现）
         lenient().when(moderation.clean(org.mockito.ArgumentMatchers.anyString(),
                         org.mockito.ArgumentMatchers.anyString()))
@@ -124,7 +124,7 @@ class PrivateMessageServiceTest {
     @Test
     void sendValidatesFriendshipAndInput() {
         // 合法用户校验先于好友校验：未注册的账号直接拒绝
-        when(userService.exists("不存在的人")).thenReturn(false);
+        when(accounts.exists("不存在的人")).thenReturn(false);
         assertThatThrownBy(() -> service.send("alice", "不存在的人", "hi", "text", null))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("查无此人");

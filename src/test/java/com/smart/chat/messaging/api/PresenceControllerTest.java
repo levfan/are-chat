@@ -51,7 +51,7 @@ class PresenceControllerTest {
     void adminSeesWholeSiteOnlineUsers() {
         when(registry.onlineUsers()).thenReturn(Set.of("alice", "bob", "admin"));
         lenient().when(accounts.find("admin")).thenReturn(Optional.of(
-                new AccountDirectory.Account("admin", "管理员", true)));
+                new AccountDirectory.Account("admin", "管理员", true, "138****0000")));
 
         ApiResponse<PresenceController.OnlineVO> response = controller.online(sessionOf("admin"));
 
@@ -65,7 +65,7 @@ class PresenceControllerTest {
     void regularUserOnlyCountsOnlineFriends() {
         when(registry.onlineUsers()).thenReturn(Set.of("alice", "bob", "carol"));
         when(accounts.find("alice")).thenReturn(Optional.of(
-                new AccountDirectory.Account("alice", "alice", false)));
+                new AccountDirectory.Account("alice", "alice", false, "138****0001")));
         // alice 的通讯录：bob 与 dave（carol 不是好友）
         when(friendMapper.findAllByOwner("alice"))
                 .thenReturn(List.of(Friend.of("alice", "bob"), Friend.of("alice", "dave")));
@@ -80,7 +80,7 @@ class PresenceControllerTest {
     void regularUserWithoutFriendsSeesZero() {
         when(registry.onlineUsers()).thenReturn(Set.of("alice", "bob"));
         when(accounts.find("alice")).thenReturn(Optional.of(
-                new AccountDirectory.Account("alice", "alice", false)));
+                new AccountDirectory.Account("alice", "alice", false, "138****0001")));
         when(friendMapper.findAllByOwner("alice")).thenReturn(List.of());
 
         ApiResponse<PresenceController.OnlineVO> response = controller.online(sessionOf("alice"));

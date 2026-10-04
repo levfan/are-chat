@@ -4,7 +4,7 @@ import com.smart.chat.couple.infrastructure.persistence.CoupleAnniversary;
 import com.smart.chat.couple.infrastructure.persistence.CoupleAnniversaryMapper;
 import com.smart.chat.couple.infrastructure.persistence.CoupleSpace;
 import com.smart.chat.couple.infrastructure.persistence.CoupleSpaceMapper;
-import com.smart.chat.messaging.infrastructure.transport.ImPushService;
+import com.smart.chat.messaging.domain.CoupleEventPublisher;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -24,10 +24,10 @@ public class CoupleReminderJob {
 
     private final CoupleSpaceMapper spaceMapper;
     private final CoupleAnniversaryMapper anniversaryMapper;
-    private final ImPushService push;
+    private final CoupleEventPublisher push;
 
     public CoupleReminderJob(CoupleSpaceMapper spaceMapper, CoupleAnniversaryMapper anniversaryMapper,
-                             ImPushService push) {
+                             CoupleEventPublisher push) {
         this.spaceMapper = spaceMapper;
         this.anniversaryMapper = anniversaryMapper;
         this.push = push;

@@ -6,7 +6,7 @@ import com.smart.chat.couple.infrastructure.persistence.CoupleQuestOvertimeMappe
 import com.smart.chat.couple.infrastructure.persistence.CoupleSpace;
 import com.smart.chat.couple.infrastructure.persistence.CoupleSpaceMapper;
 import com.smart.chat.sharedkernel.web.BusinessException;
-import com.smart.chat.messaging.infrastructure.transport.ImPushService;
+import com.smart.chat.messaging.domain.CoupleEventPublisher;
 import org.springframework.stereotype.Service;
 
 import java.time.DayOfWeek;
@@ -26,10 +26,10 @@ public class CoupleQuestService {
 
     private final CoupleSpaceMapper spaceMapper;
     private final CoupleQuestOvertimeMapper overtimeMapper;
-    private final ImPushService push;
+    private final CoupleEventPublisher push;
 
     public CoupleQuestService(CoupleSpaceMapper spaceMapper, CoupleQuestOvertimeMapper overtimeMapper,
-                              ImPushService push) {
+                              CoupleEventPublisher push) {
         this.spaceMapper = spaceMapper;
         this.overtimeMapper = overtimeMapper;
         this.push = push;

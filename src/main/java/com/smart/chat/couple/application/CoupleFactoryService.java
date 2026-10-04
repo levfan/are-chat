@@ -9,7 +9,7 @@ import com.smart.chat.couple.infrastructure.persistence.CoupleSpaceMapper;
 import com.smart.chat.couple.infrastructure.persistence.CoupleSpinTask;
 import com.smart.chat.couple.infrastructure.persistence.CoupleSpinTaskMapper;
 import com.smart.chat.sharedkernel.web.BusinessException;
-import com.smart.chat.messaging.infrastructure.transport.ImPushService;
+import com.smart.chat.messaging.domain.CoupleEventPublisher;
 import org.springframework.stereotype.Service;
 
 import java.time.DayOfWeek;
@@ -39,10 +39,10 @@ public class CoupleFactoryService {
     private final CoupleSpaceMapper spaceMapper;
     private final CoupleSpinTaskMapper spinMapper;
     private final CouplePointLedgerMapper ledgerMapper;
-    private final ImPushService push;
+    private final CoupleEventPublisher push;
 
     public CoupleFactoryService(CoupleSpaceMapper spaceMapper, CoupleSpinTaskMapper spinMapper,
-                                CouplePointLedgerMapper ledgerMapper, ImPushService push) {
+                                CouplePointLedgerMapper ledgerMapper, CoupleEventPublisher push) {
         this.spaceMapper = spaceMapper;
         this.spinMapper = spinMapper;
         this.ledgerMapper = ledgerMapper;

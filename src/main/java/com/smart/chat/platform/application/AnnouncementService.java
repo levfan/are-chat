@@ -5,7 +5,7 @@ import com.smart.chat.platform.infrastructure.persistence.AnnouncementMapper;
 import com.smart.chat.platform.infrastructure.persistence.AnnouncementRead;
 import com.smart.chat.platform.infrastructure.persistence.AnnouncementReadMapper;
 import com.smart.chat.sharedkernel.web.BusinessException;
-import com.smart.chat.messaging.infrastructure.transport.ImPushService;
+import com.smart.chat.messaging.domain.AnnouncementBroadcaster;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -22,13 +22,13 @@ public class AnnouncementService {
 
     private final AnnouncementMapper announcementMapper;
     private final AnnouncementReadMapper readMapper;
-    private final ImPushService push;
+    private final AnnouncementBroadcaster broadcaster;
 
     public AnnouncementService(AnnouncementMapper announcementMapper, AnnouncementReadMapper readMapper,
-                               ImPushService push) {
+                               AnnouncementBroadcaster broadcaster) {
         this.announcementMapper = announcementMapper;
         this.readMapper = readMapper;
-        this.push = push;
+        this.broadcaster = broadcaster;
     }
 
     /** 发布新公告：同一时刻只有最新一条生效（发布即关闭旧公告） */
@@ -49,7 +49,7 @@ public class AnnouncementService {
         Announcement announcement = Announcement.of(clean, actor);
         announcementMapper.insert(announcement);
         // 在线用户实时收到（unread 未读标记由客户端按已读记录判断）
-        push.pushAll(new ImPushService.AnnouncementPayload("announcement", announcement.getId(), clean));
+        broadcaster.publishAnnouncement(announcement.getId(), clean);
         return toVO(announcement, false);
     }
 

@@ -2,9 +2,8 @@ package com.smart.chat.couple.infrastructure.scheduler;
 
 import com.smart.chat.couple.infrastructure.persistence.CoupleSpace;
 import com.smart.chat.couple.infrastructure.persistence.CoupleSpaceMapper;
-import com.smart.chat.messaging.infrastructure.transport.ImPushService;
-import com.smart.chat.messaging.infrastructure.persistence.UserProfile;
-import com.smart.chat.messaging.infrastructure.persistence.UserProfileMapper;
+import com.smart.chat.messaging.domain.CoupleEventPublisher;
+import com.smart.chat.messaging.domain.PeerProfileReader;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
@@ -19,12 +18,12 @@ import java.util.List;
 public class CoupleSurpriseJob {
 
     private final CoupleSpaceMapper spaceMapper;
-    private final UserProfileMapper profileMapper;
-    private final ImPushService push;
+    private final PeerProfileReader profiles;
+    private final CoupleEventPublisher push;
 
-    public CoupleSurpriseJob(CoupleSpaceMapper spaceMapper, UserProfileMapper profileMapper, ImPushService push) {
+    public CoupleSurpriseJob(CoupleSpaceMapper spaceMapper, PeerProfileReader profiles, CoupleEventPublisher push) {
         this.spaceMapper = spaceMapper;
-        this.profileMapper = profileMapper;
+        this.profiles = profiles;
         this.push = push;
     }
 
@@ -35,8 +34,8 @@ public class CoupleSurpriseJob {
         String eveMonthDay = LocalDate.now().plusDays(3).toString().substring(5);
         for (CoupleSpace space : spaceMapper.findAllActive()) {
             for (String user : List.of(space.getUserA(), space.getUserB())) {
-                UserProfile profile = profileMapper.selectById(user);
-                String birthday = profile == null ? null : profile.getBirthday();
+                PeerProfileReader.PeerProfile profile = profiles.read(user).orElse(null);
+                String birthday = profile == null ? null : profile.birthday();
                 if (birthday == null || birthday.isBlank()) {
                     continue;
                 }

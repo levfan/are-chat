@@ -10,7 +10,7 @@ import com.smart.chat.couple.infrastructure.persistence.CoupleScratchMapper;
 import com.smart.chat.couple.infrastructure.persistence.CoupleSpace;
 import com.smart.chat.couple.infrastructure.persistence.CoupleSpaceMapper;
 import com.smart.chat.sharedkernel.web.BusinessException;
-import com.smart.chat.messaging.infrastructure.transport.ImPushService;
+import com.smart.chat.messaging.domain.CoupleEventPublisher;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
@@ -39,11 +39,11 @@ public class CoupleSurpriseService {
     private final CoupleScratchMapper scratchMapper;
     private final CoupleMysteryBoxMapper boxMapper;
     private final CouplePointLedgerMapper ledgerMapper;
-    private final ImPushService push;
+    private final CoupleEventPublisher push;
 
     public CoupleSurpriseService(CoupleSpaceMapper spaceMapper, CoupleScratchMapper scratchMapper,
                                  CoupleMysteryBoxMapper boxMapper, CouplePointLedgerMapper ledgerMapper,
-                                 ImPushService push) {
+                                 CoupleEventPublisher push) {
         this.spaceMapper = spaceMapper;
         this.scratchMapper = scratchMapper;
         this.boxMapper = boxMapper;

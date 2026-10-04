@@ -1,5 +1,6 @@
 package com.smart.chat.messaging.infrastructure.transport;
 
+import com.smart.chat.messaging.domain.PresenceReader;
 import jakarta.websocket.Session;
 import org.springframework.stereotype.Component;
 
@@ -17,7 +18,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * 纯 Java 实现，不依赖容器，方便单元测试。
  */
 @Component
-public class ChatSessionRegistry {
+public class ChatSessionRegistry implements PresenceReader {
 
     public record Connection(String id, String username, Session session) {
         public static Connection of(String username, Session session) {

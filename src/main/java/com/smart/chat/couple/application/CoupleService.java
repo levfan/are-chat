@@ -19,10 +19,9 @@ import com.smart.chat.couple.infrastructure.persistence.CoupleSpaceMapper;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.smart.chat.identity.domain.AccountDirectory;
 import com.smart.chat.sharedkernel.web.BusinessException;
-import com.smart.chat.messaging.infrastructure.persistence.FriendMapper;
-import com.smart.chat.messaging.infrastructure.transport.ImPushService;
-import com.smart.chat.messaging.infrastructure.persistence.UserProfile;
-import com.smart.chat.messaging.infrastructure.persistence.UserProfileMapper;
+import com.smart.chat.messaging.domain.FriendshipChecker;
+import com.smart.chat.messaging.domain.CoupleEventPublisher;
+import com.smart.chat.messaging.domain.PeerProfileReader;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -107,10 +106,10 @@ public class CoupleService {
     private final CoupleQuestOvertimeMapper overtimeMapper;
     private final CoupleCatchSafewordUseMapper safewordUseMapper;
     private final CouplePointLedgerMapper ledgerMapper;
-    private final FriendMapper friendMapper;
-    private final UserProfileMapper profileMapper;
+    private final FriendshipChecker friendships;
+    private final PeerProfileReader profiles;
     private final AccountDirectory accounts;
-    private final ImPushService push;
+    private final CoupleEventPublisher push;
 
     @SuppressWarnings("java:S107")
     public CoupleService(CoupleSpaceMapper spaceMapper, CoupleInviteMapper inviteMapper,
@@ -119,8 +118,8 @@ public class CoupleService {
                          CoupleQuestOvertimeMapper overtimeMapper,
                          CoupleCatchSafewordUseMapper safewordUseMapper,
                          CouplePointLedgerMapper ledgerMapper,
-                         FriendMapper friendMapper, UserProfileMapper profileMapper,
-                         AccountDirectory accounts, ImPushService push) {
+                         FriendshipChecker friendships, PeerProfileReader profiles,
+                         AccountDirectory accounts, CoupleEventPublisher push) {
         this.spaceMapper = spaceMapper;
         this.inviteMapper = inviteMapper;
         this.anniversaryMapper = anniversaryMapper;
@@ -130,8 +129,8 @@ public class CoupleService {
         this.overtimeMapper = overtimeMapper;
         this.safewordUseMapper = safewordUseMapper;
         this.ledgerMapper = ledgerMapper;
-        this.friendMapper = friendMapper;
-        this.profileMapper = profileMapper;
+        this.friendships = friendships;
+        this.profiles = profiles;
         this.accounts = accounts;
         this.push = push;
     }
@@ -151,7 +150,7 @@ public class CoupleService {
         if (!accounts.exists(targetName)) {
             throw new BusinessException(400, "查无此人：对方还没注册或已注销");
         }
-        if (friendMapper.findByOwnerAndFriend(me, targetName).isEmpty()) {
+        if (!friendships.areFriends(me, targetName)) {
             throw new BusinessException(400, "只能邀请自己的好友，先去通讯录加个好友吧");
         }
         if (spaceMapper.findActiveByUser(me).isPresent()) {
@@ -273,7 +272,7 @@ public class CoupleService {
             throw new BusinessException(400, "用户名不能为空");
         }
         // 只有对方好友可以查看（保护隐私）
-        if (friendMapper.findByOwnerAndFriend(me, name).isEmpty()) {
+        if (!friendships.areFriends(me, name)) {
             throw new BusinessException(403, "只有好友才能查看恋爱状态");
         }
         return spaceMapper.findActiveByUser(name)
@@ -576,10 +575,10 @@ public class CoupleService {
 
     private SpaceVO toSpaceVO(CoupleSpace space, String me) {
         String partner = space.partnerOf(me);
-        UserProfile profile = profileMapper.selectById(partner);
-        String nickname = profile == null || profile.getNickname() == null || profile.getNickname().isBlank()
-                ? partner : profile.getNickname();
-        String avatar = profile == null || profile.getAvatar() == null ? "" : profile.getAvatar();
+        PeerProfileReader.PeerProfile profile = profiles.read(partner).orElse(null);
+        String nickname = profile == null || profile.nickname() == null || profile.nickname().isBlank()
+                ? partner : profile.nickname();
+        String avatar = profile == null || profile.avatar() == null ? "" : profile.avatar();
         PartnerVO partnerVO = new PartnerVO(partner, nickname, avatar, push.isOnline(partner), space.nickOf(partner));
         return new SpaceVO(space.getId(), partnerVO, space.getCreated(), space.getAnniversary(),
                 daysTogether(space), space.getSlogan(),

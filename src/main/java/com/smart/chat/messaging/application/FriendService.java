@@ -9,8 +9,7 @@ import com.smart.chat.messaging.infrastructure.persistence.PrivateMessageMapper;
 import com.smart.chat.messaging.infrastructure.persistence.UserProfile;
 import com.smart.chat.messaging.infrastructure.persistence.UserProfileMapper;
 import com.smart.chat.messaging.infrastructure.transport.ImPushService;
-import com.smart.chat.identity.infrastructure.persistence.AppUser;
-import com.smart.chat.identity.application.AppUserService;
+import com.smart.chat.identity.domain.AccountDirectory;
 import com.smart.chat.sharedkernel.web.BusinessException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -49,17 +48,17 @@ public class FriendService {
     private final UserProfileMapper profileMapper;
     private final ImPushService push;
     /** 合法用户目录：手机号注册产生的账号 */
-    private final AppUserService userService;
+    private final AccountDirectory accounts;
 
     public FriendService(FriendMapper friendMapper, FriendRequestMapper requestMapper,
                          PrivateMessageMapper messageMapper, UserProfileMapper profileMapper, ImPushService push,
-                         AppUserService userService) {
+                         AccountDirectory accounts) {
         this.friendMapper = friendMapper;
         this.requestMapper = requestMapper;
         this.messageMapper = messageMapper;
         this.profileMapper = profileMapper;
         this.push = push;
-        this.userService = userService;
+        this.accounts = accounts;
     }
 
     public List<FriendVO> listFriends(String me) {
@@ -140,11 +139,11 @@ public class FriendService {
             throw new BusinessException(400, "想加谁？手机号或用户名不能为空");
         }
         // 用户名统一小写；对方必须是手机号注册过的合法用户
-        String targetName = userService.normalizeUsername(raw);
+        String targetName = accounts.normalizeUsername(raw);
         if (targetName.equals(me)) {
             throw new BusinessException(400, "不能添加自己为好友");
         }
-        if (!userService.exists(targetName)) {
+        if (!accounts.exists(targetName)) {
             throw new BusinessException(400, "查无此人：对方还没用手机号注册，或手机号/用户名输错了");
         }
         if (friendMapper.findByOwnerAndFriend(me, targetName).isPresent()) {
@@ -179,9 +178,9 @@ public class FriendService {
      */
     public List<UserSuggestion> suggest(String me, String keyword) {
         List<UserSuggestion> result = new ArrayList<>();
-        for (AppUser candidate : userService.search(keyword, me, 10)) {
-            result.add(new UserSuggestion(candidate.getUsername(), candidate.maskedPhone(),
-                    relation(me, candidate.getUsername())));
+        for (AccountDirectory.Account candidate : accounts.search(keyword, me, 10)) {
+            result.add(new UserSuggestion(candidate.username(), candidate.maskedPhone(),
+                    relation(me, candidate.username())));
         }
         return result;
     }

@@ -4,7 +4,7 @@ import com.smart.chat.couple.infrastructure.persistence.CoupleInviteMapper;
 import com.smart.chat.couple.infrastructure.persistence.CoupleSpace;
 import com.smart.chat.couple.infrastructure.persistence.CoupleSpaceMapper;
 import com.smart.chat.identity.domain.AccountCascade;
-import com.smart.chat.messaging.infrastructure.transport.ImPushService;
+import com.smart.chat.messaging.domain.CoupleEventPublisher;
 import org.springframework.stereotype.Component;
 
 /**
@@ -18,9 +18,9 @@ public class SpaceCascadeAdapter implements AccountCascade {
 
     private final CoupleSpaceMapper spaceMapper;
     private final CoupleInviteMapper inviteMapper;
-    private final ImPushService push;
+    private final CoupleEventPublisher push;
 
-    public SpaceCascadeAdapter(CoupleSpaceMapper spaceMapper, CoupleInviteMapper inviteMapper, ImPushService push) {
+    public SpaceCascadeAdapter(CoupleSpaceMapper spaceMapper, CoupleInviteMapper inviteMapper, CoupleEventPublisher push) {
         this.spaceMapper = spaceMapper;
         this.inviteMapper = inviteMapper;
         this.push = push;
