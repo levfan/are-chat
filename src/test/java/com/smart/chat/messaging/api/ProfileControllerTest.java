@@ -4,7 +4,7 @@ import com.smart.chat.messaging.infrastructure.persistence.Friend;
 import com.smart.chat.messaging.infrastructure.persistence.FriendMapper;
 import com.smart.chat.messaging.infrastructure.persistence.UserProfile;
 import com.smart.chat.messaging.infrastructure.persistence.UserProfileMapper;
-import com.smart.chat.identity.application.AppUserService;
+import com.smart.chat.identity.domain.AccountDirectory;
 import com.smart.chat.bootstrap.config.FastJsonWebConfig;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -43,7 +43,7 @@ class ProfileControllerTest {
     private FriendMapper friendMapper;
 
     @MockitoBean
-    private AppUserService userService;
+    private AccountDirectory accounts;
 
     private UserProfile profileOf(String username) {
         UserProfile profile = new UserProfile();
@@ -67,7 +67,7 @@ class ProfileControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.nickname").value("新昵称"));
 
-        verify(userService).updateNickname("alice", "新昵称");
+        verify(accounts).updateNickname("alice", "新昵称");
         ArgumentCaptor<UserProfile> captor = ArgumentCaptor.forClass(UserProfile.class);
         verify(profileMapper).updateById(captor.capture());
         org.assertj.core.api.Assertions.assertThat(captor.getValue().getNickname()).isEqualTo("新昵称");
@@ -85,7 +85,7 @@ class ProfileControllerTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.message").value("昵称需为 1~32 个字"));
 
-        verify(userService, never()).updateNickname(eq("alice"), org.mockito.ArgumentMatchers.anyString());
+        verify(accounts, never()).updateNickname(eq("alice"), org.mockito.ArgumentMatchers.anyString());
     }
 
     private Friend friendOf(String owner, String peer) {

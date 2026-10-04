@@ -3,7 +3,7 @@ package com.smart.chat.messaging.api;
 import com.smart.chat.messaging.infrastructure.persistence.FriendMapper;
 import com.smart.chat.messaging.infrastructure.persistence.UserProfile;
 import com.smart.chat.messaging.infrastructure.persistence.UserProfileMapper;
-import com.smart.chat.identity.application.AppUserService;
+import com.smart.chat.identity.domain.AccountDirectory;
 import com.smart.chat.sharedkernel.web.ApiResponse;
 import com.smart.chat.sharedkernel.web.BusinessException;
 import com.smart.chat.sharedkernel.web.Sessions;
@@ -48,12 +48,12 @@ public class ProfileController {
 
     private final UserProfileMapper profileMapper;
     private final FriendMapper friendMapper;
-    private final AppUserService userService;
+    private final AccountDirectory accounts;
 
-    public ProfileController(UserProfileMapper profileMapper, FriendMapper friendMapper, AppUserService userService) {
+    public ProfileController(UserProfileMapper profileMapper, FriendMapper friendMapper, AccountDirectory accounts) {
         this.profileMapper = profileMapper;
         this.friendMapper = friendMapper;
-        this.userService = userService;
+        this.accounts = accounts;
     }
 
     @GetMapping
@@ -83,7 +83,7 @@ public class ProfileController {
             }
             profile.setNickname(nickname);
             // 登录后修改昵称：同步 app_user（auth/me、管理后台用户列表显示的就是这里的昵称）
-            userService.updateNickname(username, nickname);
+            accounts.updateNickname(username, nickname);
         }
         if (req.signature() != null) {
             String signature = req.signature().trim();

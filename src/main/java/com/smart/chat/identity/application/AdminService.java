@@ -7,9 +7,7 @@ import com.smart.chat.identity.infrastructure.persistence.AppUserMapper;
 import com.smart.chat.identity.infrastructure.persistence.RegistrationApplication;
 import com.smart.chat.identity.infrastructure.persistence.RegistrationApplicationMapper;
 import com.smart.chat.sharedkernel.web.BusinessException;
-import com.smart.chat.messaging.infrastructure.transport.ImPushService;
-import com.smart.chat.messaging.infrastructure.persistence.PrivateMessage;
-import com.smart.chat.messaging.infrastructure.persistence.PrivateMessageMapper;
+import com.smart.chat.identity.domain.WelcomeMessenger;
 import com.smart.chat.platform.application.AdminNotifyService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -56,20 +54,18 @@ public class AdminService {
     private final AppUserMapper userMapper;
     private final AppUserService userService;
     private final AdminAuditMapper auditMapper;
-    private final PrivateMessageMapper messageMapper;
-    private final ImPushService push;
+    private final WelcomeMessenger welcomeMessenger;
     private final AdminNotifyService notifyService;
 
     public AdminService(RegistrationApplicationMapper applicationMapper, AppUserMapper userMapper,
                         AppUserService userService, AdminAuditMapper auditMapper,
-                        PrivateMessageMapper messageMapper, ImPushService push,
+                        WelcomeMessenger welcomeMessenger,
                         AdminNotifyService notifyService) {
         this.applicationMapper = applicationMapper;
         this.userMapper = userMapper;
         this.userService = userService;
         this.auditMapper = auditMapper;
-        this.messageMapper = messageMapper;
-        this.push = push;
+        this.welcomeMessenger = welcomeMessenger;
         this.notifyService = notifyService;
     }
 
@@ -181,11 +177,7 @@ public class AdminService {
         String content = "欢迎加入小帆船！你的注册申请已由管理员 " + reviewer + " 审批通过。"
                 + "入门指引：① 到「好友」页添加好友；② Enter 发送、Shift+Enter 换行，可直接粘贴图片；"
                 + "③ 「我的」菜单可快切在线状态，个人中心里有皮肤/背景等外观设置。祝你聊得开心！";
-        PrivateMessage welcome = PrivateMessage.of(reviewer, username, content, PrivateMessage.TYPE_SYSTEM);
-        messageMapper.insert(welcome);
-        if (push.isOnline(username)) {
-            push.pushDm(welcome);
-        }
+        welcomeMessenger.sendSystemWelcome(reviewer, username, content);
     }
 
     private static String generatePassword() {

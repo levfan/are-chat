@@ -2,6 +2,7 @@ package com.smart.chat.bootstrap.config;
 
 import com.alibaba.fastjson2.JSON;
 import com.smart.chat.sharedkernel.web.ApiResponse;
+import com.smart.chat.sharedkernel.web.Sessions;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.web.servlet.HandlerInterceptor;
@@ -12,12 +13,10 @@ import org.springframework.web.servlet.HandlerInterceptor;
  */
 public class LoginInterceptor implements HandlerInterceptor {
 
-    public static final String SESSION_USER = "CurrentUser";
-
     @Override
     public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) throws Exception {
         var session = request.getSession(false);
-        Object user = session == null ? null : session.getAttribute(SESSION_USER);
+        Object user = session == null ? null : session.getAttribute(Sessions.SESSION_USER);
         if (user != null) {
             return true;
         }

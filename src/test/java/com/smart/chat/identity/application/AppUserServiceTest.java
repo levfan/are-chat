@@ -4,9 +4,7 @@ import com.smart.chat.identity.infrastructure.persistence.AppUser;
 import com.smart.chat.identity.infrastructure.persistence.AppUserMapper;
 import com.smart.chat.identity.infrastructure.security.PasswordHasher;
 import com.smart.chat.sharedkernel.web.BusinessException;
-import com.smart.chat.messaging.infrastructure.persistence.FriendMapper;
-import com.smart.chat.messaging.infrastructure.persistence.UserProfile;
-import com.smart.chat.messaging.infrastructure.persistence.UserProfileMapper;
+import com.smart.chat.identity.domain.ProfileProvisioner;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -31,10 +29,8 @@ class AppUserServiceTest {
     private AppUserMapper userMapper;
 
     @Mock
-    private UserProfileMapper profileMapper;
+    private ProfileProvisioner profileProvisioner;
 
-    @Mock
-    private FriendMapper friendMapper;
 
     @Mock
     private PasswordHasher passwordHasher;
@@ -49,7 +45,6 @@ class AppUserServiceTest {
     void createAccountFallsBackToUsernameWhenNicknameBlank() {
         when(userMapper.findByPhone("13900001111")).thenReturn(Optional.empty());
         when(userMapper.findByUsername("zhangsan")).thenReturn(Optional.empty());
-        when(profileMapper.selectById("zhangsan")).thenReturn(null);
 
         service.createAccount("13900001111", "zhangsan", "  ", "hash", AppUser.ROLE_USER);
 
@@ -62,7 +57,6 @@ class AppUserServiceTest {
     void createAccountUsesProvidedNickname() {
         when(userMapper.findByPhone("13900001111")).thenReturn(Optional.empty());
         when(userMapper.findByUsername("zhangsan")).thenReturn(Optional.empty());
-        when(profileMapper.selectById("zhangsan")).thenReturn(null);
 
         service.createAccount("13900001111", "zhangsan", "张三", "hash", AppUser.ROLE_USER);
 
@@ -70,9 +64,8 @@ class AppUserServiceTest {
         verify(userMapper).insert(captor.capture());
         assertThat(captor.getValue().getNickname()).isEqualTo("张三");
 
-        ArgumentCaptor<UserProfile> profileCaptor = ArgumentCaptor.forClass(UserProfile.class);
-        verify(profileMapper).insert(profileCaptor.capture());
-        assertThat(profileCaptor.getValue().getNickname()).isEqualTo("张三");
+        verify(profileProvisioner).provision(org.mockito.ArgumentMatchers.eq("zhangsan"),
+                org.mockito.ArgumentMatchers.eq("张三"), org.mockito.ArgumentMatchers.any());
     }
 
     @Test

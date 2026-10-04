@@ -5,8 +5,7 @@ import com.smart.chat.identity.infrastructure.persistence.AppUserMapper;
 import com.smart.chat.identity.infrastructure.security.PasswordHasher;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.smart.chat.bootstrap.properties.AdminProperties;
-import com.smart.chat.messaging.infrastructure.persistence.UserProfile;
-import com.smart.chat.messaging.infrastructure.persistence.UserProfileMapper;
+import com.smart.chat.identity.domain.ProfileProvisioner;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.ApplicationArguments;
@@ -30,14 +29,14 @@ public class AdminBootstrapper implements ApplicationRunner {
     private static final List<String> DEMO_PHONES = List.of("13800000001", "13800000002", "13800000003");
 
     private final AppUserMapper userMapper;
-    private final UserProfileMapper profileMapper;
+    private final ProfileProvisioner profileProvisioner;
     private final PasswordHasher passwordHasher;
     private final AdminProperties adminProperties;
 
-    public AdminBootstrapper(AppUserMapper userMapper, UserProfileMapper profileMapper,
+    public AdminBootstrapper(AppUserMapper userMapper, ProfileProvisioner profileProvisioner,
                              PasswordHasher passwordHasher, AdminProperties adminProperties) {
         this.userMapper = userMapper;
-        this.profileMapper = profileMapper;
+        this.profileProvisioner = profileProvisioner;
         this.passwordHasher = passwordHasher;
         this.adminProperties = adminProperties;
     }
@@ -87,16 +86,6 @@ public class AdminBootstrapper implements ApplicationRunner {
     static final String ADMIN_PLACEHOLDER_PHONE = "00000000000";
 
     private void ensureProfile(AppUser user) {
-        if (profileMapper.selectById(user.getUsername()) != null) {
-            return;
-        }
-        UserProfile profile = new UserProfile();
-        profile.setUsername(user.getUsername());
-        profile.setNickname(user.getNickname());
-        profile.setSignature("");
-        profile.setAvatar(user.getAvatar());
-        profile.setPresenceStatus("online");
-        profile.setUpdatedAt(System.currentTimeMillis());
-        profileMapper.insert(profile);
+        profileProvisioner.provision(user.getUsername(), user.getNickname(), user.getAvatar());
     }
 }

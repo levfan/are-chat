@@ -4,7 +4,7 @@ import com.smart.chat.identity.infrastructure.persistence.RegistrationApplicatio
 import com.smart.chat.identity.infrastructure.persistence.RegistrationApplicationMapper;
 import com.smart.chat.identity.infrastructure.security.PasswordHasher;
 import com.smart.chat.sharedkernel.web.BusinessException;
-import com.smart.chat.messaging.infrastructure.transport.ImPushService;
+import com.smart.chat.identity.domain.AdminAlerter;
 import com.smart.chat.platform.application.AdminNotifyService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -47,7 +47,7 @@ class RegistrationServiceTest {
     private AdminNotifyService notifyService;
 
     @Mock
-    private ImPushService push;
+    private AdminAlerter adminAlerter;
 
     @InjectMocks
     private RegistrationService service;
@@ -121,6 +121,6 @@ class RegistrationServiceTest {
         apply("张三");
 
         verify(notifyService).pushTextAsync(anyString(), anyString());
-        verify(push).pushAdminEvent(anyList(), anyLong());
+        verify(adminAlerter).publishPendingCount(anyList(), anyLong());
     }
 }

@@ -8,7 +8,6 @@ import com.smart.chat.identity.infrastructure.throttle.LoginRateLimiter;
 import com.smart.chat.sharedkernel.web.ApiResponse;
 import com.smart.chat.sharedkernel.web.BusinessException;
 import com.smart.chat.sharedkernel.web.Sessions;
-import com.smart.chat.bootstrap.config.LoginInterceptor;
 import jakarta.servlet.http.HttpSession;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -146,7 +145,7 @@ public class AuthController {
 
     @GetMapping("/me")
     public ApiResponse<LoginResult> me(HttpSession session) {
-        String username = (String) session.getAttribute(LoginInterceptor.SESSION_USER);
+        String username = (String) session.getAttribute(Sessions.SESSION_USER);
         if (username == null) {
             throw new BusinessException(401, "还没有登录哦");
         }
@@ -177,7 +176,7 @@ public class AuthController {
     }
 
     private void startSession(HttpSession session, AppUser user) {
-        session.setAttribute(LoginInterceptor.SESSION_USER, user.getUsername());
+        session.setAttribute(Sessions.SESSION_USER, user.getUsername());
         session.setAttribute(SESSION_LOGIN_AT, System.currentTimeMillis());
     }
 }

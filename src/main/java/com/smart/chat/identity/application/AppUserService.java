@@ -3,14 +3,9 @@ package com.smart.chat.identity.application;
 import com.smart.chat.identity.infrastructure.persistence.AppUser;
 import com.smart.chat.identity.infrastructure.persistence.AppUserMapper;
 import com.smart.chat.identity.infrastructure.security.PasswordHasher;
+import com.smart.chat.identity.domain.AccountCascade;
 import com.smart.chat.sharedkernel.web.BusinessException;
-import com.smart.chat.couple.infrastructure.persistence.CoupleInviteMapper;
-import com.smart.chat.couple.infrastructure.persistence.CoupleSpace;
-import com.smart.chat.couple.infrastructure.persistence.CoupleSpaceMapper;
-import com.smart.chat.messaging.infrastructure.persistence.FriendMapper;
-import com.smart.chat.messaging.infrastructure.transport.ImPushService;
-import com.smart.chat.messaging.infrastructure.persistence.UserProfile;
-import com.smart.chat.messaging.infrastructure.persistence.UserProfileMapper;
+import com.smart.chat.identity.domain.ProfileProvisioner;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -31,27 +26,20 @@ public class AppUserService {
     private static final Pattern USERNAME = Pattern.compile("^[a-z0-9_]{3,20}$");
 
     private final AppUserMapper userMapper;
-    private final UserProfileMapper profileMapper;
-    private final FriendMapper friendMapper;
+    private final ProfileProvisioner profileProvisioner;
     private final PasswordHasher passwordHasher;
     private final SmsCodeService smsCodeService;
-    /** 情侣空间清理（84 注销时解散所在空间并通知对方）；直接注入 Mapper/Push 避免与 CoupleService 循环依赖 */
-    private final CoupleSpaceMapper coupleSpaceMapper;
-    private final CoupleInviteMapper coupleInviteMapper;
-    private final ImPushService push;
+    /** 注销连带清理：谁的数据谁清理（messaging 摘好友边、couple 散空间并推给对方），identity 不再 import 任何别的上下文 */
+    private final List<AccountCascade> accountCascades;
 
-    public AppUserService(AppUserMapper userMapper, UserProfileMapper profileMapper, FriendMapper friendMapper,
+    public AppUserService(AppUserMapper userMapper, ProfileProvisioner profileProvisioner,
                           PasswordHasher passwordHasher, SmsCodeService smsCodeService,
-                          CoupleSpaceMapper coupleSpaceMapper, CoupleInviteMapper coupleInviteMapper,
-                          ImPushService push) {
+                          List<AccountCascade> accountCascades) {
         this.userMapper = userMapper;
-        this.profileMapper = profileMapper;
-        this.friendMapper = friendMapper;
+        this.profileProvisioner = profileProvisioner;
         this.passwordHasher = passwordHasher;
         this.smsCodeService = smsCodeService;
-        this.coupleSpaceMapper = coupleSpaceMapper;
-        this.coupleInviteMapper = coupleInviteMapper;
-        this.push = push;
+        this.accountCascades = accountCascades;
     }
 
     /** 手机号格式校验（注册与发验证码共用） */
@@ -161,17 +149,7 @@ public class AppUserService {
         }
         user.setStatus(AppUser.STATUS_CLOSED);
         userMapper.updateById(user);
-        friendMapper.deleteAllByOwner(username);
-        friendMapper.deleteAllByFriend(username);
-        // 情侣空间清理：解散所在空间（对方收到推送）并删除相关邀请
-        coupleSpaceMapper.findActiveByUser(username).ifPresent(space -> {
-            space.setStatus(CoupleSpace.STATUS_DISSOLVED);
-            space.setDissolvedAt(System.currentTimeMillis());
-            coupleSpaceMapper.updateById(space);
-            push.pushCoupleEvent("dissolved", username, space.partnerOf(username),
-                    "对方账号已注销，情侣空间自动解除 😢");
-        });
-        coupleInviteMapper.deleteAllInvolving(username);
+        accountCascades.forEach(cascade -> cascade.onDeactivated(username));
     }
 
     /** 79 管理员启用/禁用用户账号 */
@@ -257,17 +235,7 @@ public class AppUserService {
 
     /** 注册时同步建资料行，保证既有资料/资料卡逻辑可直接使用（RegistrationService 复用） */
     public void ensureProfile(AppUser user) {
-        if (profileMapper.selectById(user.getUsername()) != null) {
-            return;
-        }
-        UserProfile profile = new UserProfile();
-        profile.setUsername(user.getUsername());
-        profile.setNickname(user.getNickname());
-        profile.setSignature("");
-        profile.setAvatar(user.getAvatar());
-        profile.setPresenceStatus("online");
-        profile.setUpdatedAt(System.currentTimeMillis());
-        profileMapper.insert(profile);
+        profileProvisioner.provision(user.getUsername(), user.getNickname(), user.getAvatar());
     }
 
     /** 密码规则：6~64 位、无空格、必须同时含字母和数字（注册申请与改密共用） */

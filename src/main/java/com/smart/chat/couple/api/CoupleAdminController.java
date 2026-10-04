@@ -4,7 +4,7 @@ import com.smart.chat.couple.infrastructure.persistence.CoupleActionMapper;
 import com.smart.chat.couple.infrastructure.persistence.CoupleEchoDeedMapper;
 import com.smart.chat.couple.infrastructure.persistence.CoupleSpace;
 import com.smart.chat.couple.infrastructure.persistence.CoupleSpaceMapper;
-import com.smart.chat.identity.application.AppUserService;
+import com.smart.chat.identity.domain.AccountDirectory;
 import com.smart.chat.sharedkernel.web.ApiResponse;
 import com.smart.chat.sharedkernel.web.BusinessException;
 import com.smart.chat.sharedkernel.web.Sessions;
@@ -34,15 +34,15 @@ public class CoupleAdminController {
     private final CoupleSpaceMapper spaceMapper;
     private final CoupleActionMapper actionMapper;
     private final CoupleEchoDeedMapper deedMapper;
-    private final AppUserService userService;
+    private final AccountDirectory accounts;
 
     @SuppressWarnings("java:S107")
     public CoupleAdminController(CoupleSpaceMapper spaceMapper, CoupleActionMapper actionMapper,
-                                 CoupleEchoDeedMapper deedMapper, AppUserService userService) {
+                                 CoupleEchoDeedMapper deedMapper, AccountDirectory accounts) {
         this.spaceMapper = spaceMapper;
         this.actionMapper = actionMapper;
         this.deedMapper = deedMapper;
-        this.userService = userService;
+        this.accounts = accounts;
     }
 
     /** 情侣空间运营统计（仅管理员）。 */
@@ -50,7 +50,7 @@ public class CoupleAdminController {
     public ApiResponse<CoupleStatsVO> stats(HttpSession session) {
         String me = Sessions.requireUser(session);
         try {
-            userService.requireAdmin(me);
+            accounts.requireAdmin(me);
         } catch (BusinessException e) {
             throw new BusinessException(403, "仅管理员可查看运营看板");
         }

@@ -5,7 +5,7 @@ import com.smart.chat.identity.infrastructure.persistence.RegistrationApplicatio
 import com.smart.chat.identity.infrastructure.persistence.RegistrationApplicationMapper;
 import com.smart.chat.identity.infrastructure.security.PasswordHasher;
 import com.smart.chat.sharedkernel.web.BusinessException;
-import com.smart.chat.messaging.infrastructure.transport.ImPushService;
+import com.smart.chat.identity.domain.AdminAlerter;
 import com.smart.chat.platform.application.AdminNotifyService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -41,17 +41,17 @@ public class RegistrationService {
     private final PasswordHasher passwordHasher;
     private final SmsCodeService smsCodeService;
     private final AdminNotifyService notifyService;
-    private final ImPushService push;
+    private final AdminAlerter adminAlerter;
 
     public RegistrationService(RegistrationApplicationMapper applicationMapper, AppUserService userService,
                                PasswordHasher passwordHasher, SmsCodeService smsCodeService,
-                               AdminNotifyService notifyService, ImPushService push) {
+                               AdminNotifyService notifyService, AdminAlerter adminAlerter) {
         this.applicationMapper = applicationMapper;
         this.userService = userService;
         this.passwordHasher = passwordHasher;
         this.smsCodeService = smsCodeService;
         this.notifyService = notifyService;
-        this.push = push;
+        this.adminAlerter = adminAlerter;
     }
 
     /** 提交注册申请：校验与原注册一致；昵称必填；申请入待审队列并通知管理员 */
@@ -85,7 +85,7 @@ public class RegistrationService {
         notifyService.pushTextAsync("小帆船 新用户注册申请",
                 "**" + name + "**（手机号 " + mask(validPhone) + "）申请加入小帆船，请到管理后台审批。");
         // 78 在线管理员实时收到待办角标
-        push.pushAdminEvent(userService.admins().stream().map(AppUser::getUsername).toList(),
+        adminAlerter.publishPendingCount(userService.admins().stream().map(AppUser::getUsername).toList(),
                 applicationMapper.countByStatus(RegistrationApplication.STATUS_PENDING));
         return ApplicationVO.of(application);
     }

@@ -69,4 +69,9 @@ public class AppUser {
     public boolean isAdmin() {
         return ROLE_ADMIN.equals(role);
     }
+
+    /** 对外只给这张最小视图：账号 PO 不离开 identity（AccountDirectory 用它转换） */
+    public com.smart.chat.identity.domain.AccountDirectory.Account view() {
+        return new com.smart.chat.identity.domain.AccountDirectory.Account(username, nickname, isAdmin());
+    }
 }

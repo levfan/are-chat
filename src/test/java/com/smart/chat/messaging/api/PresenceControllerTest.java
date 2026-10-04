@@ -2,8 +2,7 @@ package com.smart.chat.messaging.api;
 
 import com.smart.chat.messaging.infrastructure.persistence.Friend;
 import com.smart.chat.messaging.infrastructure.persistence.FriendMapper;
-import com.smart.chat.identity.infrastructure.persistence.AppUser;
-import com.smart.chat.identity.application.AppUserService;
+import com.smart.chat.identity.domain.AccountDirectory;
 import com.smart.chat.sharedkernel.web.ApiResponse;
 import com.smart.chat.messaging.infrastructure.transport.ChatSessionRegistry;
 import jakarta.servlet.http.HttpSession;
@@ -34,7 +33,7 @@ class PresenceControllerTest {
     private ChatSessionRegistry registry;
 
     @Mock
-    private AppUserService userService;
+    private AccountDirectory accounts;
 
     @Mock
     private FriendMapper friendMapper;
@@ -51,8 +50,8 @@ class PresenceControllerTest {
     @Test
     void adminSeesWholeSiteOnlineUsers() {
         when(registry.onlineUsers()).thenReturn(Set.of("alice", "bob", "admin"));
-        lenient().when(userService.find("admin")).thenReturn(Optional.of(
-                AppUser.of("13800000000", "admin", "hash", "管理员", "c0", AppUser.ROLE_ADMIN)));
+        lenient().when(accounts.find("admin")).thenReturn(Optional.of(
+                new AccountDirectory.Account("admin", "管理员", true)));
 
         ApiResponse<PresenceController.OnlineVO> response = controller.online(sessionOf("admin"));
 
@@ -65,8 +64,8 @@ class PresenceControllerTest {
     @Test
     void regularUserOnlyCountsOnlineFriends() {
         when(registry.onlineUsers()).thenReturn(Set.of("alice", "bob", "carol"));
-        when(userService.find("alice")).thenReturn(Optional.of(
-                AppUser.of("13800000001", "alice", "hash", "alice", "c0")));
+        when(accounts.find("alice")).thenReturn(Optional.of(
+                new AccountDirectory.Account("alice", "alice", false)));
         // alice 的通讯录：bob 与 dave（carol 不是好友）
         when(friendMapper.findAllByOwner("alice"))
                 .thenReturn(List.of(Friend.of("alice", "bob"), Friend.of("alice", "dave")));
@@ -80,8 +79,8 @@ class PresenceControllerTest {
     @Test
     void regularUserWithoutFriendsSeesZero() {
         when(registry.onlineUsers()).thenReturn(Set.of("alice", "bob"));
-        when(userService.find("alice")).thenReturn(Optional.of(
-                AppUser.of("13800000001", "alice", "hash", "alice", "c0")));
+        when(accounts.find("alice")).thenReturn(Optional.of(
+                new AccountDirectory.Account("alice", "alice", false)));
         when(friendMapper.findAllByOwner("alice")).thenReturn(List.of());
 
         ApiResponse<PresenceController.OnlineVO> response = controller.online(sessionOf("alice"));

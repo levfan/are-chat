@@ -17,7 +17,7 @@ import com.smart.chat.couple.infrastructure.persistence.CoupleQuestOvertimeMappe
 import com.smart.chat.couple.infrastructure.persistence.CoupleSpace;
 import com.smart.chat.couple.infrastructure.persistence.CoupleSpaceMapper;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import com.smart.chat.identity.application.AppUserService;
+import com.smart.chat.identity.domain.AccountDirectory;
 import com.smart.chat.sharedkernel.web.BusinessException;
 import com.smart.chat.messaging.infrastructure.persistence.FriendMapper;
 import com.smart.chat.messaging.infrastructure.transport.ImPushService;
@@ -109,7 +109,7 @@ public class CoupleService {
     private final CouplePointLedgerMapper ledgerMapper;
     private final FriendMapper friendMapper;
     private final UserProfileMapper profileMapper;
-    private final AppUserService userService;
+    private final AccountDirectory accounts;
     private final ImPushService push;
 
     @SuppressWarnings("java:S107")
@@ -120,7 +120,7 @@ public class CoupleService {
                          CoupleCatchSafewordUseMapper safewordUseMapper,
                          CouplePointLedgerMapper ledgerMapper,
                          FriendMapper friendMapper, UserProfileMapper profileMapper,
-                         AppUserService userService, ImPushService push) {
+                         AccountDirectory accounts, ImPushService push) {
         this.spaceMapper = spaceMapper;
         this.inviteMapper = inviteMapper;
         this.anniversaryMapper = anniversaryMapper;
@@ -132,7 +132,7 @@ public class CoupleService {
         this.ledgerMapper = ledgerMapper;
         this.friendMapper = friendMapper;
         this.profileMapper = profileMapper;
-        this.userService = userService;
+        this.accounts = accounts;
         this.push = push;
     }
 
@@ -144,11 +144,11 @@ public class CoupleService {
         if (raw.isEmpty()) {
             throw new BusinessException(400, "想邀请谁？请先选择一位好友");
         }
-        String targetName = userService.normalizeUsername(raw);
+        String targetName = accounts.normalizeUsername(raw);
         if (targetName.equals(me)) {
             throw new BusinessException(400, "不能和自己建立情侣空间哦");
         }
-        if (!userService.exists(targetName)) {
+        if (!accounts.exists(targetName)) {
             throw new BusinessException(400, "查无此人：对方还没注册或已注销");
         }
         if (friendMapper.findByOwnerAndFriend(me, targetName).isEmpty()) {

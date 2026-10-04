@@ -2,8 +2,7 @@ package com.smart.chat.messaging.api;
 
 import com.smart.chat.messaging.infrastructure.persistence.Friend;
 import com.smart.chat.messaging.infrastructure.persistence.FriendMapper;
-import com.smart.chat.identity.infrastructure.persistence.AppUser;
-import com.smart.chat.identity.application.AppUserService;
+import com.smart.chat.identity.domain.AccountDirectory;
 import com.smart.chat.sharedkernel.web.ApiResponse;
 import com.smart.chat.sharedkernel.web.Sessions;
 import com.smart.chat.messaging.infrastructure.transport.ChatSessionRegistry;
@@ -27,12 +26,12 @@ public class PresenceController {
     }
 
     private final ChatSessionRegistry registry;
-    private final AppUserService userService;
+    private final AccountDirectory accounts;
     private final FriendMapper friendMapper;
 
-    public PresenceController(ChatSessionRegistry registry, AppUserService userService, FriendMapper friendMapper) {
+    public PresenceController(ChatSessionRegistry registry, AccountDirectory accounts, FriendMapper friendMapper) {
         this.registry = registry;
-        this.userService = userService;
+        this.accounts = accounts;
         this.friendMapper = friendMapper;
     }
 
@@ -41,8 +40,8 @@ public class PresenceController {
         String username = Sessions.requireUser(session);
         Set<String> online = registry.onlineUsers();
         List<String> users;
-        AppUser user = userService.find(username).orElse(null);
-        if (user != null && user.isAdmin()) {
+        AccountDirectory.Account user = accounts.find(username).orElse(null);
+        if (user != null && user.admin()) {
             // 管理员：全站所有在线用户
             users = List.copyOf(online);
         } else {
