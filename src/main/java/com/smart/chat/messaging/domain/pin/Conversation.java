@@ -35,4 +35,26 @@ public final class Conversation {
     public String userB() {
         return userB;
     }
+
+    /** 值对象按值相等（仓储端口与用例的验证都要靠它比较「是不是同一个会话」）。 */
+    @Override
+    public boolean equals(Object other) {
+        if (this == other) {
+            return true;
+        }
+        if (!(other instanceof Conversation that)) {
+            return false;
+        }
+        return userA.equals(that.userA) && userB.equals(that.userB);
+    }
+
+    @Override
+    public int hashCode() {
+        return java.util.Objects.hash(userA, userB);
+    }
+
+    @Override
+    public String toString() {
+        return userA + "↔" + userB;
+    }
 }

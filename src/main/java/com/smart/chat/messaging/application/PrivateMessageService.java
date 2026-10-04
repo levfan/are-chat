@@ -81,7 +81,7 @@ public class PrivateMessageService {
     public record SentMessageVO(String id, String fromUser, String toUser, String content, String msgType,
                                 String status, String replyToId, Integer readFlag, Integer edited, Long heartAt,
                                 Long created) {
-        static SentMessageVO of(PrivateMessage m) {
+        public static SentMessageVO of(PrivateMessage m) {
             return new SentMessageVO(m.id(), m.fromUser(), m.toUser(), m.content(), m.msgType(), m.status(),
                     m.replyToId(), m.readFlagRaw(), m.editedRaw(), m.heartAt(), m.created());
         }
@@ -116,7 +116,7 @@ public class PrivateMessageService {
         this.pinRepository = pinRepository;
     }
 
-    public SentMessageVO send(String me, String peer, String content, String type, String replyToId) {
+    public PrivateMessage send(String me, String peer, String content, String type, String replyToId) {
         // 87 防刷屏：所有消息类型统一限流
         rateLimiter.check(me);
         String rawPeer = peer == null ? "" : peer.trim();
@@ -152,7 +152,7 @@ public class PrivateMessageService {
         if (push.isOnline(peerName)) {
             push.pushDm(message);
         }
-        return SentMessageVO.of(message);
+        return message;
     }
 
     /** 82 文件消息校验：name/size/url 必填，url 必须指向站内文件下载地址 */
@@ -326,12 +326,12 @@ public class PrivateMessageService {
     // ---------- 编辑 ----------
 
     /** 2 分钟内可编辑自己发出的文本消息。 */
-    public SentMessageVO edit(String me, String msgId, String content) {
+    public PrivateMessage edit(String me, String msgId, String content) {
         PrivateMessage message = requireMessage(msgId);
         guard(() -> message.editBy(me, System.currentTimeMillis(), content));
         messageRepository.save(message);
         push.pushEdit(message);
-        return SentMessageVO.of(message);
+        return message;
     }
 
     private PrivateMessage requireMessage(String msgId) {

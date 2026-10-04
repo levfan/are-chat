@@ -65,7 +65,8 @@ public class PrivateMessageController {
     public ApiResponse<PrivateMessageService.SentMessageVO> send(@PathVariable String peer,
                                             @RequestBody SendMessageRequest req,
                                             HttpSession session) {
-        return ApiResponse.ok(messageService.send(Sessions.requireUser(session), peer, req.content(), req.type(), req.replyToId()));
+        return ApiResponse.ok(PrivateMessageService.SentMessageVO.of(messageService.send(
+                Sessions.requireUser(session), peer, req.content(), req.type(), req.replyToId())));
     }
 
     @PostMapping("/{peer}/read")
@@ -84,7 +85,8 @@ public class PrivateMessageController {
     @PutMapping("/{id}")
     public ApiResponse<PrivateMessageService.SentMessageVO> edit(@PathVariable String id, @RequestBody EditMessageRequest req,
                                             HttpSession session) {
-        return ApiResponse.ok(messageService.edit(Sessions.requireUser(session), id, req.content()));
+        return ApiResponse.ok(PrivateMessageService.SentMessageVO.of(
+                messageService.edit(Sessions.requireUser(session), id, req.content())));
     }
 
     /** 表情回应 toggle：已回应则取消。 */
