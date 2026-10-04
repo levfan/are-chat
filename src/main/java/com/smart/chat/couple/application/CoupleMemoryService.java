@@ -4,14 +4,14 @@ import com.smart.chat.couple.domain.memory.RelationSummary;
 import com.smart.chat.couple.domain.streak.BondStreak;
 import com.smart.chat.couple.domain.streak.StreakTier;
 import com.smart.chat.couple.domain.wish.Wish;
-import com.smart.chat.couple.infrastructure.persistence.CoupleBondDayMapper;
-import com.smart.chat.couple.infrastructure.persistence.CoupleBondDayPO;
-import com.smart.chat.couple.infrastructure.persistence.CoupleQuestionAnswerMapper;
-import com.smart.chat.couple.infrastructure.persistence.CoupleQuestionAnswerPO;
+import com.smart.chat.couple.domain.streak.BondDayRepository;
+import com.smart.chat.couple.domain.streak.BondDay;
+import com.smart.chat.couple.domain.question.QuestionAnswerRepository;
+import com.smart.chat.couple.domain.question.QuestionAnswer;
 import com.smart.chat.couple.domain.space.CoupleSpaceRepository;
 import com.smart.chat.couple.domain.space.CoupleSpace;
-import com.smart.chat.couple.infrastructure.persistence.CoupleWishMapper;
-import com.smart.chat.couple.infrastructure.persistence.CoupleWishPO;
+import com.smart.chat.couple.domain.wish.WishRepository;
+import com.smart.chat.couple.domain.wish.Wish;
 import com.smart.chat.sharedkernel.web.BusinessException;
 import org.springframework.stereotype.Service;
 
@@ -49,18 +49,18 @@ public class CoupleMemoryService {
     }
 
     private final CoupleSpaceRepository spaceRepository;
-    private final CoupleBondDayMapper bondDayMapper;
-    private final CoupleQuestionAnswerMapper answerMapper;
-    private final CoupleWishMapper wishMapper;
+    private final BondDayRepository bondDayRepository;
+    private final QuestionAnswerRepository answerRepository;
+    private final WishRepository wishRepository;
     private final CoupleService coupleService;
 
-    public CoupleMemoryService(CoupleSpaceRepository spaceRepository, CoupleBondDayMapper bondDayMapper,
-                               CoupleQuestionAnswerMapper answerMapper, CoupleWishMapper wishMapper,
+    public CoupleMemoryService(CoupleSpaceRepository spaceRepository, BondDayRepository bondDayRepository,
+                               QuestionAnswerRepository answerRepository, WishRepository wishRepository,
                                CoupleService coupleService) {
         this.spaceRepository = spaceRepository;
-        this.bondDayMapper = bondDayMapper;
-        this.answerMapper = answerMapper;
-        this.wishMapper = wishMapper;
+        this.bondDayRepository = bondDayRepository;
+        this.answerRepository = answerRepository;
+        this.wishRepository = wishRepository;
         this.coupleService = coupleService;
     }
 
@@ -74,20 +74,20 @@ public class CoupleMemoryService {
                     + (REQUIRED_DAYS - streak.longestStreak()) + " 天");
         }
 
-        List<CoupleBondDayPO> checkins = bondDayMapper.findBySpace(space.id());
+        List<BondDay> checkins = bondDayRepository.findBySpace(space.id());
         int makeupDays = 0;
-        for (CoupleBondDayPO row : checkins) {
-            if (row.makeupFlag()) {
+        for (BondDay row : checkins) {
+            if (row.makeup()) {
                 makeupDays++;
             }
         }
-        List<CoupleQuestionAnswerPO> answers = answerMapper.findBySpace(space.id());
+        List<QuestionAnswer> answers = answerRepository.findBySpace(space.id());
         int bothAnswered = bothAnsweredDays(answers);
         List<Wish> wishes = new ArrayList<>();
         int fulfilled = 0;
-        for (CoupleWishPO row : wishMapper.findBySpace(space.id())) {
-            Wish wish = Wish.restore(row.getId(), row.getOwnerUser(), row.getCreatorUser(), row.getTitle(),
-                    row.getNote(), row.getStatus(), row.getPreparedBy(), row.getPreparedAt(), row.getFulfilledAt());
+        for (Wish row : wishRepository.findBySpace(space.id())) {
+            Wish wish = Wish.restore(row.id(), row.ownerUser(), row.creatorUser(), row.title(),
+                    row.note(), row.status(), row.preparedBy(), row.preparedAt(), row.fulfilledAt());
             wishes.add(wish);
             if (wish.fulfilledFlag()) {
                 fulfilled++;
@@ -108,7 +108,7 @@ public class CoupleMemoryService {
     // ========== 内部 ==========
 
     private List<TimelineItemVO> buildTimeline(CoupleSpace space,
-                                               List<CoupleQuestionAnswerPO> answers, List<Wish> wishes,
+                                               List<QuestionAnswer> answers, List<Wish> wishes,
                                                BondStreak streak) {
         // 保留类事件（建立、解锁、答完的题、实现的愿望）一条都不能被截掉——
         // 截断如果按日期取前 80，100 天里最早的那几次解锁就正好消失在轴尾。
@@ -124,12 +124,12 @@ public class CoupleMemoryService {
             }
         }
         Set<String> seenQuestionDays = new HashSet<>();
-        for (CoupleQuestionAnswerPO row : answers) {
-            if (!seenQuestionDays.add(row.getDay())) {
+        for (QuestionAnswer row : answers) {
+            if (!seenQuestionDays.add(row.day())) {
                 continue;
             }
-            if (bothAnsweredOn(answers, row.getDay())) {
-                kept.add(new TimelineItemVO(row.getDay(), "question", "答完一道每日一问 💬", row.getQuestion()));
+            if (bothAnsweredOn(answers, row.day())) {
+                kept.add(new TimelineItemVO(row.day(), "question", "答完一道每日一问 💬", row.question()));
             }
         }
         for (Wish wish : wishes) {
@@ -185,22 +185,22 @@ public class CoupleMemoryService {
         return label;
     }
 
-    private int bothAnsweredDays(List<CoupleQuestionAnswerPO> answers) {
+    private int bothAnsweredDays(List<QuestionAnswer> answers) {
         Set<String> days = new HashSet<>();
-        for (CoupleQuestionAnswerPO row : answers) {
-            if (row.getAnswer() != null && !row.getAnswer().isBlank() && bothAnsweredOn(answers, row.getDay())) {
-                days.add(row.getDay());
+        for (QuestionAnswer row : answers) {
+            if (row.answerText() != null && !row.answerText().isBlank() && bothAnsweredOn(answers, row.day())) {
+                days.add(row.day());
             }
         }
         return days.size();
     }
 
-    private boolean bothAnsweredOn(List<CoupleQuestionAnswerPO> answers, String day) {
+    private boolean bothAnsweredOn(List<QuestionAnswer> answers, String day) {
         int count = 0;
         Set<String> who = new HashSet<>();
-        for (CoupleQuestionAnswerPO row : answers) {
-            if (row.getDay().equals(day) && row.getAnswer() != null && !row.getAnswer().isBlank()
-                    && who.add(row.getUsername())) {
+        for (QuestionAnswer row : answers) {
+            if (row.day().equals(day) && row.answerText() != null && !row.answerText().isBlank()
+                    && who.add(row.username())) {
                 count++;
             }
         }
@@ -209,8 +209,8 @@ public class CoupleMemoryService {
 
     private BondStreak streakOf(String spaceId) {
         List<String> days = new ArrayList<>();
-        for (CoupleBondDayPO row : bondDayMapper.findBySpace(spaceId)) {
-            days.add(row.getDay());
+        for (BondDay row : bondDayRepository.findBySpace(spaceId)) {
+            days.add(row.day());
         }
         return BondStreak.of(days, LocalDate.now());
     }

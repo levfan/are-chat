@@ -1,8 +1,8 @@
 package com.smart.chat.couple.application;
 
 import com.smart.chat.couple.infrastructure.content.CoupleQuestionBank;
-import com.smart.chat.couple.infrastructure.persistence.CoupleQuestionAnswerMapper;
-import com.smart.chat.couple.infrastructure.persistence.CoupleQuestionAnswerPO;
+import com.smart.chat.couple.domain.question.QuestionAnswerRepository;
+import com.smart.chat.couple.domain.question.QuestionAnswer;
 import com.smart.chat.couple.domain.space.CoupleSpaceRepository;
 import com.smart.chat.couple.domain.space.CoupleSpace;
 import com.smart.chat.messaging.domain.CoupleEventPublisher;
@@ -41,7 +41,7 @@ class CoupleQuestionServiceTest {
     @Mock
     private CoupleSpaceRepository spaceRepository;
     @Mock
-    private CoupleQuestionAnswerMapper answerMapper;
+    private QuestionAnswerRepository answerRepository;
     @Mock
     private CoupleEventPublisher push;
 
@@ -49,27 +49,29 @@ class CoupleQuestionServiceTest {
     private CoupleQuestionService service;
 
     private final class Bag {
-        private final List<CoupleQuestionAnswerPO> rows = new ArrayList<>();
+        private final List<QuestionAnswer> rows = new ArrayList<>();
 
         Bag stub() {
-            lenient().when(answerMapper.findBySpace(SPACE)).thenAnswer(inv -> List.copyOf(rows));
-            lenient().when(answerMapper.findBySpaceAndDay(SPACE, DAY)).thenAnswer(inv -> rows.stream()
-                    .filter(r -> r.getDay().equals(DAY)).toList());
-            lenient().when(answerMapper.findBySpaceFrom(eq(SPACE), anyString())).thenAnswer(inv -> rows);
-            lenient().when(answerMapper.find(eq(SPACE), anyString(), anyString())).thenAnswer(inv -> rows.stream()
-                    .filter(r -> r.getDay().equals(inv.getArgument(1, String.class))
-                            && r.getUsername().equals(inv.getArgument(2, String.class)))
+            lenient().when(answerRepository.findBySpace(SPACE)).thenAnswer(inv -> List.copyOf(rows));
+            lenient().when(answerRepository.findBySpaceAndDay(SPACE, DAY)).thenAnswer(inv -> rows.stream()
+                    .filter(r -> r.day().equals(DAY)).toList());
+            lenient().when(answerRepository.findBySpaceFrom(eq(SPACE), anyString())).thenAnswer(inv -> rows);
+            lenient().when(answerRepository.find(eq(SPACE), anyString(), anyString())).thenAnswer(inv -> rows.stream()
+                    .filter(r -> r.day().equals(inv.getArgument(1, String.class))
+                            && r.username().equals(inv.getArgument(2, String.class)))
                     .findFirst());
-            lenient().when(answerMapper.insert(any(CoupleQuestionAnswerPO.class))).thenAnswer(inv -> {
-                rows.add(inv.getArgument(0));
-                return 1;
-            });
-            lenient().when(answerMapper.updateById(any(CoupleQuestionAnswerPO.class))).thenReturn(1);
+            lenient().doAnswer(inv -> {
+                QuestionAnswer saved = inv.getArgument(0);
+                if (!rows.contains(saved)) {
+                    rows.add(saved);
+                }
+                return null;
+            }).when(answerRepository).save(any(QuestionAnswer.class));
             return this;
         }
 
         void answered(String who, String text) {
-            CoupleQuestionAnswerPO row = CoupleQuestionAnswerPO.of(SPACE, DAY,
+            QuestionAnswer row = QuestionAnswer.answer(SPACE, DAY,
                     CoupleQuestionBank.indexOf(SPACE, DAY), CoupleQuestionBank.textAt(0), who, text);
             rows.add(row);
         }
@@ -122,12 +124,14 @@ class CoupleQuestionServiceTest {
         service.answer("alice", "改了一版答案");
 
         assertThat(bag.rows).hasSize(2);
-        assertThat(bag.rows.stream().filter(r -> r.getUsername().equals("alice")).count()).isEqualTo(1);
-        CoupleQuestionAnswerPO mine = bag.rows.stream()
-                .filter(r -> r.getUsername().equals("alice")).findFirst().orElseThrow();
-        assertThat(mine.getAnswer()).isEqualTo("改了一版答案");
-        assertThat(mine.getUpdatedAt()).isNotNull();
-        verify(answerMapper, times(1)).updateById(any(CoupleQuestionAnswerPO.class));
+        assertThat(bag.rows.stream().filter(r -> r.username().equals("alice")).count()).isEqualTo(1);
+        QuestionAnswer mine = bag.rows.stream()
+                .filter(r -> r.username().equals("alice")).findFirst().orElseThrow();
+        assertThat(mine.answerText()).isEqualTo("改了一版答案");
+        assertThat(mine.updatedAt()).isNotNull();
+        // 端口只有一个 save：第一次是插入、第二次是改写，所以 2 次；
+        // 「第二次没有多插一行」这条真判据由上面 bag.rows 里 alice 只有一行来锁
+        verify(answerRepository, times(2)).save(any(QuestionAnswer.class));
         verify(push, times(2)).pushCoupleEvent(eq("question-answered"), eq("alice"), eq("bob"), anyString());
     }
 

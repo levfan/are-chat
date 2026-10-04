@@ -1,13 +1,13 @@
 package com.smart.chat.couple.application;
 
-import com.smart.chat.couple.infrastructure.persistence.CoupleBondDayMapper;
-import com.smart.chat.couple.infrastructure.persistence.CoupleBondDayPO;
-import com.smart.chat.couple.infrastructure.persistence.CoupleQuestionAnswerMapper;
-import com.smart.chat.couple.infrastructure.persistence.CoupleQuestionAnswerPO;
+import com.smart.chat.couple.domain.streak.BondDayRepository;
+import com.smart.chat.couple.domain.streak.BondDay;
+import com.smart.chat.couple.domain.question.QuestionAnswerRepository;
+import com.smart.chat.couple.domain.question.QuestionAnswer;
 import com.smart.chat.couple.domain.space.CoupleSpaceRepository;
 import com.smart.chat.couple.domain.space.CoupleSpace;
-import com.smart.chat.couple.infrastructure.persistence.CoupleWishMapper;
-import com.smart.chat.couple.infrastructure.persistence.CoupleWishPO;
+import com.smart.chat.couple.domain.wish.WishRepository;
+import com.smart.chat.couple.domain.wish.Wish;
 import com.smart.chat.sharedkernel.web.BusinessException;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -39,11 +39,11 @@ class CoupleMemoryServiceTest {
     @Mock
     private CoupleSpaceRepository spaceRepository;
     @Mock
-    private CoupleBondDayMapper bondDayMapper;
+    private BondDayRepository bondDayRepository;
     @Mock
-    private CoupleQuestionAnswerMapper answerMapper;
+    private QuestionAnswerRepository answerRepository;
     @Mock
-    private CoupleWishMapper wishMapper;
+    private WishRepository wishRepository;
     @Mock
     private CoupleService coupleService;
 
@@ -55,18 +55,18 @@ class CoupleMemoryServiceTest {
     }
 
     /** 从 endDay 往前数 n 天，铺成连续打卡日。 */
-    private List<CoupleBondDayPO> consecutive(int n, LocalDate endDay) {
-        List<CoupleBondDayPO> rows = new ArrayList<>();
+    private List<BondDay> consecutive(int n, LocalDate endDay) {
+        List<BondDay> rows = new ArrayList<>();
         for (int i = 0; i < n; i++) {
-            rows.add(CoupleBondDayPO.of(SPACE, endDay.minusDays(i).toString(),
-                    i == 3 ? CoupleBondDayPO.SOURCE_MAKEUP : CoupleBondDayPO.SOURCE_AUTO, null));
+            rows.add(BondDay.confirm(SPACE, endDay.minusDays(i).toString(),
+                    i == 3 ? BondDay.SOURCE_MAKEUP : BondDay.SOURCE_AUTO, null));
         }
         return rows;
     }
 
     private void stubEmptyWishesAndAnswers() {
-        lenient().when(wishMapper.findBySpace(SPACE)).thenReturn(List.of());
-        lenient().when(answerMapper.findBySpace(SPACE)).thenReturn(List.of());
+        lenient().when(wishRepository.findBySpace(SPACE)).thenReturn(List.of());
+        lenient().when(answerRepository.findBySpace(SPACE)).thenReturn(List.of());
         lenient().when(coupleService.intimacy(anyString())).thenReturn(new CoupleService.IntimacyVO(
                 1400, 7, "相守一生", "💍", null, 100,
                 new CoupleService.IntimacyBreakdown(100, 100, 10, 4, 2, 300)));
@@ -75,7 +75,7 @@ class CoupleMemoryServiceTest {
     @Test
     void hiddenPageIsGatedOnTheServerNotJustTheFrontend() {
         when(spaceRepository.findActiveByMember("alice")).thenReturn(Optional.of(space()));
-        when(bondDayMapper.findBySpace(SPACE)).thenReturn(consecutive(90, LocalDate.now()));
+        when(bondDayRepository.findBySpace(SPACE)).thenReturn(consecutive(90, LocalDate.now()));
         stubEmptyWishesAndAnswers();
 
         assertThatThrownBy(() -> service.memory("alice"))
@@ -94,7 +94,7 @@ class CoupleMemoryServiceTest {
     @Test
     void unlockedPageShowsEveryTierStampedWithItsRealDay() {
         when(spaceRepository.findActiveByMember("alice")).thenReturn(Optional.of(space()));
-        when(bondDayMapper.findBySpace(SPACE)).thenReturn(consecutive(100, LocalDate.now()));
+        when(bondDayRepository.findBySpace(SPACE)).thenReturn(consecutive(100, LocalDate.now()));
         stubEmptyWishesAndAnswers();
 
         CoupleMemoryService.MemoryVO vo = service.memory("alice");
@@ -115,19 +115,16 @@ class CoupleMemoryServiceTest {
     @Test
     void timelineOnlyCarriesEventsWithRealDates() {
         when(spaceRepository.findActiveByMember("alice")).thenReturn(Optional.of(space()));
-        when(bondDayMapper.findBySpace(SPACE)).thenReturn(consecutive(120, LocalDate.now()));
-        List<CoupleQuestionAnswerPO> answers = List.of(
-                CoupleQuestionAnswerPO.of(SPACE, "2026-09-30", 1, "今天最开心的一件事是什么？", "alice", "见到你"),
-                CoupleQuestionAnswerPO.of(SPACE, "2026-09-30", 1, "今天最开心的一件事是什么？", "bob", "吃到面了"),
+        when(bondDayRepository.findBySpace(SPACE)).thenReturn(consecutive(120, LocalDate.now()));
+        List<QuestionAnswer> answers = List.of(
+                QuestionAnswer.answer(SPACE, "2026-09-30", 1, "今天最开心的一件事是什么？", "alice", "见到你"),
+                QuestionAnswer.answer(SPACE, "2026-09-30", 1, "今天最开心的一件事是什么？", "bob", "吃到面了"),
                 // 只有 alice 答过的一天：不该作为「答完」上轴
-                CoupleQuestionAnswerPO.of(SPACE, "2026-09-29", 2, "今天累不累？", "alice", "有点"));
-        when(answerMapper.findBySpace(SPACE)).thenReturn(answers);
-        CoupleWishPO done = CoupleWishPO.of(SPACE, "alice", "bob", "想一起看海", null);
-        done.setId("w1");
-        done.setStatus(CoupleWishPO.STATUS_FULFILLED);
-        done.setFulfilledAt(LocalDate.of(2026, 9, 21)
-                .atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli());
-        when(wishMapper.findBySpace(SPACE)).thenReturn(List.of(done));
+                QuestionAnswer.answer(SPACE, "2026-09-29", 2, "今天累不累？", "alice", "有点"));
+        when(answerRepository.findBySpace(SPACE)).thenReturn(answers);
+        Wish done = Wish.restore("w1", SPACE, "alice", "bob", "想一起看海", null, Wish.STATUS_FULFILLED, null, null,
+                LocalDate.of(2026, 9, 21).atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli(), null);
+        when(wishRepository.findBySpace(SPACE)).thenReturn(List.of(done));
         when(coupleService.intimacy(anyString())).thenReturn(new CoupleService.IntimacyVO(
                 1400, 7, "相守一生", "💍", null, 100,
                 new CoupleService.IntimacyBreakdown(120, 120, 10, 4, 2, 300)));

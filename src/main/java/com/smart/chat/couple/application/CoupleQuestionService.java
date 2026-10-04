@@ -2,8 +2,8 @@ package com.smart.chat.couple.application;
 
 import com.smart.chat.couple.domain.question.DailyQuestion;
 import com.smart.chat.couple.infrastructure.content.CoupleQuestionBank;
-import com.smart.chat.couple.infrastructure.persistence.CoupleQuestionAnswerMapper;
-import com.smart.chat.couple.infrastructure.persistence.CoupleQuestionAnswerPO;
+import com.smart.chat.couple.domain.question.QuestionAnswerRepository;
+import com.smart.chat.couple.domain.question.QuestionAnswer;
 import com.smart.chat.couple.domain.space.CoupleSpaceRepository;
 import com.smart.chat.couple.domain.space.CoupleSpace;
 import com.smart.chat.messaging.domain.CoupleEventPublisher;
@@ -47,13 +47,13 @@ public class CoupleQuestionService {
     }
 
     private final CoupleSpaceRepository spaceRepository;
-    private final CoupleQuestionAnswerMapper answerMapper;
+    private final QuestionAnswerRepository answerRepository;
     private final CoupleEventPublisher push;
 
-    public CoupleQuestionService(CoupleSpaceRepository spaceRepository, CoupleQuestionAnswerMapper answerMapper,
+    public CoupleQuestionService(CoupleSpaceRepository spaceRepository, QuestionAnswerRepository answerRepository,
                                  CoupleEventPublisher push) {
         this.spaceRepository = spaceRepository;
-        this.answerMapper = answerMapper;
+        this.answerRepository = answerRepository;
         this.push = push;
     }
 
@@ -69,13 +69,13 @@ public class CoupleQuestionService {
         String day = LocalDate.now().toString();
         int index = CoupleQuestionBank.indexOf(space.id(), day);
         String question = CoupleQuestionBank.textAt(index);
-        CoupleQuestionAnswerPO mine = answerMapper.find(space.id(), day, me).orElse(null);
-        CoupleQuestionAnswerPO theirs = answerMapper.find(space.id(), day, space.partnerOf(me)).orElse(null);
+        QuestionAnswer mine = answerRepository.find(space.id(), day, me).orElse(null);
+        QuestionAnswer theirs = answerRepository.find(space.id(), day, space.partnerOf(me)).orElse(null);
         DailyQuestion view = DailyQuestion.of(day, index, question,
-                mine == null ? null : mine.getAnswer(), theirs == null ? null : theirs.getAnswer());
+                mine == null ? null : mine.answerText(), theirs == null ? null : theirs.answerText());
         return new TodayVO(day, index, view.question(),
-                mine == null ? null : new AnswerVO(mine.getUsername(), mine.getAnswer(), mine.getCreated(),
-                        mine.getUpdatedAt()),
+                mine == null ? null : new AnswerVO(mine.username(), mine.answerText(), mine.created(),
+                        mine.updatedAt()),
                 view.partnerAnswerText(), view.answeredByMe(), view.answeredByPartner(), view.bothAnswered(),
                 DailyQuestion.ANSWER_MAX);
     }
@@ -85,22 +85,22 @@ public class CoupleQuestionService {
         CoupleSpace space = requireSpace(me);
         int limit = days == null || days <= 0 ? 14 : Math.min(days, HISTORY_MAX);
         String startDay = LocalDate.now().minusDays(limit - 1L).toString();
-        List<CoupleQuestionAnswerPO> rows = answerMapper.findBySpaceFrom(space.id(), startDay);
+        List<QuestionAnswer> rows = answerRepository.findBySpaceFrom(space.id(), startDay);
         List<String> dayKeys = new ArrayList<>();
-        for (CoupleQuestionAnswerPO row : rows) {
-            if (!dayKeys.contains(row.getDay())) {
-                dayKeys.add(row.getDay());
+        for (QuestionAnswer row : rows) {
+            if (!dayKeys.contains(row.day())) {
+                dayKeys.add(row.day());
             }
         }
         List<HistoryVO> items = new ArrayList<>();
         int bothCount = 0;
         int mineCount = 0;
         for (String day : dayKeys) {
-            CoupleQuestionAnswerPO mine = findOf(rows, day, me);
-            CoupleQuestionAnswerPO theirs = findOf(rows, day, space.partnerOf(me));
-            String question = mine != null ? mine.getQuestion() : (theirs == null ? "" : theirs.getQuestion());
+            QuestionAnswer mine = findOf(rows, day, me);
+            QuestionAnswer theirs = findOf(rows, day, space.partnerOf(me));
+            String question = mine != null ? mine.question() : (theirs == null ? "" : theirs.question());
             DailyQuestion view = DailyQuestion.of(day, 0, question,
-                    mine == null ? null : mine.getAnswer(), theirs == null ? null : theirs.getAnswer());
+                    mine == null ? null : mine.answerText(), theirs == null ? null : theirs.answerText());
             if (view.answeredByMe()) {
                 mineCount++;
             }
@@ -122,17 +122,16 @@ public class CoupleQuestionService {
         String day = LocalDate.now().toString();
         int index = CoupleQuestionBank.indexOf(space.id(), day);
         String question = CoupleQuestionBank.textAt(index);
-        Optional<CoupleQuestionAnswerPO> existing = answerMapper.find(space.id(), day, me);
+        Optional<QuestionAnswer> existing = answerRepository.find(space.id(), day, me);
         if (existing.isPresent()) {
-            CoupleQuestionAnswerPO row = existing.get();
-            row.setAnswer(answer);
-            row.setUpdatedAt(System.currentTimeMillis());
-            answerMapper.updateById(row);
+            QuestionAnswer row = existing.get();
+            row.rewrite(answer);
+            answerRepository.save(row);
         } else {
-            answerMapper.insert(CoupleQuestionAnswerPO.of(space.id(), day, index, question, me, answer));
+            answerRepository.save(QuestionAnswer.answer(space.id(), day, index, question, me, answer));
         }
         String partner = space.partnerOf(me);
-        boolean partnerAnswered = answerMapper.find(space.id(), day, partner).isPresent();
+        boolean partnerAnswered = answerRepository.find(space.id(), day, partner).isPresent();
         push.pushCoupleEvent("question-answered", me, partner,
                 partnerAnswered ? "你们今天的每日一问都答完啦 💬 可以互看"
                         : "TA 答了今天的每日一问 💬 你也答一个就能互相看到");
@@ -148,7 +147,7 @@ public class CoupleQuestionService {
     public void remindDailyQuestion() {
         String day = LocalDate.now().toString();
         for (CoupleSpace space : spaceRepository.findAllActive()) {
-            if (answerMapper.findBySpaceAndDay(space.id(), day).size() >= 2) {
+            if (answerRepository.findBySpaceAndDay(space.id(), day).size() >= 2) {
                 continue;
             }
             String question = CoupleQuestionBank.textAt(CoupleQuestionBank.indexOf(space.id(), day));
@@ -161,17 +160,17 @@ public class CoupleQuestionService {
 
     /** 这个空间答过的总条数（百日回顾用）。 */
     public long answeredCount(String spaceId) {
-        return answerMapper.findBySpace(spaceId).size();
+        return answerRepository.findBySpace(spaceId).size();
     }
 
     /** 最近若干条问答（百日回顾的时间轴原料）。 */
-    public List<CoupleQuestionAnswerPO> recentAnswers(String spaceId) {
-        return answerMapper.findBySpace(spaceId);
+    public List<QuestionAnswer> recentAnswers(String spaceId) {
+        return answerRepository.findBySpace(spaceId);
     }
 
-    private CoupleQuestionAnswerPO findOf(List<CoupleQuestionAnswerPO> rows, String day, String username) {
-        for (CoupleQuestionAnswerPO row : rows) {
-            if (row.getDay().equals(day) && row.getUsername().equals(username)) {
+    private QuestionAnswer findOf(List<QuestionAnswer> rows, String day, String username) {
+        for (QuestionAnswer row : rows) {
+            if (row.day().equals(day) && row.username().equals(username)) {
                 return row;
             }
         }
