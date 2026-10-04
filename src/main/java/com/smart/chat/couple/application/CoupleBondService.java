@@ -47,15 +47,17 @@ public class CoupleBondService {
     private final CoupleActionMapper actionMapper;
     private final CoupleMoodReactionMapper moodReactionMapper;
     private final CoupleMoodMapper moodMapper;
+    private final CoupleStreakService streakService;
     private final CoupleEventPublisher push;
 
     public CoupleBondService(CoupleSpaceMapper spaceMapper, CoupleActionMapper actionMapper,
                              CoupleMoodReactionMapper moodReactionMapper, CoupleMoodMapper moodMapper,
-                             CoupleEventPublisher push) {
+                             CoupleStreakService streakService, CoupleEventPublisher push) {
         this.spaceMapper = spaceMapper;
         this.actionMapper = actionMapper;
         this.moodReactionMapper = moodReactionMapper;
         this.moodMapper = moodMapper;
+        this.streakService = streakService;
         this.push = push;
     }
 
@@ -70,6 +72,8 @@ public class CoupleBondService {
         String partner = space.partnerOf(me);
         actionMapper.insert(CoupleActionPO.of(space.getId(), me, kind));
         push.pushCoupleEvent("bond-action", me, partner, actionPushDetail(kind));
+        // 贴贴即打卡：双方当天都发过动作才落一天（口径与心动值的 bondDays 同源）
+        streakService.markTodayAfterAction(space, me);
         // 贴贴里程碑：抱抱/亲亲/想念累计到整数关口，双方一起庆祝
         if (CoupleActionPO.KIND_HUG.equals(kind) || CoupleActionPO.KIND_KISS.equals(kind)
                 || CoupleActionPO.KIND_MISS.equals(kind)) {

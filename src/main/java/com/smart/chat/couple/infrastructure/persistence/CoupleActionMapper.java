@@ -16,6 +16,13 @@ public interface CoupleActionMapper extends BaseMapperCompat<CoupleActionPO> {
                 .orderByDesc(CoupleActionPO::getCreated));
     }
 
+    /** 某空间某时刻（含）之后的动作流水——打卡判定只看当天，不必把全历史拉进内存。 */
+    default List<CoupleActionPO> findSince(String spaceId, long fromMillis) {
+        return selectList(new LambdaQueryWrapper<CoupleActionPO>()
+                .eq(CoupleActionPO::getSpaceId, spaceId)
+                .ge(CoupleActionPO::getCreated, fromMillis));
+    }
+
     /** 某空间某类动作的累计条数。 */
     default long countByKind(String spaceId, String kind) {
         return selectCount(new LambdaQueryWrapper<CoupleActionPO>()
