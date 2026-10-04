@@ -1,15 +1,16 @@
 package com.smart.chat.couple.application;
 
-import com.smart.chat.couple.infrastructure.persistence.CoupleCeremonyCouponPO;
-import com.smart.chat.couple.infrastructure.persistence.CoupleCeremonyCouponMapper;
-import com.smart.chat.couple.infrastructure.persistence.CouplePointLedgerPO;
-import com.smart.chat.couple.infrastructure.persistence.CouplePointLedgerMapper;
+import com.smart.chat.couple.domain.coupon.CouponRepository;
+import com.smart.chat.couple.domain.coupon.WishCoupon;
+import com.smart.chat.couple.domain.points.PointEntry;
+import com.smart.chat.couple.domain.points.PointLedgerRepository;
 import com.smart.chat.couple.domain.space.CoupleSpace;
 import com.smart.chat.couple.domain.space.CoupleSpaceRepository;
-import com.smart.chat.sharedkernel.web.BusinessException;
 import com.smart.chat.messaging.infrastructure.transport.ImPushService;
+import com.smart.chat.sharedkernel.web.BusinessException;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -21,6 +22,7 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
@@ -29,7 +31,8 @@ import static org.mockito.Mockito.when;
 
 /**
  * 愿望券本（保留卡 `couple-cere-coupon`）单测：积分唯一的花分出口。
- * 锁的是「券行与台账 SPEND 行都真落库、余额不够时一行都不许写」，不是返回值回显。
+ * 锁的是「券与台账 SPEND 行都真落库、余额不够时一行都不许写」，不是返回值回显。
+ * mock 的是仓储端口（CouponRepository / PointLedgerRepository），PO 与 Mapper 不在这一层出现。
  */
 @ExtendWith(MockitoExtension.class)
 class CoupleCeremonyServiceTest {
@@ -37,9 +40,9 @@ class CoupleCeremonyServiceTest {
     @Mock
     private CoupleSpaceRepository spaceRepository;
     @Mock
-    private CoupleCeremonyCouponMapper couponMapper;
+    private CouponRepository couponRepository;
     @Mock
-    private CouplePointLedgerMapper ledgerMapper;
+    private PointLedgerRepository ledgerRepository;
     @Mock
     private ImPushService push;
 
@@ -47,31 +50,47 @@ class CoupleCeremonyServiceTest {
     private CoupleCeremonyService service;
 
     private CoupleSpace space() {
-        return CoupleSpace.restore("s1", "alice", "bob", CoupleSpace.STATUS_ACTIVE, System.currentTimeMillis(), null, null, null, null, null, null, null);
+        return CoupleSpace.restore("s1", "alice", "bob", CoupleSpace.STATUS_ACTIVE, System.currentTimeMillis(),
+                null, null, null, null, null, null, null);
     }
 
     private void stubSpace(String me) {
         lenient().when(spaceRepository.findActiveByMember(me)).thenReturn(Optional.of(space()));
     }
 
+    private static WishCoupon coupon(String id, String title, String issuer, String status) {
+        return WishCoupon.restore(id, "s1", title, issuer, "", 1L, status, null, null);
+    }
+
+    /** 假券本 + 假台账：只在端口这一层成立，落库口径由适配器自己的用例锁。 */
     private final class Bag {
-        private final List<CoupleCeremonyCouponPO> coupons = new ArrayList<>();
-        private final List<CouplePointLedgerPO> ledger = new ArrayList<>();
+        private final List<WishCoupon> coupons = new ArrayList<>();
+        private final List<PointEntry> ledger = new ArrayList<>();
 
         void stub() {
-            lenient().when(ledgerMapper.findBySpace("s1")).thenAnswer(inv -> List.copyOf(ledger));
-            lenient().when(couponMapper.findBySpace("s1")).thenAnswer(inv -> List.copyOf(coupons));
-            lenient().when(couponMapper.insert(any(CoupleCeremonyCouponPO.class))).thenAnswer(inv -> {
-                coupons.add(inv.getArgument(0));
-                return 1;
-            });
-            lenient().when(couponMapper.updateById(any(CoupleCeremonyCouponPO.class))).thenReturn(1);
-            lenient().when(ledgerMapper.insert(any(CouplePointLedgerPO.class))).thenAnswer(inv -> {
+            lenient().when(ledgerRepository.findBySpace("s1")).thenAnswer(inv -> List.copyOf(ledger));
+            lenient().when(couponRepository.findBySpace("s1")).thenAnswer(inv -> List.copyOf(coupons));
+            lenient().doAnswer(inv -> {
+                WishCoupon issued = inv.getArgument(0);
+                coupons.add(coupon("c" + (coupons.size() + 1), issued.title(), issued.grantedBy(),
+                        WishCoupon.STATUS_OPEN));
+                return null;
+            }).when(couponRepository).issue(any(WishCoupon.class), anyString());
+            lenient().doAnswer(inv -> {
                 ledger.add(inv.getArgument(0));
-                return 1;
-            });
-            lenient().when(couponMapper.selectById(any())).thenAnswer(inv -> coupons.stream()
-                    .filter(c -> c.getId().equals(inv.getArgument(0))).findFirst().orElse(null));
+                return null;
+            }).when(ledgerRepository).append(any(PointEntry.class));
+            lenient().when(couponRepository.findByIdIn(any(), eq("s1"))).thenAnswer(inv -> coupons.stream()
+                    .filter(c -> c.id().equals(inv.getArgument(0))).findFirst());
+            lenient().doAnswer(inv -> {
+                WishCoupon used = inv.getArgument(0);
+                coupons.replaceAll(c -> c.id().equals(used.id()) ? used : c);
+                return null;
+            }).when(couponRepository).save(any(WishCoupon.class));
+        }
+
+        void earn(String user, int points) {
+            ledger.add(PointEntry.earn("s1", user, "好事簿：接我下班", points));
         }
     }
 
@@ -85,18 +104,19 @@ class CoupleCeremonyServiceTest {
         assertThatThrownBy(() -> service.issueCoupon("alice", "陪我去海边"))
                 .isInstanceOf(BusinessException.class).hasMessageContaining("只有 0 分");
         assertThat(bag.coupons).isEmpty();
-        verify(couponMapper, never()).insert(any(CoupleCeremonyCouponPO.class));
+        verify(couponRepository, never()).issue(any(WishCoupon.class), anyString());
 
         // 好事簿攒来的 12 分够发一张 10 分的券，券必须真落到台账的 SPEND 行
-        bag.ledger.add(CouplePointLedgerPO.of("s1", "alice", CouplePointLedgerPO.TYPE_EARN, "好事簿：接我下班", 12));
+        bag.earn("alice", 12);
         service.issueCoupon("alice", "陪我去海边");
         assertThat(bag.coupons).hasSize(1);
-        assertThat(bag.ledger).filteredOn(l -> CouplePointLedgerPO.TYPE_SPEND.equals(l.getType())).hasSize(1);
-        CouplePointLedgerPO spend = bag.ledger.stream()
-                .filter(l -> CouplePointLedgerPO.TYPE_SPEND.equals(l.getType())).findFirst().orElseThrow();
-        assertThat(spend.getFromUser()).isEqualTo("alice");
-        assertThat(spend.getPoints()).isEqualTo(CoupleCeremonyService.COUPON_COST);
-        assertThat(spend.getItem()).isEqualTo("发出愿望券：陪我去海边");
+        assertThat(bag.ledger).filteredOn(e -> !e.earned()).hasSize(1);
+        ArgumentCaptor<PointEntry> spend = ArgumentCaptor.forClass(PointEntry.class);
+        verify(ledgerRepository).append(spend.capture());
+        assertThat(spend.getValue().fromUser()).isEqualTo("alice");
+        assertThat(spend.getValue().points()).isEqualTo(CoupleCeremonyService.COUPON_COST);
+        assertThat(spend.getValue().item()).isEqualTo("发出愿望券：陪我去海边");
+        assertThat(spend.getValue().earned()).isFalse();
 
         // 余额只剩 2 分，第二张发不出去
         assertThatThrownBy(() -> service.issueCoupon("alice", "再一张"))
@@ -110,12 +130,12 @@ class CoupleCeremonyServiceTest {
         Bag bag = new Bag();
         bag.stub();
         // 发券现在要先有积分余额，这里给够一张券的钱再验标题
-        bag.ledger.add(CouplePointLedgerPO.of("s1", "alice", CouplePointLedgerPO.TYPE_EARN, "好事簿：接我下班", 50));
+        bag.earn("alice", 50);
 
         assertThatThrownBy(() -> service.issueCoupon("alice", "  "))
                 .isInstanceOf(BusinessException.class).hasMessage("券面写点什么愿望吧");
         service.issueCoupon("alice", "一次说走就走的骑行");
-        verify(couponMapper).insert(any(CoupleCeremonyCouponPO.class));
+        verify(couponRepository).issue(any(WishCoupon.class), eq(""));
     }
 
     @Test
@@ -127,20 +147,16 @@ class CoupleCeremonyServiceTest {
         assertThatThrownBy(() -> service.useCoupon("alice", "nope"))
                 .isInstanceOf(BusinessException.class).hasMessage("这张愿望券不存在");
 
-        CoupleCeremonyCouponPO used = CoupleCeremonyCouponPO.of("s1", "已核销券", "bob", "");
-        used.setId("c1");
-        used.setStatus(CoupleCeremonyCouponPO.STATUS_USED);
-        bag.coupons.add(used);
+        bag.coupons.add(coupon("c1", "已核销券", "bob", WishCoupon.STATUS_USED));
         assertThatThrownBy(() -> service.useCoupon("alice", "c1"))
                 .isInstanceOf(BusinessException.class).hasMessage("这张券已经核销过了");
 
-        CoupleCeremonyCouponPO open = CoupleCeremonyCouponPO.of("s1", "看一次海", "bob", "");
-        open.setId("c2");
-        bag.coupons.add(open);
+        bag.coupons.add(coupon("c2", "看一次海", "bob", WishCoupon.STATUS_OPEN));
         service.useCoupon("alice", "c2");
-        assertThat(open.getStatus()).isEqualTo(CoupleCeremonyCouponPO.STATUS_USED);
-        assertThat(open.getUsedBy()).isEqualTo("alice");
-        verify(couponMapper).updateById(open);
+        WishCoupon used = bag.coupons.stream().filter(c -> "c2".equals(c.id())).findFirst().orElseThrow();
+        assertThat(used.status()).isEqualTo(WishCoupon.STATUS_USED);
+        assertThat(used.usedBy()).isEqualTo("alice");
+        verify(couponRepository).save(any(WishCoupon.class));
         verify(push).pushCoupleEvent(eq("ceremony-coupon-used"), eq("alice"), eq("bob"), any());
     }
 
@@ -149,11 +165,11 @@ class CoupleCeremonyServiceTest {
         stubSpace("alice");
         Bag bag = new Bag();
         bag.stub();
-        bag.ledger.add(CouplePointLedgerPO.of("s1", "alice", CouplePointLedgerPO.TYPE_EARN, "好事簿：接我下班", 12));
-        bag.ledger.add(CouplePointLedgerPO.of("s1", "alice", CouplePointLedgerPO.TYPE_EARN, "家务轮盘干完：倒垃圾", 3));
-        bag.ledger.add(CouplePointLedgerPO.of("s1", "alice", CouplePointLedgerPO.TYPE_SPEND, "发出愿望券：看一次海", 10));
+        bag.ledger.add(PointEntry.earn("s1", "alice", "好事簿：接我下班", 12));
+        bag.ledger.add(PointEntry.earn("s1", "alice", "家务轮盘干完：倒垃圾", 3));
+        bag.ledger.add(PointEntry.spend("s1", "alice", "发出愿望券：看一次海", 10));
         // 对方的流水不能算进我的余额
-        bag.ledger.add(CouplePointLedgerPO.of("s1", "bob", CouplePointLedgerPO.TYPE_EARN, "好事簿：帮我吹头", 2));
+        bag.ledger.add(PointEntry.earn("s1", "bob", "好事簿：帮我吹头", 2));
 
         CoupleCeremonyService.OverviewVO vo = service.overview("alice");
         assertThat(vo.myBalance()).isEqualTo(5);
