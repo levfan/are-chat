@@ -24,9 +24,8 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
- * 饭桌系（F210-F219）核心逻辑单测：饭票撞菜推送与改票覆盖、裁决稳定与票池、星评钳位、
- * 踩雷重复与越权划掉、菜单插删与周一锚、拿手菜 upsert、搭伙车双锁成行与删除权限、
- * 话题打卡幂等、点单机兜底、年度干饭账聚合。
+ * 今晚饭桌（保留卡 `couple-dine-today`）单测：饭票撞菜推送与改票覆盖、裁决稳定与票池。
+ * 星评/踩雷库/菜单/拿手菜/点单机/搭伙车/干饭账 随功能下线，对应用例一并删除。
  */
 @ExtendWith(MockitoExtension.class)
 class CoupleDiningServiceTest {
@@ -35,10 +34,6 @@ class CoupleDiningServiceTest {
     private CoupleSpaceMapper spaceMapper;
     @Mock
     private CoupleDineTicketMapper ticketMapper;
-    @Mock
-    private CoupleDineRateMapper rateMapper;
-    @Mock
-    private CoupleDineNogoMapper nogoMapper;
     @Mock
     private ImPushService push;
 
@@ -134,71 +129,6 @@ class CoupleDiningServiceTest {
         when(ticketMapper.findByDay("s1", DAY)).thenReturn(List.of());
         assertThat(service.verdictOf(space(), DAY)).isNull();
     }
-
-    // ========== F212 星评 ==========
-
-    @Test
-    void starsClampedTo1To5() {
-        stubSpace("alice");
-        when(rateMapper.findBySpace("s1")).thenReturn(List.of());
-
-        service.rate("alice", DAY, "烤肉", 9, "香");
-        ArgumentCaptor<CoupleDineRate> cap = ArgumentCaptor.forClass(CoupleDineRate.class);
-        verify(rateMapper).insert(cap.capture());
-        assertThat(cap.getValue().getStars()).isEqualTo(5);
-
-        service.rate("alice", DAY, "泡面", 0, "");
-        verify(rateMapper, org.mockito.Mockito.times(2)).insert(cap.capture());
-        assertThat(cap.getValue().getStars()).isEqualTo(1);
-    }
-
-    @Test
-    void rateRejectsBadDayAndBlankDish() {
-        stubSpace("alice");
-        assertThatThrownBy(() -> service.rate("alice", "昨天", "菜", 5, ""))
-                .isInstanceOf(BusinessException.class);
-        assertThatThrownBy(() -> service.rate("alice", DAY, " ", 5, ""))
-                .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("吃了什么");
-    }
-
-    // ========== F213 踩雷库 ==========
-
-    @Test
-    void duplicateNogoRejected() {
-        stubSpace("alice");
-        when(nogoMapper.find("s1", "某店")).thenReturn(CoupleDineNogo.of("s1", "某店", "难吃", "bob"));
-        assertThatThrownBy(() -> service.addNogo("alice", "某店", "又难吃"))
-                .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("别重复拉黑");
-    }
-
-    @Test
-    void onlyProposerCanRemoveNogo() {
-        stubSpace("alice");
-        stubSpace("bob");
-        CoupleDineNogo row = CoupleDineNogo.of("s1", "坑店", "拉肚子", "bob");
-        row.setId("n1");
-        when(nogoMapper.selectById("n1")).thenReturn(row);
-        assertThatThrownBy(() -> service.removeNogo("alice", "n1"))
-                .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("谁提议");
-
-        service.removeNogo("bob", "n1");
-        verify(nogoMapper).deleteById("n1");
-    }
-
-    // ========== F214 本周菜单 ==========
-
-    // ========== F215 拿手菜 ==========
-
-    // ========== F216 点单机 ==========
-
-    // ========== F217 搭伙车 ==========
-
-    // ========== F218 话题打卡 ==========
-
-    // ========== F219 年度干饭账 ==========
 
     // ========== 无空间 ==========
 

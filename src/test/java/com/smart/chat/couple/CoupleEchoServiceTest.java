@@ -25,9 +25,9 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
- * 回音壁单测（保留好事簿/鼓励语罐/能量补给/电量预报）：好事查重不重复记分、加星只归记录人且幂等、
- * 积分归「被记的那位」而不是写字的人、罐子槽位复用与容量、补给每人每天一次、电量钳制与当天改写落同一行、
- * 无空间 404。
+ * 好事簿（保留卡 `couple-echo-deed`）单测。
+ * 重点锁「积分台账真的插了一行、分值与归属人对」——只看 VO 回显的话，
+ * 漏插台账的坏代码在 mock 下也能过。
  */
 @ExtendWith(MockitoExtension.class)
 class CoupleEchoServiceTest {
@@ -36,12 +36,6 @@ class CoupleEchoServiceTest {
     private CoupleSpaceMapper spaceMapper;
     @Mock
     private CoupleEchoDeedMapper deedMapper;
-    @Mock
-    private CoupleEchoJuiceMapper juiceMapper;
-    @Mock
-    private CoupleEchoRefillLogMapper refillLogMapper;
-    @Mock
-    private CoupleEchoBatteryMapper batteryMapper;
     @Mock
     private CouplePointLedgerMapper ledgerMapper;
     @Mock
@@ -53,9 +47,6 @@ class CoupleEchoServiceTest {
     private static final String DAY = LocalDate.now().toString();
 
     private final List<CoupleEchoDeed> deeds = new ArrayList<>();
-    private final List<CoupleEchoJuice> juices = new ArrayList<>();
-    private final List<CoupleEchoRefillLog> logs = new ArrayList<>();
-    private final List<CoupleEchoBattery> batteries = new ArrayList<>();
     private final List<CouplePointLedger> ledger = new ArrayList<>();
 
     @BeforeEach
@@ -70,6 +61,7 @@ class CoupleEchoServiceTest {
 
         lenient().when(deedMapper.findByUser(eq("s1"), any())).thenAnswer(inv -> deeds.stream()
                 .filter(d -> d.getFromUser().equals(inv.getArgument(1))).toList());
+        lenient().when(deedMapper.findBySpace("s1")).thenAnswer(inv -> List.copyOf(deeds));
         lenient().when(deedMapper.findByDayContent(eq("s1"), any(), any(), any())).thenAnswer(inv -> deeds.stream()
                 .filter(d -> d.getFromUser().equals(inv.getArgument(1)) && d.getDay().equals(inv.getArgument(2))
                         && d.getContent().equals(inv.getArgument(3)))
@@ -81,39 +73,6 @@ class CoupleEchoServiceTest {
         lenient().when(deedMapper.selectById(any())).thenAnswer(inv -> deeds.stream()
                 .filter(d -> d.getId().equals(inv.getArgument(0))).findFirst().orElse(null));
         lenient().when(deedMapper.updateById(any(CoupleEchoDeed.class))).thenAnswer(inv -> 1);
-
-        lenient().when(juiceMapper.findBySpace("s1")).thenAnswer(inv -> List.copyOf(juices));
-        lenient().when(juiceMapper.findByUser(eq("s1"), any())).thenAnswer(inv -> juices.stream()
-                .filter(j -> j.getFromUser().equals(inv.getArgument(1))).toList());
-        lenient().when(juiceMapper.insert(any(CoupleEchoJuice.class))).thenAnswer(inv -> {
-            juices.add(inv.getArgument(0));
-            return 1;
-        });
-        lenient().when(juiceMapper.selectById(any())).thenAnswer(inv -> juices.stream()
-                .filter(j -> j.getId().equals(inv.getArgument(0))).findFirst().orElse(null));
-        lenient().when(juiceMapper.deleteById(any(String.class))).thenAnswer(inv -> {
-            juices.removeIf(j -> j.getId().equals(inv.getArgument(0)));
-            return 1;
-        });
-
-        lenient().when(refillLogMapper.findByDayUser(eq("s1"), any(), any())).thenAnswer(inv -> logs.stream()
-                .filter(l -> l.getFromUser().equals(inv.getArgument(1)) && l.getDay().equals(inv.getArgument(2)))
-                .findFirst().orElse(null));
-        lenient().when(refillLogMapper.insert(any(CoupleEchoRefillLog.class))).thenAnswer(inv -> {
-            logs.add(inv.getArgument(0));
-            return 1;
-        });
-
-        lenient().when(batteryMapper.findByDay(eq("s1"), any())).thenAnswer(inv -> batteries.stream()
-                .filter(b -> b.getDay().equals(inv.getArgument(1))).toList());
-        lenient().when(batteryMapper.findByDayUser(eq("s1"), any(), any())).thenAnswer(inv -> batteries.stream()
-                .filter(b -> b.getDay().equals(inv.getArgument(1)) && b.getFromUser().equals(inv.getArgument(2)))
-                .findFirst().orElse(null));
-        lenient().when(batteryMapper.insert(any(CoupleEchoBattery.class))).thenAnswer(inv -> {
-            batteries.add(inv.getArgument(0));
-            return 1;
-        });
-        lenient().when(batteryMapper.updateById(any(CoupleEchoBattery.class))).thenAnswer(inv -> 1);
 
         lenient().when(ledgerMapper.insert(any(CouplePointLedger.class))).thenAnswer(inv -> {
             ledger.add(inv.getArgument(0));
@@ -175,87 +134,14 @@ class CoupleEchoServiceTest {
     }
 
     @Test
-    void juiceReusesFreedSlotAndStopsAtCap() {
-        for (int i = 0; i < 5; i++) {
-            service.addJuice("alice", "纸条" + i);
-        }
-        assertThat(juices).hasSize(5);
-        assertThat(juices).extracting(CoupleEchoJuice::getIdx).containsExactly(1, 2, 3, 4, 5);
-        assertThatThrownBy(() -> service.addJuice("alice", "第六张"))
-                .isInstanceOf(BusinessException.class).hasMessageContaining("装不下");
-
-        // 删掉第 3 张后，下一张要补进 3 号槽而不是排到 6
-        CoupleEchoJuice third = juices.stream().filter(j -> j.getIdx() == 3).findFirst().orElseThrow();
-        service.removeJuice("alice", third.getId());
-        service.addJuice("alice", "补位那张");
-        assertThat(juices).hasSize(5);
-        // 补位的那张排在列表末尾，但占回的是 3 号槽
-        assertThat(juices).extracting(CoupleEchoJuice::getIdx).containsExactlyInAnyOrder(1, 2, 3, 4, 5);
-        assertThat(juices).anyMatch(j -> j.getIdx() == 3 && j.getContent().equals("补位那张"));
-    }
-
-    @Test
-    void juiceRemovalLimitedToOwner() {
-        service.addJuice("alice", "我的纸条");
-        CoupleEchoJuice row = juices.get(0);
-        assertThatThrownBy(() -> service.removeJuice("bob", row.getId()))
-                .isInstanceOf(BusinessException.class).hasMessageContaining("只能清自己罐子");
-        assertThat(juices).hasSize(1);
-        assertThatThrownBy(() -> service.addJuice("alice", "一".repeat(61)))
-                .isInstanceOf(BusinessException.class).hasMessageContaining("最多 60 字");
-    }
-
-    @Test
-    void refillOnceADayCarriesOwnDeedsAndBothJars() {
-        service.addDeed("alice", "接我", null);
-        service.addDeed("alice", "做饭", null);
-        service.addJuice("alice", "你可以的");
-        service.addJuice("bob", "你已经很棒了");
-
-        CoupleEchoService.EchoVO vo = service.refill("alice");
-        assertThat(vo.refill().mineToday()).isTrue();
-        assertThat(vo.refill().deeds()).hasSize(2);
-        assertThat(vo.refill().juices()).hasSize(2);
-        verify(push).pushCoupleEventBoth(eq("echo-refilled"), eq("alice"), eq("alice"), eq("bob"), any());
-
-        assertThatThrownBy(() -> service.refill("alice"))
-                .isInstanceOf(BusinessException.class).hasMessageContaining("已经充过电");
-        // 对方那一格独立
-        assertThat(service.refill("bob").refill().partnerToday()).isTrue();
-    }
-
-    @Test
-    void batteryClampsAndRewritesSameRow() {
-        service.battery("alice", 99, "抱抱就好");
-        assertThat(batteries).hasSize(1);
-        assertThat(batteries.get(0).getLevel()).isEqualTo(5);
-
-        service.battery("alice", -3, "别问");
-        assertThat(batteries).hasSize(1);
-        assertThat(batteries.get(0).getLevel()).isEqualTo(1);
-        assertThat(batteries.get(0).getWant()).isEqualTo("别问");
-        verify(batteryMapper, times(1)).insert(any(CoupleEchoBattery.class));
-        verify(batteryMapper).updateById(any(CoupleEchoBattery.class));
-
-        // 低电量只提醒对方，提醒自己时不给 hint
-        service.battery("bob", 1, "");
-        CoupleEchoService.EchoVO asAlice = service.vault("alice");
-        assertThat(asAlice.battery()).filteredOn(b -> b.fromUser().equals("bob"))
-                .allMatch(b -> !b.mine() && !b.hint().isEmpty());
-        assertThat(service.vault("bob").battery()).filteredOn(CoupleEchoService.BatteryVO::mine)
-                .allMatch(b -> b.hint().isEmpty());
-
-        assertThatThrownBy(() -> service.battery("alice", 3, "太".repeat(41)))
-                .isInstanceOf(BusinessException.class).hasMessageContaining("最多 40 字");
-    }
-
-    @Test
     void vaultListsOwnAndPartnerDeedsSeparately() {
         service.addDeed("alice", "TA 接我", null);
         service.addDeed("bob", "TA 做饭", null);
         CoupleEchoService.EchoVO vo = service.vault("alice");
         assertThat(vo.deeds()).extracting(CoupleEchoService.DeedVO::content).containsExactly("TA 接我");
         assertThat(vo.partnerDeeds()).extracting(CoupleEchoService.DeedVO::content).containsExactly("TA 做饭");
+        assertThat(vo.mineCount()).isEqualTo(1);
+        assertThat(vo.partnerCount()).isEqualTo(1);
         assertThat(vo.day()).isEqualTo(DAY);
     }
 

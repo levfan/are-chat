@@ -23,7 +23,9 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
- * 惊喜与期待核心逻辑单测：刮刮乐周卡懒生成与归属校验、盲盒开箱规则、思念速递限流。
+ * 刮刮乐与盲盒（保留卡 `couple-surprise`）单测：周卡懒生成与归属校验、核销只给送券人记一次分、
+ * 盲盒到日才能拆且装盒人不能自拆。
+ * 心动闹钟/思念速递/藏宝图/告白重现 随功能下线，对应用例一并删除。
  */
 @ExtendWith(MockitoExtension.class)
 class CoupleSurpriseServiceTest {
@@ -36,18 +38,6 @@ class CoupleSurpriseServiceTest {
 
     @Mock
     private CoupleMysteryBoxMapper boxMapper;
-
-    @Mock
-    private CoupleSweetAlarmMapper alarmMapper;
-
-    @Mock
-    private CoupleMissExpressMapper missMapper;
-
-    @Mock
-    private CoupleTreasureMapper treasureMapper;
-
-    @Mock
-    private CoupleConfessionMapper confessionMapper;
 
     @Mock
     private CouplePointLedgerMapper ledgerMapper;
@@ -155,43 +145,5 @@ class CoupleSurpriseServiceTest {
         assertThatThrownBy(() -> service.openBox("alice", "b1"))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("自己装的盒子");
-    }
-
-    @Test
-    void sendMissRejectedWhileOneInTransit() {
-        stubSpace("alice");
-        CoupleMissExpress inTransit = CoupleMissExpress.of("s1", "alice", System.currentTimeMillis() + 60_000);
-        when(missMapper.findByUser("s1", "alice")).thenReturn(List.of(inTransit));
-
-        assertThatThrownBy(() -> service.sendMiss("alice"))
-                .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("还在路上");
-        verify(missMapper, never()).insert(any(CoupleMissExpress.class));
-
-        // 送达后可再寄
-        inTransit.setDelivered(true);
-        service.sendMiss("alice");
-        ArgumentCaptor<CoupleMissExpress> captor = ArgumentCaptor.forClass(CoupleMissExpress.class);
-        verify(missMapper).insert(captor.capture());
-        assertThat(captor.getValue().getDeliverAt()).isGreaterThan(System.currentTimeMillis());
-    }
-
-    @Test
-    void treasurePrizeHiddenFromDiggerUntilDone() {
-        stubSpace("bob");
-        CoupleTreasure treasure = CoupleTreasure.of("s1", "alice", "去阳台看看", "一个大拥抱");
-        when(treasureMapper.findBySpace("s1")).thenReturn(List.of(treasure));
-
-        // 未完成时对挖宝人隐藏奖品
-        List<CoupleSurpriseService.TreasureVO> hidden = service.treasures("bob");
-        assertThat(hidden.get(0).prizeText()).isNull();
-
-        // 完成后揭晓
-        stubSpace("bob");
-        when(treasureMapper.selectById("t1")).thenReturn(treasure);
-        CoupleSurpriseService.TreasureVO revealed = service.completeTreasure("bob", "t1");
-        assertThat(revealed.prizeText()).isEqualTo("一个大拥抱");
-        assertThat(treasure.getStatus()).isEqualTo(CoupleTreasure.STATUS_DONE);
-        verify(push).pushCoupleEventBoth(eq("treasure-done"), eq("bob"), eq("alice"), eq("bob"), any());
     }
 }
