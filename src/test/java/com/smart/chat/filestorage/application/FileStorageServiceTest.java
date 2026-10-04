@@ -1,7 +1,8 @@
 package com.smart.chat.filestorage.application;
 
-import com.smart.chat.filestorage.infrastructure.persistence.UploadedFile;
-import com.smart.chat.filestorage.infrastructure.persistence.UploadedFileMapper;
+import com.smart.chat.filestorage.domain.file.ContentAlreadyStored;
+import com.smart.chat.filestorage.domain.file.UploadedFile;
+import com.smart.chat.filestorage.domain.file.UploadedFileRepository;
 import com.smart.chat.sharedkernel.web.BusinessException;
 import com.smart.chat.bootstrap.properties.FileStorageProperties;
 import org.junit.jupiter.api.BeforeEach;
@@ -10,7 +11,6 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.io.TempDir;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.dao.DuplicateKeyException;
 import org.springframework.mock.web.MockMultipartFile;
 
 import java.io.IOException;
@@ -26,16 +26,21 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+/**
+ * 用例编排的接线：mock 的是领域端口 {@link UploadedFileRepository}（改造前是 UploadedFileMapper），
+ * 断言的期望值与改造前一字不改——去重、落盘路径、异常文案都按原口径校验。
+ */
 @ExtendWith(MockitoExtension.class)
 class FileStorageServiceTest {
 
     @Mock
-    private UploadedFileMapper mapper;
+    private UploadedFileRepository repository;
 
     @TempDir
     Path tempDir;
@@ -45,7 +50,7 @@ class FileStorageServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new FileStorageService(mapper, new FileStorageProperties(tempDir.toString()));
+        service = new FileStorageService(repository, new FileStorageProperties(tempDir.toString()));
     }
 
     private MockMultipartFile upload(String name, String content) {
@@ -53,21 +58,17 @@ class FileStorageServiceTest {
     }
 
     private void stubInMemoryDb() {
-        when(mapper.insert(any(UploadedFile.class))).thenAnswer(inv -> {
+        doAnswer(inv -> {
             UploadedFile f = inv.getArgument(0);
-            db.put(f.getId(), f);
-            return 1;
-        });
-        when(mapper.findBySha256(anyString())).thenAnswer(inv ->
+            db.put(f.id(), f);
+            return null;
+        }).when(repository).save(any(UploadedFile.class));
+        when(repository.findBySha256(anyString())).thenAnswer(inv ->
                 db.values().stream()
-                        .filter(f -> f.getSha256().equals(inv.getArgument(0, String.class)))
+                        .filter(f -> f.sha256().equals(inv.getArgument(0, String.class)))
                         .findFirst());
-        lenient().when(mapper.selectById(anyString())).thenAnswer(inv ->
-                db.get(inv.getArgument(0, String.class)));
-        lenient().doAnswer(inv -> {
-            db.remove(inv.getArgument(0, String.class));
-            return 1;
-        }).when(mapper).deleteById(anyString());
+        lenient().when(repository.findById(anyString())).thenAnswer(inv ->
+                Optional.ofNullable(db.get(inv.getArgument(0, String.class))));
     }
 
     @Test
@@ -83,9 +84,9 @@ class FileStorageServiceTest {
         FileStorageService.StoreResult result = service.store(upload("照片.png", "hello world"));
 
         assertThat(result.deduplicated()).isFalse();
-        assertThat(result.file().getSha256()).hasSize(64);
-        assertThat(result.file().getStoredPath()).startsWith(result.file().getSha256().substring(0, 2) + "/");
-        Path stored = service.resolveStored(result.file().getStoredPath());
+        assertThat(result.file().sha256()).hasSize(64);
+        assertThat(result.file().storedPath()).startsWith(result.file().sha256().substring(0, 2) + "/");
+        Path stored = service.resolveStored(result.file().storedPath());
         assertThat(Files.readString(stored)).isEqualTo("hello world");
     }
 
@@ -98,31 +99,26 @@ class FileStorageServiceTest {
 
         assertThat(first.deduplicated()).isFalse();
         assertThat(second.deduplicated()).isTrue();
-        assertThat(second.file().getId()).isEqualTo(first.file().getId());
-        verify(mapper, times(1)).insert(any(UploadedFile.class));
+        assertThat(second.file().id()).isEqualTo(first.file().id());
+        verify(repository, times(1)).save(any(UploadedFile.class));
     }
 
     @Test
     void storeUniqueIndexRaceFallsBackToExisting() {
-        // 首查为空触发落盘与 save，save 抛唯一索引冲突，此时库里已有并发写入的记录
-        UploadedFile concurrent = new UploadedFile();
-        concurrent.setId("winner");
-        concurrent.setOriginalName("winner.txt");
-        concurrent.setStoredPath("aa/hash.txt");
-        concurrent.setSize(5);
-        concurrent.setSha256(FileStorageService.sha256Hex("same-content".getBytes(StandardCharsets.UTF_8)));
-        concurrent.setUploadedAt(System.currentTimeMillis());
+        // 首查为空触发落盘与 save，save 撞唯一索引（并发写入），此时库里已有那条记录
+        UploadedFile concurrent = UploadedFile.restore("winner", "winner.txt", "aa/hash.txt", null, 5,
+                FileStorageService.sha256Hex("same-content".getBytes(StandardCharsets.UTF_8)),
+                System.currentTimeMillis());
         db.put("winner", concurrent);
-        when(mapper.findBySha256(anyString()))
+        when(repository.findBySha256(anyString()))
                 .thenReturn(Optional.empty())
                 .thenReturn(Optional.of(concurrent));
-        when(mapper.insert(any(UploadedFile.class)))
-                .thenThrow(new DuplicateKeyException("duplicate"));
+        doThrow(new ContentAlreadyStored(concurrent.sha256())).when(repository).save(any(UploadedFile.class));
 
         FileStorageService.StoreResult result = service.store(upload("mine.txt", "same-content"));
 
         assertThat(result.deduplicated()).isTrue();
-        assertThat(result.file().getId()).isEqualTo("winner");
+        assertThat(result.file().id()).isEqualTo("winner");
     }
 
     @Test

@@ -1,7 +1,7 @@
 package com.smart.chat.filestorage.api;
 
 import com.smart.chat.filestorage.application.FileStorageService;
-import com.smart.chat.filestorage.infrastructure.persistence.UploadedFile;
+import com.smart.chat.filestorage.domain.file.UploadedFile;
 import com.smart.chat.bootstrap.config.FastJsonWebConfig;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -38,14 +38,9 @@ class FileControllerTest {
 
     @BeforeEach
     void setUp() {
-        record = new UploadedFile();
-        record.setId("file-1");
-        record.setOriginalName("hello.txt");
-        record.setContentType("text/plain");
-        record.setSize(5);
-        record.setSha256("a".repeat(64));
-        record.setStoredPath("aa/" + "a".repeat(64) + ".txt");
-        record.setUploadedAt(1700000000000L);
+        // 换接线：原来 new 持久化模型再逐列 setter，现在按同值构造领域档案（restore = 不校验的重建）
+        record = UploadedFile.restore("file-1", "hello.txt", "aa/" + "a".repeat(64) + ".txt",
+                "text/plain", 5, "a".repeat(64), 1700000000000L);
     }
 
     @Test
