@@ -163,13 +163,13 @@ class ArchitectureGuardTest {
     }
 
     /**
-     * 战术改造的收口账（ADR-0008 第 3 条）：application/domain 只能通过仓储端口取数，PO 与 Mapper 不许外泄。
+     * 战术改造的收口账（ADR-0008 第 3 条）：api/application/domain 只能通过仓储端口取数，PO 与 Mapper 不许外泄。
      * <p>
      * 账本不是"永久豁免名单"，而是<b>由实测违规集合反推出来的</b>：哪个上下文还在摸 PO，它就出现在账本里；
      * 一旦收口干净就必须从 {@link #TACTICAL_PENDING} 删掉——否则这条测试红。
      * 两个方向都拦：新代码不许把 PO 递出 infrastructure，记账也不许停在过期状态假装还在改造。
      */
-    private static final Set<String> TACTICAL_PENDING = Set.of("couple");
+    private static final Set<String> TACTICAL_PENDING = Set.of();
 
     @Test
     void persistenceTypesStayBehindRepositoryPorts() {
@@ -182,7 +182,7 @@ class ArchitectureGuardTest {
             e.getValue().forEach(v -> bad.add(e.getKey() + " / " + v));
         }
         assertThat(bad)
-                .as("已收口上下文的 application/domain 直接 import 本上下文 PO/Mapper。"
+                .as("已收口上下文的 api/application/domain 直接 import 本上下文 PO/Mapper。"
                         + "手法见 docs/ddd/05-tactical-playbook.md 第二节")
                 .isEmpty();
     }
@@ -195,17 +195,29 @@ class ArchitectureGuardTest {
                 .containsExactlyInAnyOrder(TACTICAL_PENDING.toArray(new String[0]));
     }
 
+    /**
+     * 越界取数：import 与全限定写法都要拦——只查 import 会被
+     * {@code com.smart.chat.x.infrastructure.persistence.FooPO} 这种内联引用绕过去（与 domain 注解
+     * 那条同一个教训：按子串/单条通道检查，等于给绕过留门）。
+     */
     private Map<String, List<String>> poLeaks() {
         Map<String, List<String>> out = new HashMap<>();
         for (Src s : scan()) {
-            if (!"application".equals(s.layer()) && !"domain".equals(s.layer())) {
+            if (!"application".equals(s.layer()) && !"domain".equals(s.layer()) && !"api".equals(s.layer())) {
                 continue;
             }
             String own = "com.smart.chat." + s.context() + ".infrastructure.persistence";
             for (String imp : s.imports()) {
                 if (imp.startsWith(own)) {
-                    out.computeIfAbsent(s.context(), k -> new ArrayList<>()).add(s.file() + " → " + imp);
+                    out.computeIfAbsent(s.context(), k -> new ArrayList<>()).add(s.file() + " → import " + imp);
                 }
+            }
+            // 先剔掉 import 行：内联全限定写法不产生 import，只查 import 就等于给它留门
+            String body = s.text().replaceAll("(?m)^import\\s+.*$", "");
+            Matcher inline = Pattern.compile(Pattern.quote(own) + "\\.\\w+").matcher(body);
+            while (inline.find()) {
+                out.computeIfAbsent(s.context(), k -> new ArrayList<>())
+                        .add(s.file() + " → 内联引用 " + inline.group());
             }
         }
         return out;
