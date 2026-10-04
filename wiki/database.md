@@ -1,8 +1,8 @@
 # 数据库
 
-> 本页回答：全库数据约定、V1→V51 Flyway 迁移时间线、按域分组的表清单。
+> 本页回答：全库数据约定、V1→V52 Flyway 迁移时间线、按域分组的表清单。
 
-结构事实源：`src/main/resources/schema.sql`（全量结构文档，**当前 32 张表 = 19 张 `couple_*` + 13 张非情侣表**，不由运行时执行） + `src/main/resources/db/V*.sql`（真正被 Flyway 执行的增量脚本，V1→V51 共 51 个）。运行时建表路径只有 Flyway；生产与测试（H2）走同一批 V 脚本。**2026-10-04 情侣空间裁剪**：V50 drop 193 张、V51 再 drop 85 张，V1-V49 建过的 297 张 `couple_*` 表只剩上面这 19 张；集合等式「297 − 278 = 19」由脚本核过（见 docs/couple-trim-ranking.md 第 9.2 节）。
+结构事实源：`src/main/resources/schema.sql`（全量结构文档，**当前 35 张表 = 22 张 `couple_*` + 13 张非情侣表**，不由运行时执行） + `src/main/resources/db/V*.sql`（真正被 Flyway 执行的增量脚本，V1→V52 共 52 个）。运行时建表路径只有 Flyway；生产与测试（H2）走同一批 V 脚本。**2026-10-04 情侣空间裁剪**：V50 drop 193 张、V51 再 drop 85 张，V1-V49 建过的 297 张 `couple_*` 表只剩 19 张；集合等式「297 − 278 = 19」由脚本核过（见 docs/couple-trim-ranking.md 第 9.2 节）。**2026-10-05 v8 第一批**由 V52 新建 3 张（`couple_bond_day` / `couple_question_answer` / `couple_wish`），于是现役 22 张——注意这 3 张是新概念新表名，不是把 V51 删掉的 `couple_checkin` / `couple_answer` 名字捡回来（CONTEXT.md：一个概念只有一个名字）。
 
 ## 数据约定（硬性）
 
@@ -20,7 +20,7 @@
 
 改表流程与幂等细则：`.agents/skills/db-migration/SKILL.md`；"新增 V 脚本 + 同步 schema.sql + 独立 db commit" 为硬性要求（见 [dev-guide.md](dev-guide.md)）。
 
-## 迁移时间线（V1 → V51）
+## 迁移时间线（V1 → V52）
 
 | 版本 | 主题 | 新增表 / 变更 |
 |---|---|---|
@@ -61,11 +61,12 @@
 | V49 | 私聊消息与好友申请补二级索引 | private_message 双向会话复合索引 + friend_request 收件/查重索引（非 couple 域，保留） |
 | **V50** | **系统裁剪第一批** | drop 193 张已下线功能的表；保留 couple_point_ledger |
 | **V51** | **系统裁剪第十六/十七轮** | 再 drop 85 张，情侣空间收口到 10 张卡的 19 张表；**不改 V50**（改已入库脚本会让已打过 V50 的库在 Flyway 校验和上失败） |
+| **V52** | **v8 第一批（2026-10-05）** | 新建 3 张：`couple_bond_day`（贴贴打卡日）、`couple_question_answer`（每日一问回答）、`couple_wish`（愿望清单）；索引名统一 `uk_couple8_/idx_couple8_` 前缀（H2 索引名全库唯一，先对全部 V 脚本查重）；连续天数与解锁**不建表**（读时算）；**没给 `couple_space` 加"一用户一有效空间"的唯一约束**——存量脏数据会让迁移在启动期失败，取舍与残留风险见 `docs/adr/0007` 第 12 条 |
 
 
 注：个别 V 脚本尾部含种子数据（如题库类内容存库的场景）；schema.sql 历史遗留的悬空 `CREATE TABLE` 残行（含 V31 同步基线时引入的第 2323 行一处）已全部修复删除，现 `grep -c "CREATE TABLE"` 与 `^CREATE TABLE \`` 一致，均为 170 张。
 
-## 表清单（按域分组，共 32 张，其中 `couple_*` 19 张）
+## 表清单（按域分组，共 35 张，其中 `couple_*` 22 张）
 
 ### 账号与运营（auth / system）
 
@@ -89,12 +90,13 @@
 | `conversation_pin` | 会话置顶消息 |
 | `uploaded_file` | 上传文件元数据（image/file 附件墙） |
 
-### 情侣空间（裁剪后 19 张，全部来自 schema.sql 实测）
+### 情侣空间（22 张：裁剪后 19 张 + V52 新增 3 张，全部来自 schema.sql 实测）
 
 | 表 | 用途 |
 |---|---|
 | `couple_action` | 贴贴动作流（卡 `couple-bond`）：宫格动作逐条落库，心动值按"双方同日都动过"计天数 |
 | `couple_anniversary` | 共同日历纪念日（calendar_type/lunar_md 支持农历生日换算） |
+| `couple_bond_day` | 贴贴打卡日（卡 `couple-streak`，V52）：一行 = 那一天**双方都贴过**（或补签成功）；`source` AUTO/MAKEUP，`uk_couple8_bond_day(space_id,day)` 保证一天只一行；连续天数与七档解锁全部由本表 day 集合读时算，**不建缓存列** |
 | `couple_catch_safeword` | 安全词约定（卡 `couple-catch-safeword`）：每人一格，可改写 |
 | `couple_catch_safeword_use` | 一次暂停使用（一天一人一行）+ 事后复盘（只有喊停本人能补） |
 | `couple_ceremony_coupon` | 愿望券（卡 `couple-cere-coupon`）：OPEN→USED，发券时向台账写一条 SPEND |
@@ -108,10 +110,12 @@
 | `couple_notify` | 空间动态通知中心（F41 铃铛）：每条 push 都落一行，与 WS 双写 |
 | `couple_point_ledger` | 积分台账：三赚（好事簿/家务轮盘/刮刮乐）一花（愿望券本）的物理载体，心动值也读它 |
 | `couple_quest_overtime` | 加班预报与留灯（卡 `couple-quest-overtime`）：每人每天一行，灯文本与留灯人在同一行 |
+| `couple_question_answer` | 每日一问的回答（卡 `couple-question`，V52）：`uk_couple8_question_day_user(space_id,day,username)` 每人每天一行可改写；题号与题干都落库存快照，「双方都答过才互看」是读时判定，库里不存可见位 |
 | `couple_scratch` | 刮刮乐（卡 `couple-surprise`）：每周懒生成两张，核销权在送券人，核销才向台账写 EARN |
 | `couple_space` | 空间主表：userA/userB、在一起纪念日、状态、双方爱称、宣言/主题/贴纸墙 |
 | `couple_spin_task` | 家务轮盘（卡 `couple-fy-spin`）：本周格子，分配人/认账位/干完位 |
 | `couple_user_pin` | 常用收藏（F207）：每人一行，功能卡 key 逗号分隔 ≤6 个 |
+| `couple_wish` | 愿望清单（卡 `couple-wish`，V52）：`owner_user` 想要的人 / `creator_user` 记录的人可以不同；`status` OPEN→PREPARED（**对被许愿人保密**，读时回显成 OPEN 且不落 `preparedAt` 给对方）→FULFILLED；`uk_couple8_wish_title(space_id,owner_user,title)` 挡同名 |
 
 > 原 157 张 `couple_*` 表里的 142 张已随功能裁剪被 V50（193 张）+ V51（85 张）drop，
 > 本页不再列出；每张卡的落点与保留理由见 [../docs/couple-trim-ranking.md](../docs/couple-trim-ranking.md) 第四节。

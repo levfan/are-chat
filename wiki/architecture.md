@@ -19,7 +19,7 @@
 
 ## 分层模式（Controller → Service → Mapper → Entity）
 
-每个功能域严格四层，实体/Mapper/Service/Controller 同包平铺（couple 包 74 个文件即此模式）。要点：
+每个功能域严格四层，实体/Mapper/Service/Controller 同包平铺（couple 包 108 个文件即此模式，2026-10-05 v8 后）。要点：
 
 - 实体：`@Data @TableName` + `@TableId(IdType.INPUT)`（UUID 由应用层生成）+ 静态 `of()` 工厂 + 常量。
 - Mapper：`@Mapper interface extends com.smart.chat.im.BaseMapperCompat<T>`（项目对 MP `BaseMapper` 的统一兼容层），常用查询写成 default 方法。
@@ -52,7 +52,7 @@
 
 ## Flyway 迁移策略
 
-- `spring.flyway.locations=classpath:db`，脚本命名 `V{n}__{描述}.sql`，当前 V1→V51（V50/V51 是 2026-10-04 情侣空间裁剪的下线脚本；见 [database.md](database.md)）。
+- `spring.flyway.locations=classpath:db`，脚本命名 `V{n}__{描述}.sql`，当前 V1→V52（V50/V51 是 2026-10-04 裁剪的下线脚本，V52 是 2026-10-05 v8 第一批的三张新表；见 [database.md](database.md)）。
 - `baseline-on-migrate=true` + `baseline-version=0`：存量老库（有表无 flyway 历史）首次启动自动打 0 基线后**从 V1 全量重放**——推论：**每个脚本必须幂等**（`CREATE TABLE IF NOT EXISTS` / `ADD COLUMN ... IF NOT EXISTS`）。
 - `spring.sql.init.mode=never`：`src/main/resources/schema.sql` 已退役为**全量结构文档**，不再被执行；改表时必须"新增 V 脚本 + 同步 schema.sql"双写。
 - 已入库脚本不可再修改；新版本号 = db 目录最大版本 + 1。完整规范见 `.agents/skills/db-migration/SKILL.md`。

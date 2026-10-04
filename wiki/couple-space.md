@@ -4,7 +4,10 @@
 
 **2026-10-04 系统裁剪后的现役口径**：全模块按五维打分（操作轻简 / 吸引兴趣 / 情绪价值 / 具体不虚 / 日常频次）排序后**只保留 10 张功能卡**。
 排序表、切线规则与落选理由的唯一依据是 [../docs/couple-trim-ranking.md](../docs/couple-trim-ranking.md)，本页是它落地后的代码事实。
-现役规模：**74 个 java 文件 / 13 个 Controller / 57 个映射 / 19 张 `couple_*` 表 / 37 个 WS 事件**。
+
+**2026-10-05 v8 第一批**在其上再加 4 张卡（连续互动打卡 / 每日一问 / 愿望清单 / 百日回顾），
+需求与取舍见 [../docs/adr/0007-couple-v8-streak-question-wish.md](../docs/adr/0007-couple-v8-streak-question-wish.md)。
+现役规模：**108 个 java 文件 / 17 个 Controller / 70 个映射 / 22 张 `couple_*` 表 / 44 个 WS 事件 / 4 条定时任务**。
 
 ## 聚合根与基本设定
 
@@ -31,7 +34,23 @@
 
 地基（不是一张卡，删不得）：`CoupleController` 的邀请建立 / 纪念日 / 空间个性化 / `relationship-of` / **心动值**，`CoupleNotifyController`（F41 通知中心），`CouplePinController`（F207 常用收藏）。
 
+## v8 第一批新增的 4 张卡（2026-10-05）
+
+| 卡 key | 功能 | Controller（前缀） | Service | 表 | 关键规则 |
+|---|---|---|---|---|---|
+| `couple-streak` | 连续互动打卡与七档解锁 | `CoupleStreakController` `/streak` | `CoupleStreakService` | `couple_bond_day` | 打卡日 = **双方当天都发过贴贴**（与心动值 `bondDays` 同源口径，无第二个「互动日」定义）；连续天数与七档解锁**读时算**，判 `longestStreak` 因此**单调不回退**；`streak-checkin`/`streak-unlocked`/`streak-makeup` 只在历史最长真的跨过档位时推，断签后重新爬到同一数字不再庆祝第二遍；第 1 天（建立当天）由看板读取时自愈补一行；补签 20 分走 `couple_point_ledger` SPEND，闸门=7 天窗口 + 每自然月 3 次 + 不许补今天 |
+| `couple-question` | 每日一问 | `CoupleQuestionController` `/question` | `CoupleQuestionService` | `couple_question_answer` | 同空间同天同题（`stableHash(space\|salt\|day)`），题号与题干都落库存快照；**双方都答过才互看**（我没答时 `partnerAnswer` 返回 null）；每人每天一行可改写；09:00 `CoupleQuestionJob` 推 `question-daily`，答完推 `question-answered`（不带答案内容）；**不进心动值公式** |
+| `couple-wish` | 愿望清单 | `CoupleWishController` `/wish` | `CoupleWishService` | `couple_wish` | 与「愿望券本」是两个概念不合并；`owner`（想要的人）与 `creator`（记录的人）可不同；**「已准备」对被许愿人保密**——`visibleStatusFor(me)` 把它回显成 OPEN、`preparedAt` 置 null，且标记/撤销**一个 WS 事件都不推**；只有许愿人能确认实现（此时才公开并推 `wish-fulfilled`）；同空间同 owner 同名 400，未实现上限 30 条 |
+| `couple-memory` | 百日回顾（隐藏页） | `CoupleMemoryController` `/memory` | `CoupleMemoryService` | 复用 `couple_bond_day`/`couple_question_answer`/`couple_wish` | 历史最长连续 <100 天时**服务端 400**「还差 N 天」，不靠前端藏页签；时间轴只收有真实时间戳或可精确派生日期的事件，且建立/解锁/答完/实现这四类**优先占位不被截断**（只截"刷峰值的日子"到 80 条）；一句话总结是 `RelationSummary` 规则生成，本仓库无 LLM 依赖（ADR-0007 第 7 条） |
+
+七档解锁的档位与前端挂钩（`StreakTier`，key 上线即冻结）：
+`bubble`(3 天·双人专属气泡) → `background`(7 天·空间背景 + 角落电子植物) → `nickname-glow`(14 天·爱称发光)
+→ `pendant`(21 天·头像联动挂件) → `title`(30 天·恋爱等级称号挂到空间顶部，**内容沿用心动值七级称号，不造第二套**)
+→ `custom-emoji`(50 天·专属贴纸包，纯 unicode 派生，**不用双方照片**——产品红线不做图片) → `easter-egg`(100 天·隐藏页签)。
+
 ## 心动值与积分（裁剪后重算的口径）
+
+
 
 - **心动值** `CoupleService.intimacy()` 是**读时算、无表**：
   `心情条数×1 + 贴贴双向往来天数×2 + 好事簿条数×2 + 留灯次数×3 + 安全词复盘次数×2 + 台账累计 EARN×1`。
@@ -49,11 +68,11 @@
 4. 静态内容只增不改顺序；按天/按空间稳定取值统一走 `CoupleRitualBank.stableHash`（FNV-1a）。
 5. 文案一律中文口语化带 emoji，业务失败抛 `BusinessException(400, 人话)`，前端 `ElMessage.error` 直透不重写。
 
-## 内容库（现役 8 个）
+## 内容库（现役 9 个）
 
 | 库 | 供谁用 |
 |---|---|
-| `CoupleRitualBank` | `stableHash` 全模块共用（饭桌裁决、盲盒/刮刮乐取面、轮盘开场） |
+| `CoupleRitualBank` | `stableHash` 全模块共用（饭桌裁决、盲盒/刮刮乐取面、轮盘开场、每日一问选题） |
 | `CoupleTalkBank` | 求抱抱话术卡、陪聊话题卡、深夜陪伴文案 |
 | `CoupleCatchBank` | 安全词的约定/喊停/复盘三套话术与 kind 标签 |
 | `CoupleEchoBank` | 好事簿记下与加星话术、年报称号（年报已下线，话术仍在用） |
@@ -61,8 +80,10 @@
 | `CoupleQuestBank` | 加班与留灯话术 |
 | `CoupleSurpriseBank` | 刮刮乐券面池、盲盒任务灵感、花语、幸运签 |
 | `CoupleTermBank` | `CoupleService` 的农历生日换算（`lunarToSolar/solarToLunar`）仍依赖它 |
+| `CoupleQuestionBank` | 每日一问题库 74 道；`indexOf(spaceId, day)` 用 `CoupleRitualBank.stableHash(space\|"v8-question-bank"\|day)` 选题，题号会落进 `couple_question_answer.question_index`，所以**只增不改顺序**（改了历史答案的题号就不指向原题） |
 
-`CoupleCities`（双城城市库）、`CoupleQuestions`（今日一问题库 105 题）、`CoupleCeremonyBank`、`CoupleDiningBank` 以及 `CoupleChatBank`/`Codex`/`Cozy`/`Focus`/`Growth`/`Laugh`/`Legacy`/`Play` 等已随功能彻底无引用而删除。
+`CoupleCities`（双城城市库）、`CoupleCeremonyBank`、`CoupleDiningBank` 以及 `CoupleChatBank`/`Codex`/`Cozy`/`Focus`/`Growth`/`Laugh`/`Legacy`/`Play` 等已随功能彻底无引用而删除。
+被裁掉的 `CoupleQuestions`（今日一问题库 105 题）在 v8 按新口径重建为 `CoupleQuestionBank`：题干全部改成"今天"口径、题号与题干一起落库存快照，旧库与旧表（`couple_answer`/`couple_answer_reaction`）不复活。
 
 ## 分层模板（加新卡照抄）
 

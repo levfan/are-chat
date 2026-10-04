@@ -43,6 +43,14 @@
 | 家务轮盘 | `CoupleSpinTask`（`factory`） | 一周一转、对方认账后本人才能打勾 | 双签才生效 |
 | 加班预报 / 留灯 | `CoupleQuestOvertime` / lamp | 预报今晚几点回；灯卡**只有对方能留** | 自己留不算 |
 | 愿望券 | `CoupleCeremonyCoupon` | 花 10 积分发一张，对方核销 | 积分唯一出水口 |
+| 愿望清单 | `CoupleWish`（`wish`） | 「我想要什么东西」，双方都能添加 | **不是愿望券**（见 `docs/adr/0007` 第 9 条）；`PREPARED` 对被许愿人保密 |
+| 偷偷准备 | `Wish.visibleStatusFor(me)` | 对方给我许的愿标了「已准备」，我这边仍显示 OPEN | 唯一回显入口；标记/撤销**不推任何事件**，连 `preparedAt` 也置 null |
+| 贴贴打卡日 | `CoupleBondDay`（`bond` 的派生） | **双方当天都发过贴贴**的那一天（含补签） | 与心动值的 `bondDays` 同一条口径，不另立「互动日」 |
+| 连续互动 | `BondStreak` | 由打卡日集合读时算：`currentStreak` / `longestStreak` | 今天没打**不算断**，只有昨天缺行才叫断；不物化缓存列 |
+| 解锁档位 | `StreakTier` | 七档 3/7/14/21/30/50/100 天，管气泡·背景·昵称光效·挂件·称号·贴纸·隐藏页 | 判 `longestStreak`，**单调不回退**；档位 key 是前端挂视觉的合同，上线即冻结 |
+| 补签 | `MakeupPolicy` | 花 20 分买回一个缺口 | 只能补最近 7 天、每自然月最多 3 次、今天不许补 |
+| 每日一问 | `CoupleQuestionAnswer`（`question`） | 一个空间一天一题，每人一行答案 | 同空间同天同题（`stableHash`）；**双方都答过才互看**；不进心动值公式 |
+| 百日回顾 | `CoupleMemoryService` | 连满 100 天的隐藏页：时间轴 + 一句话总结 | 总结是规则生成（`RelationSummary`），本仓库无 LLM 依赖，见 ADR-0007 第 7 条 |
 | 好事簿 | `CoupleEchoDeed`（`echo`） | 「TA 为我做的事」，单记录人口径，被记的那位加分 | 加星只归记录人 |
 | 刮刮乐 / 盲盒 | `CoupleScratch` / `CoupleMysteryBox` | 周券懒生成、送券人核销；盲盒到日才可拆、装盒人不能自拆 | — |
 | 积分台账 | `CouplePointLedger`（`EARN`/`SPEND`） | 心动值与券本的共同账本 | **断言必须锁真插一行，不能只看返回的 VO** |
@@ -51,7 +59,11 @@
 
 ## 事件命名口径
 
-WS 事件名 = 小写连字符、动词或过去分词结尾，前缀族即聚合归属：`bond-*` `mood-*` `comfort-*` `catch-*` `dine-*` `factory-*` `quest-*` `ceremony-*` `echo-*` `scratch-*` `box-*`，另有地基类 `invite*` `anniversary-*` `space-themed` `dissolved` `birthday-*` `pet-name-changed` `night-care` `anniversaries-changed`。现役 **37 个**（实测：后端 `pushCouple*` 抽取 40 项 − 2 个私信域 − 1 个实参字面量）。
+WS 事件名 = 小写连字符、动词或过去分词结尾，前缀族即聚合归属：`bond-*` `mood-*` `comfort-*` `catch-*` `dine-*` `factory-*` `quest-*` `ceremony-*` `echo-*` `scratch-*` `box-*` `streak-*` `question-*` `wish-*`，另有地基类 `invite*` `anniversary-*` `space-themed` `dissolved` `birthday-*` `pet-name-changed` `night-care` `anniversaries-changed`。现役 **44 个**（实测：后端 `pushCouple*` 抽取，v8 新增 7 个 = `streak-checkin` `streak-unlocked` `streak-makeup` `question-daily` `question-answered` `wish-added` `wish-fulfilled`）。
+
+刻意**不存在**的事件：`wish-prepared` / `wish-unprepared`。愿望被偷偷标记「已准备」不推任何事件，
+这是产品规则而不是遗漏（`CoupleWishServiceTest.markingPreparedPushesNothingAtAll` 用
+`verifyNoInteractions(push)` 锁死）——将来谁"顺手补上"这个推送，就等于把惊喜删掉。
 
 ## 产品红线（长期约束）
 

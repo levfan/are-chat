@@ -1,6 +1,6 @@
 # REST 接口总表
 
-> 本页回答：全部 Controller 的端点清单（方法+路径+一句话）。路径省略类前缀 `/api`；couple 系前缀见各节标题。**2026-10-04 情侣空间裁剪后**：非 couple 侧 10 个 Controller / 56 个映射（本轮未动，实测自源码注解），couple 侧降到 13 个 Controller / 57 个端点（全库 52 个 Controller / 698 端点是裁剪前的历史口径，见 docs/couple-trim-ranking.md）。
+> 本页回答：全部 Controller 的端点清单（方法+路径+一句话）。路径省略类前缀 `/api`；couple 系前缀见各节标题。**当前口径（2026-10-05 v8 后）**：非 couple 侧 10 个 Controller / 56 个映射（未动，实测自源码注解），couple 侧 **17 个 Controller / 70 个端点**（2026-10-04 裁剪后是 13/57，v8 加 4 个 Controller 13 个端点；全库 52 个 Controller / 698 端点是裁剪前的历史口径，见 docs/couple-trim-ranking.md）。
 
 来源：`src/main/java` 各 `*Controller.java` 的映射注解与 javadoc。返回统一 `ApiResponse{code,message,data}`；除 `/api/auth/**` 与 `/api/health` 外均需登录会话。业务功能编号（F 号）含义见 [couple-space.md](couple-space.md)。
 
@@ -40,7 +40,8 @@
 
 ## couple 接口（按 Controller）
 
-> 2026-10-04 情侣空间裁剪后的现役清单：**13 个 Controller / 57 个端点**。
+> 2026-10-04 情侣空间裁剪后为 13 个 Controller / 57 个端点；**2026-10-05 v8 第一批补到 17 个 Controller / 70 个端点**
+> （新增 streak 2 + question 3 + wish 7 + memory 1）。
 > 由脚本从源码映射注解与 javadoc 生成，不是手抄；保留的 10 张卡与地基的对应关系见 [couple-space.md](couple-space.md)。
 
 ### `CoupleAdminController`（1）
@@ -125,3 +126,24 @@
 - GET `/surprise/boxes`
 - POST `/surprise/boxes` 装一个盲盒（最早明天开箱）。
 - POST `/surprise/boxes/{id}/open` 开盲盒（到开箱日才能拆）。
+
+### `CoupleStreakController`（2）
+- GET `/streak/board` 打卡看板：今天日期 / 当前连续 / 历史最长 / 累计确认天数 / 今天是否已打 / 昨天是否断 / 七档 `tiers`（含 `unlocked` 与派生的 `unlockedDay`）/ 下一档 key 与还差几天 / 近 21 格 `strip` / 补签价格·本月剩余额度·余额 / `canMakeup`。
+- POST `/streak/makeup` 补签某一天（body `{day:yyyy-MM-dd}`），落一行 `MAKEUP` 并扣 20 分，返回整份看板。闸门四选一失败即 400：超出 7 天窗口 / 补今天 / 该日已打 / 本月满 3 次 / 余额不足。
+
+### `CoupleQuestionController`（3）
+- GET `/question/today` 今日一问：题号 + 题干 + 我的回答 + （双方都答完才有的）TA 的答案。
+- POST `/question/answer` 回答或改写今天的答案（body `{answer}`，≤300 字），每人每天一行。
+- GET `/question/history?days=` 回看最近 N 天（1-90，默认 14），没答的一侧返回 null。
+
+### `CoupleWishController`（7）
+- GET `/wish/board` 愿望清单，**按请求者视角脱敏**：`open` / `prepared`（只有标记人看得到）/ `fulfilled` 三组。
+- POST `/wish/add` 添加愿望（body `{title,note,ownerUsername}`；owner 只能是本人或另一半，可空默认给自己许）。
+- POST `/wish/prepare` 偷偷标记「已准备」（body `{id}`，只有对方能标自己许的愿；**不推任何 WS 事件**）。
+- POST `/wish/unprepare` 撤销「已准备」（只有当初点的人能撤）。
+- POST `/wish/fulfill` 许愿人确认实现（只有本人能点；这时才公开并推 `wish-fulfilled`）。
+- POST `/wish/note` 改补充说明（只有记录人能改）。
+- POST `/wish/remove` 删除（只有记录人能删，已实现的删不掉）。
+
+### `CoupleMemoryController`（1）
+- GET `/memory/page` 百日隐藏回顾页：一句话总结 + 时间轴。**服务端也挡一道**——历史最长连续不足 100 天返回 400「还差 N 天」，不靠前端藏页签。
