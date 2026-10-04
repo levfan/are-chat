@@ -1,13 +1,13 @@
 package com.smart.chat.messaging.application;
 
-import com.smart.chat.messaging.infrastructure.persistence.FriendPO;
-import com.smart.chat.messaging.infrastructure.persistence.FriendMapper;
-import com.smart.chat.messaging.infrastructure.persistence.FriendRequestPO;
-import com.smart.chat.messaging.infrastructure.persistence.FriendRequestMapper;
-import com.smart.chat.messaging.infrastructure.persistence.PrivateMessagePO;
-import com.smart.chat.messaging.infrastructure.persistence.PrivateMessageMapper;
-import com.smart.chat.messaging.infrastructure.persistence.UserProfilePO;
-import com.smart.chat.messaging.infrastructure.persistence.UserProfileMapper;
+import com.smart.chat.messaging.domain.conversation.PrivateMessage;
+import com.smart.chat.messaging.domain.conversation.PrivateMessageRepository;
+import com.smart.chat.messaging.domain.friend.Friend;
+import com.smart.chat.messaging.domain.friend.FriendRepository;
+import com.smart.chat.messaging.domain.friend.FriendRequest;
+import com.smart.chat.messaging.domain.friend.FriendRequestRepository;
+import com.smart.chat.messaging.domain.profile.UserProfile;
+import com.smart.chat.messaging.domain.profile.UserProfileRepository;
 import com.smart.chat.messaging.infrastructure.transport.ImPushService;
 import com.smart.chat.identity.domain.AccountDirectory;
 import com.smart.chat.sharedkernel.web.BusinessException;
@@ -19,6 +19,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -32,22 +33,27 @@ import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
+/**
+ * 好友用例：断言的期望值与改造前一字不差，只是 mock 从 Mapper 换成仓储端口、
+ * fixture 从 PO 的 getter 换成领域类型的记录式访问器。
+ */
 @ExtendWith(MockitoExtension.class)
 class FriendServiceTest {
 
     @Mock
-    private FriendMapper friendMapper;
+    private FriendRepository friendRepository;
 
     @Mock
-    private FriendRequestMapper requestMapper;
+    private FriendRequestRepository requestRepository;
 
     @Mock
-    private PrivateMessageMapper messageMapper;
+    private PrivateMessageRepository messageRepository;
 
     @Mock
-    private UserProfileMapper profileMapper;
+    private UserProfileRepository profileRepository;
 
     @Mock
     private ImPushService push;
@@ -68,27 +74,35 @@ class FriendServiceTest {
                 .thenReturn(java.util.List.of());
     }
 
+    private static Friend edge(String owner, String peer) {
+        return Friend.add(owner, peer, 1L);
+    }
+
+    private static FriendRequest offer(String from, String to) {
+        return FriendRequest.offer(from, to, 1L);
+    }
+
     @Test
     void applySuccessPushesRequestToTarget() {
-        when(requestMapper.findPendingBetween("alice", "bob")).thenReturn(Optional.empty());
-        when(requestMapper.findPendingBetween("bob", "alice")).thenReturn(Optional.empty());
+        when(requestRepository.findPendingBetween("alice", "bob")).thenReturn(Optional.empty());
+        when(requestRepository.findPendingBetween("bob", "alice")).thenReturn(Optional.empty());
 
         FriendService.FriendRequestVO vo = service.apply("alice", "bob", "我是carol，加个好友");
 
-        assertThat(vo.status()).isEqualTo(FriendRequestPO.STATUS_PENDING);
+        assertThat(vo.status()).isEqualTo(FriendRequest.STATUS_PENDING);
         assertThat(vo.fromUser()).isEqualTo("alice");
         assertThat(vo.message()).isEqualTo("我是carol，加个好友");
-        ArgumentCaptor<FriendRequestPO> captor = ArgumentCaptor.forClass(FriendRequestPO.class);
-        verify(requestMapper).insert(captor.capture());
-        assertThat(captor.getValue().getToUser()).isEqualTo("bob");
-        assertThat(captor.getValue().getMessage()).isEqualTo("我是carol，加个好友");
+        ArgumentCaptor<FriendRequest> captor = ArgumentCaptor.forClass(FriendRequest.class);
+        verify(requestRepository).save(captor.capture());
+        assertThat(captor.getValue().toUser()).isEqualTo("bob");
+        assertThat(captor.getValue().message()).isEqualTo("我是carol，加个好友");
         verify(push).pushFriendEvent(eq("friend-request"), eq("bob"), anyString());
     }
 
     @Test
     void applyValidatesMessageLength() {
-        when(requestMapper.findPendingBetween("alice", "bob")).thenReturn(Optional.empty());
-        when(requestMapper.findPendingBetween("bob", "alice")).thenReturn(Optional.empty());
+        when(requestRepository.findPendingBetween("alice", "bob")).thenReturn(Optional.empty());
+        when(requestRepository.findPendingBetween("bob", "alice")).thenReturn(Optional.empty());
         assertThatThrownBy(() -> service.apply("alice", "bob", "x".repeat(101)))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("100");
@@ -109,22 +123,22 @@ class FriendServiceTest {
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("查无此人");
 
-        when(friendMapper.findByOwnerAndFriend("alice", "bob"))
-                .thenReturn(Optional.of(FriendPO.of("alice", "bob")));
+        when(friendRepository.findByOwnerAndFriend("alice", "bob"))
+                .thenReturn(Optional.of(edge("alice", "bob")));
         assertThatThrownBy(() -> service.apply("alice", "bob", null))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("已经是好友");
 
-        when(friendMapper.findByOwnerAndFriend("alice", "bob")).thenReturn(Optional.empty());
-        when(requestMapper.findPendingBetween("alice", "bob"))
-                .thenReturn(Optional.of(FriendRequestPO.of("alice", "bob")));
+        when(friendRepository.findByOwnerAndFriend("alice", "bob")).thenReturn(Optional.empty());
+        when(requestRepository.findPendingBetween("alice", "bob"))
+                .thenReturn(Optional.of(offer("alice", "bob")));
         assertThatThrownBy(() -> service.apply("alice", "bob", null))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("等对方处理");
 
-        when(requestMapper.findPendingBetween("alice", "bob")).thenReturn(Optional.empty());
-        when(requestMapper.findPendingBetween("bob", "alice"))
-                .thenReturn(Optional.of(FriendRequestPO.of("bob", "alice")));
+        when(requestRepository.findPendingBetween("alice", "bob")).thenReturn(Optional.empty());
+        when(requestRepository.findPendingBetween("bob", "alice"))
+                .thenReturn(Optional.of(offer("bob", "alice")));
         assertThatThrownBy(() -> service.apply("alice", "bob", null))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("先向你发起");
@@ -132,141 +146,140 @@ class FriendServiceTest {
 
     @Test
     void acceptCreatesBothFriendRowsAndSystemMessage() {
-        FriendRequestPO request = FriendRequestPO.of("bob", "alice");
-        when(requestMapper.selectById(request.getId())).thenReturn(request);
-        when(friendMapper.findByOwnerAndFriend("bob", "alice")).thenReturn(Optional.empty());
-        when(friendMapper.findByOwnerAndFriend("alice", "bob")).thenReturn(Optional.empty());
+        FriendRequest request = offer("bob", "alice");
+        when(requestRepository.find(request.id())).thenReturn(Optional.of(request));
+        when(friendRepository.findByOwnerAndFriend("bob", "alice")).thenReturn(Optional.empty());
+        when(friendRepository.findByOwnerAndFriend("alice", "bob")).thenReturn(Optional.empty());
 
-        service.accept("alice", request.getId());
+        service.accept("alice", request.id());
 
-        assertThat(request.getStatus()).isEqualTo(FriendRequestPO.STATUS_ACCEPTED);
-        verify(requestMapper).updateById(request);
-        verify(friendMapper, times(2)).insert(any(FriendPO.class));
+        assertThat(request.status()).isEqualTo(FriendRequest.STATUS_ACCEPTED);
+        verify(requestRepository).save(request);
+        verify(friendRepository, times(2)).save(any(Friend.class));
 
-        ArgumentCaptor<PrivateMessagePO> msgCaptor = ArgumentCaptor.forClass(PrivateMessagePO.class);
-        verify(messageMapper).insert(msgCaptor.capture());
-        assertThat(msgCaptor.getValue().getMsgType()).isEqualTo(PrivateMessagePO.TYPE_SYSTEM);
-        assertThat(msgCaptor.getValue().getFromUser()).isEqualTo("alice");
-        assertThat(msgCaptor.getValue().getToUser()).isEqualTo("bob");
-        verify(push).pushDm(any(PrivateMessagePO.class));
+        ArgumentCaptor<PrivateMessage> msgCaptor = ArgumentCaptor.forClass(PrivateMessage.class);
+        verify(messageRepository).save(msgCaptor.capture());
+        assertThat(msgCaptor.getValue().msgType()).isEqualTo(PrivateMessage.TYPE_SYSTEM);
+        assertThat(msgCaptor.getValue().fromUser()).isEqualTo("alice");
+        assertThat(msgCaptor.getValue().toUser()).isEqualTo("bob");
+        verify(push).pushDm(any(PrivateMessage.class));
         verify(push).pushFriendEvent(eq("friend-accepted"), eq("bob"), anyString());
     }
 
     @Test
     void acceptOnlyHandlesOwnPendingRequest() {
-        when(requestMapper.selectById("nope")).thenReturn(null);
+        when(requestRepository.find("nope")).thenReturn(Optional.empty());
         assertThatThrownBy(() -> service.accept("alice", "nope"))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("申请不存在");
 
-        FriendRequestPO other = FriendRequestPO.of("alice", "bob");
-        when(requestMapper.selectById(other.getId())).thenReturn(other);
-        assertThatThrownBy(() -> service.accept("alice", other.getId()))
+        FriendRequest other = offer("alice", "bob");
+        when(requestRepository.find(other.id())).thenReturn(Optional.of(other));
+        assertThatThrownBy(() -> service.accept("alice", other.id()))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("发给自己的");
 
-        FriendRequestPO handled = FriendRequestPO.of("bob", "alice");
-        handled.setStatus(FriendRequestPO.STATUS_REJECTED);
-        when(requestMapper.selectById(handled.getId())).thenReturn(handled);
-        assertThatThrownBy(() -> service.accept("alice", handled.getId()))
+        FriendRequest handled = FriendRequest.restore("r-1", "bob", "alice", null,
+                FriendRequest.STATUS_REJECTED, 1L, 2L);
+        when(requestRepository.find(handled.id())).thenReturn(Optional.of(handled));
+        assertThatThrownBy(() -> service.accept("alice", handled.id()))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("已经处理过");
     }
 
     @Test
     void deleteFriendRemovesPairAndNotifiesPeer() {
-        FriendPO row = FriendPO.of("alice", "bob");
-        when(friendMapper.selectById(row.getId())).thenReturn(row);
+        Friend row = edge("alice", "bob");
+        when(friendRepository.find(row.id())).thenReturn(Optional.of(row));
 
-        service.deleteFriend("alice", row.getId());
+        service.deleteFriend("alice", row.id());
 
-        verify(friendMapper).deletePair("alice", "bob");
+        verify(friendRepository).deletePair("alice", "bob");
         verify(push).pushFriendEvent(eq("friend-deleted"), eq("bob"), anyString());
     }
 
     @Test
     void deleteOnlyOwnFriendRow() {
-        FriendPO row = FriendPO.of("bob", "alice");
-        when(friendMapper.selectById(row.getId())).thenReturn(row);
+        Friend row = edge("bob", "alice");
+        when(friendRepository.find(row.id())).thenReturn(Optional.of(row));
 
-        assertThatThrownBy(() -> service.deleteFriend("alice", row.getId()))
+        assertThatThrownBy(() -> service.deleteFriend("alice", row.id()))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("好友不存在");
     }
 
     @Test
     void updateFriendSetsRemarkAndPin() {
-        FriendPO row = FriendPO.of("alice", "bob");
-        when(friendMapper.selectById(row.getId())).thenReturn(row);
+        Friend row = edge("alice", "bob");
+        when(friendRepository.find(row.id())).thenReturn(Optional.of(row));
 
-        service.updateFriend("alice", row.getId(), "  老友  ", true, null, null, null);
+        service.updateFriend("alice", row.id(), "  老友  ", true, null, null, null);
 
-        ArgumentCaptor<FriendPO> captor = ArgumentCaptor.forClass(FriendPO.class);
-        verify(friendMapper).updateById(captor.capture());
-        assertThat(captor.getValue().getRemark()).isEqualTo("老友");
-        assertThat(captor.getValue().getPinned()).isTrue();
+        ArgumentCaptor<Friend> captor = ArgumentCaptor.forClass(Friend.class);
+        verify(friendRepository).save(captor.capture());
+        assertThat(captor.getValue().remark()).isEqualTo("老友");
+        assertThat(captor.getValue().pinnedFlag()).isTrue();
 
-        assertThatThrownBy(() -> service.updateFriend("alice", row.getId(), "x".repeat(33), null, null, null, null))
+        assertThatThrownBy(() -> service.updateFriend("alice", row.id(), "x".repeat(33), null, null, null, null))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("32");
     }
 
     @Test
     void updateFriendTogglesMute() {
-        FriendPO row = FriendPO.of("alice", "bob");
-        when(friendMapper.selectById(row.getId())).thenReturn(row);
+        Friend row = edge("alice", "bob");
+        when(friendRepository.find(row.id())).thenReturn(Optional.of(row));
 
-        service.updateFriend("alice", row.getId(), null, null, true, null, null);
+        service.updateFriend("alice", row.id(), null, null, true, null, null);
 
-        ArgumentCaptor<FriendPO> captor = ArgumentCaptor.forClass(FriendPO.class);
-        verify(friendMapper).updateById(captor.capture());
-        assertThat(captor.getValue().getMuted()).isTrue();
-        assertThat(captor.getValue().getRemark()).isEmpty();
+        ArgumentCaptor<Friend> captor = ArgumentCaptor.forClass(Friend.class);
+        verify(friendRepository).save(captor.capture());
+        assertThat(captor.getValue().mutedFlag()).isTrue();
+        assertThat(captor.getValue().remark()).isEmpty();
     }
 
     @Test
     void updateFriendSetsTagAndBlocked() {
-        FriendPO row = FriendPO.of("alice", "bob");
-        when(friendMapper.selectById(row.getId())).thenReturn(row);
+        Friend row = edge("alice", "bob");
+        when(friendRepository.find(row.id())).thenReturn(Optional.of(row));
 
-        service.updateFriend("alice", row.getId(), null, null, null, "  同事  ", true);
+        service.updateFriend("alice", row.id(), null, null, null, "  同事  ", true);
 
-        ArgumentCaptor<FriendPO> captor = ArgumentCaptor.forClass(FriendPO.class);
-        verify(friendMapper).updateById(captor.capture());
-        assertThat(captor.getValue().getTag()).isEqualTo("同事");
-        assertThat(captor.getValue().getBlocked()).isEqualTo(1);
+        ArgumentCaptor<Friend> captor = ArgumentCaptor.forClass(Friend.class);
+        verify(friendRepository).save(captor.capture());
+        assertThat(captor.getValue().tag()).isEqualTo("同事");
+        assertThat(captor.getValue().blocked()).isEqualTo(1);
 
-        assertThatThrownBy(() -> service.updateFriend("alice", row.getId(), null, null, null, "x".repeat(17), null))
+        assertThatThrownBy(() -> service.updateFriend("alice", row.id(), null, null, null, "x".repeat(17), null))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("16");
 
         // 解除拉黑
-        service.updateFriend("alice", row.getId(), null, null, null, null, false);
-        ArgumentCaptor<FriendPO> unblock = ArgumentCaptor.forClass(FriendPO.class);
-        verify(friendMapper, org.mockito.Mockito.times(2)).updateById(unblock.capture());
-        assertThat(unblock.getValue().getBlocked()).isZero();
+        service.updateFriend("alice", row.id(), null, null, null, null, false);
+        ArgumentCaptor<Friend> unblock = ArgumentCaptor.forClass(Friend.class);
+        verify(friendRepository, org.mockito.Mockito.times(2)).save(unblock.capture());
+        assertThat(unblock.getValue().blocked()).isZero();
     }
 
     @Test
     void listFriendsSortsPinnedFirstAndCarriesUnreadAndPreview() {
-        FriendPO pinned = FriendPO.of("alice", "carol");
-        pinned.setPinned(true);
-        pinned.setTag("家人");
-        FriendPO normal = FriendPO.of("alice", "bob");
-        normal.setBlocked(1);
-        when(friendMapper.findAllByOwner("alice")).thenReturn(List.of(normal, pinned));
-        when(profileMapper.selectBatchIds(any())).thenReturn(java.util.List.of());
+        Friend pinned = edge("alice", "carol");
+        pinned.changePinned(true);
+        pinned.changeTag("家人");
+        Friend normal = edge("alice", "bob");
+        normal.changeBlocked(true);
+        when(friendRepository.findAllByOwner("alice")).thenReturn(List.of(normal, pinned));
+        when(profileRepository.listByUsernames(any())).thenReturn(java.util.List.of());
 
-        PrivateMessagePO latest = PrivateMessagePO.of("bob", "alice", "晚上一起吃饭吗", PrivateMessagePO.TYPE_TEXT);
+        PrivateMessage latest = PrivateMessage.offer("bob", "alice", "晚上一起吃饭吗", PrivateMessage.TYPE_TEXT, 9L);
         // 批量口径：一次算出各对端最后一条的时间点，一趟 JOIN 算出各对端未读数，再按时间点回捞整行
-        lenient().when(messageMapper.findLatestCreatedPerPeer("alice"))
-                .thenReturn(java.util.Map.of("bob", latest.getCreated()));
-        lenient().when(messageMapper.findMessagesAtCreated(org.mockito.ArgumentMatchers.eq("alice"),
+        lenient().when(messageRepository.findLatestCreatedPerPeer("alice"))
+                .thenReturn(java.util.Map.of("bob", latest.created()));
+        lenient().when(messageRepository.findMessagesAtCreated(org.mockito.ArgumentMatchers.eq("alice"),
                         org.mockito.ArgumentMatchers.anyList(), org.mockito.ArgumentMatchers.anyCollection()))
                 .thenReturn(List.of(latest));
-        lenient().when(friendMapper.selectUnreadCountsByPeer("alice"))
-                .thenReturn(List.of(java.util.Map.of("peer", "bob", "unread", 2L),
-                        java.util.Map.of("peer", "carol", "unread", 0L)));
+        lenient().when(friendRepository.unreadCountByPeer("alice"))
+                .thenReturn(Map.of("bob", 2L, "carol", 0L));
         lenient().when(push.isOnline("bob")).thenReturn(true);
         lenient().when(push.isOnline("carol")).thenReturn(false);
 
@@ -287,35 +300,34 @@ class FriendServiceTest {
 
     @Test
     void listFriendsNeverFallsBackToPerPeerQueries() {
-        when(friendMapper.findAllByOwner("alice"))
-                .thenReturn(List.of(FriendPO.of("alice", "bob"), FriendPO.of("alice", "carol"), FriendPO.of("alice", "dave")));
-        lenient().when(messageMapper.findLatestCreatedPerPeer("alice")).thenReturn(java.util.Map.of());
-        lenient().when(messageMapper.findMessagesAtCreated(anyString(), anyList(), anyCollection())).thenReturn(List.of());
-        lenient().when(friendMapper.selectUnreadCountsByPeer("alice")).thenReturn(List.of());
-        lenient().when(profileMapper.selectBatchIds(any())).thenReturn(List.of());
+        when(friendRepository.findAllByOwner("alice"))
+                .thenReturn(List.of(edge("alice", "bob"), edge("alice", "carol"), edge("alice", "dave")));
+        lenient().when(messageRepository.findLatestCreatedPerPeer("alice")).thenReturn(Map.of());
+        lenient().when(messageRepository.findMessagesAtCreated(anyString(), anyList(), anyCollection()))
+                .thenReturn(List.of());
+        lenient().when(profileRepository.listByUsernames(any())).thenReturn(List.of());
 
         service.listFriends("alice");
 
-        // 三个好友也只发批量查询：一旦有人把循环里的逐条查询加回来，这里就会红
-        verify(messageMapper, never()).findLatestBetween(anyString(), anyString());
-        verify(messageMapper, never()).countUnread(anyString(), anyString(), any());
-        verify(messageMapper).findLatestCreatedPerPeer("alice");
-        verify(friendMapper).selectUnreadCountsByPeer("alice");
+        // 三个好友也只发批量查询：一旦有人把循环里的逐条查询加回来，这里就会红。
+        // 改造前这条靠 verify(messageMapper, never()).findLatestBetween/countUnread 兜住，
+        // 收口后那两个逐条口径已经不在端口上，所以改成「只许有这两次批量取，多一次都算红」。
+        verify(messageRepository).findLatestCreatedPerPeer("alice");
+        verify(messageRepository).findMessagesAtCreated(eq("alice"), anyList(), anyCollection());
+        verifyNoMoreInteractions(messageRepository);
+        verify(friendRepository).findAllByOwner("alice");
+        verify(friendRepository).unreadCountByPeer("alice");
     }
 
     @Test
     void listFriendsCarriesPeerNicknameFromProfile() {
-        FriendPO row = FriendPO.of("alice", "bob");
-        when(friendMapper.findAllByOwner("alice")).thenReturn(List.of(row));
-        UserProfilePO bobProfile = new UserProfilePO();
-        bobProfile.setUsername("bob");
-        bobProfile.setNickname("波波");
-        bobProfile.setPresenceStatus("busy");
-        when(profileMapper.selectBatchIds(any())).thenReturn(List.of(bobProfile));
-        lenient().when(messageMapper.findLatestCreatedPerPeer(anyString())).thenReturn(java.util.Map.of());
-        lenient().when(messageMapper.findMessagesAtCreated(anyString(), anyList(), anyCollection()))
+        Friend row = edge("alice", "bob");
+        when(friendRepository.findAllByOwner("alice")).thenReturn(List.of(row));
+        UserProfile bobProfile = UserProfile.restore("bob", "波波", null, null, "busy", null, 1L);
+        when(profileRepository.listByUsernames(any())).thenReturn(List.of(bobProfile));
+        lenient().when(messageRepository.findLatestCreatedPerPeer(anyString())).thenReturn(Map.of());
+        lenient().when(messageRepository.findMessagesAtCreated(anyString(), anyList(), anyCollection()))
                 .thenReturn(List.of());
-        lenient().when(friendMapper.selectUnreadCountsByPeer(anyString())).thenReturn(List.of());
         lenient().when(push.isOnline("bob")).thenReturn(false);
 
         List<FriendService.FriendVO> friends = service.listFriends("alice");
@@ -327,13 +339,13 @@ class FriendServiceTest {
 
     @Test
     void rejectMarksRequestRejected() {
-        FriendRequestPO request = FriendRequestPO.of("bob", "alice");
-        when(requestMapper.selectById(request.getId())).thenReturn(request);
+        FriendRequest request = offer("bob", "alice");
+        when(requestRepository.find(request.id())).thenReturn(Optional.of(request));
 
-        service.reject("alice", request.getId());
+        service.reject("alice", request.id());
 
-        assertThat(request.getStatus()).isEqualTo(FriendRequestPO.STATUS_REJECTED);
-        verify(requestMapper).updateById(request);
-        verify(messageMapper, never()).insert(any(PrivateMessagePO.class));
+        assertThat(request.status()).isEqualTo(FriendRequest.STATUS_REJECTED);
+        verify(requestRepository).save(request);
+        verify(messageRepository, never()).save(any(PrivateMessage.class));
     }
 }

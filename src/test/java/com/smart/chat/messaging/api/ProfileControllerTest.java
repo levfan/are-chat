@@ -1,9 +1,9 @@
 package com.smart.chat.messaging.api;
 
-import com.smart.chat.messaging.infrastructure.persistence.FriendPO;
-import com.smart.chat.messaging.infrastructure.persistence.FriendMapper;
-import com.smart.chat.messaging.infrastructure.persistence.UserProfilePO;
-import com.smart.chat.messaging.infrastructure.persistence.UserProfileMapper;
+import com.smart.chat.messaging.domain.friend.Friend;
+import com.smart.chat.messaging.domain.friend.FriendRepository;
+import com.smart.chat.messaging.domain.profile.UserProfile;
+import com.smart.chat.messaging.domain.profile.UserProfileRepository;
 import com.smart.chat.identity.domain.AccountDirectory;
 import com.smart.chat.bootstrap.config.FastJsonWebConfig;
 import org.junit.jupiter.api.Test;
@@ -17,8 +17,10 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Optional;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -28,7 +30,10 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-/** 个人资料：登录用户修改昵称（user_profile + app_user 同步）、签名等字段 */
+/**
+ * 个人资料：登录用户修改昵称（user_profile + app_user 同步）、签名等字段。
+ * <p>接线从 Mapper 换成仓储端口；期望值（JSON 字段、文案、条数与排序）与改造前一字不差。
+ */
 @WebMvcTest(ProfileController.class)
 @Import(FastJsonWebConfig.class)
 class ProfileControllerTest {
@@ -37,28 +42,21 @@ class ProfileControllerTest {
     private MockMvc mockMvc;
 
     @MockitoBean
-    private UserProfileMapper profileMapper;
+    private UserProfileRepository profileRepository;
 
     @MockitoBean
-    private FriendMapper friendMapper;
+    private FriendRepository friendRepository;
 
     @MockitoBean
     private AccountDirectory accounts;
 
-    private UserProfilePO profileOf(String username) {
-        UserProfilePO profile = new UserProfilePO();
-        profile.setUsername(username);
-        profile.setNickname(username);
-        profile.setSignature("");
-        profile.setAvatar("c0");
-        profile.setPresenceStatus("online");
-        profile.setUpdatedAt(1L);
-        return profile;
+    private static UserProfile profileOf(String username) {
+        return UserProfile.restore(username, username, "", "c0", "online", null, 1L);
     }
 
     @Test
     void updateNicknameSyncsAppUser() throws Exception {
-        when(profileMapper.selectById("alice")).thenReturn(profileOf("alice"));
+        when(profileRepository.find("alice")).thenReturn(Optional.of(profileOf("alice")));
 
         mockMvc.perform(put("/api/profile")
                         .sessionAttr("CurrentUser", "alice")
@@ -68,15 +66,15 @@ class ProfileControllerTest {
                 .andExpect(jsonPath("$.data.nickname").value("新昵称"));
 
         verify(accounts).updateNickname("alice", "新昵称");
-        ArgumentCaptor<UserProfilePO> captor = ArgumentCaptor.forClass(UserProfilePO.class);
-        verify(profileMapper).updateById(captor.capture());
-        org.assertj.core.api.Assertions.assertThat(captor.getValue().getNickname()).isEqualTo("新昵称");
-        org.assertj.core.api.Assertions.assertThat(captor.getValue().getSignature()).isEqualTo("你好");
+        ArgumentCaptor<UserProfile> captor = ArgumentCaptor.forClass(UserProfile.class);
+        verify(profileRepository).save(captor.capture());
+        org.assertj.core.api.Assertions.assertThat(captor.getValue().nickname()).isEqualTo("新昵称");
+        org.assertj.core.api.Assertions.assertThat(captor.getValue().signature()).isEqualTo("你好");
     }
 
     @Test
     void updateNicknameRejectsTooLongAndSkipsSync() throws Exception {
-        when(profileMapper.selectById("alice")).thenReturn(profileOf("alice"));
+        when(profileRepository.find("alice")).thenReturn(Optional.of(profileOf("alice")));
 
         mockMvc.perform(put("/api/profile")
                         .sessionAttr("CurrentUser", "alice")
@@ -85,26 +83,24 @@ class ProfileControllerTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.message").value("昵称需为 1~32 个字"));
 
-        verify(accounts, never()).updateNickname(eq("alice"), org.mockito.ArgumentMatchers.anyString());
+        verify(accounts, never()).updateNickname(eq("alice"), anyString());
     }
 
-    private FriendPO friendOf(String owner, String peer) {
-        FriendPO friend = new FriendPO();
-        friend.setId(owner + "-" + peer);
-        friend.setOwnerUsername(owner);
-        friend.setFriendUsername(peer);
-        return friend;
+    private static Friend friendOf(String owner, String peer) {
+        return Friend.restore(owner + "-" + peer, owner, peer, "", null, false, false, null, 0L, null, 1L);
     }
 
     @Test
     void friendsBirthdaysReadsAllProfilesInOneBatch() throws Exception {
-        when(friendMapper.findAllByOwner("alice")).thenReturn(List.of(friendOf("alice", "bob"), friendOf("alice", "carol")));
-        UserProfilePO bob = profileOf("bob");
-        bob.setNickname("阿波");
-        bob.setBirthday("1990-" + LocalDate.now().minusDays(1).format(java.time.format.DateTimeFormatter.ofPattern("MM-dd")));
-        UserProfilePO carol = profileOf("carol");
-        carol.setBirthday(LocalDate.now().toString());
-        when(profileMapper.selectBatchIds(List.of("bob", "carol"))).thenReturn(List.of(carol, bob));
+        when(friendRepository.findAllByOwner("alice"))
+                .thenReturn(List.of(friendOf("alice", "bob"), friendOf("alice", "carol")));
+        UserProfile bob = profileOf("bob");
+        bob.changeNickname("阿波");
+        bob.changeBirthday("1990-" + LocalDate.now().minusDays(1).format(
+                java.time.format.DateTimeFormatter.ofPattern("MM-dd")));
+        UserProfile carol = profileOf("carol");
+        carol.changeBirthday(LocalDate.now().toString());
+        when(profileRepository.listByUsernames(List.of("bob", "carol"))).thenReturn(List.of(carol, bob));
 
         mockMvc.perform(get("/api/profile/friends-birthdays").sessionAttr("CurrentUser", "alice"))
                 .andExpect(status().isOk())
@@ -119,20 +115,20 @@ class ProfileControllerTest {
                 .andExpect(jsonPath("$.data[1].today").value(false));
 
         // 好友生日表一次批量取资料：原先每个好友 selectById 一次（N+1）
-        verify(profileMapper).selectBatchIds(List.of("bob", "carol"));
-        verify(profileMapper, never()).selectById(any(java.io.Serializable.class));
+        verify(profileRepository).listByUsernames(List.of("bob", "carol"));
+        verify(profileRepository, never()).find(anyString());
     }
 
     @Test
     void friendsBirthdaysSkipsProfileLookupWithoutFriends() throws Exception {
-        when(friendMapper.findAllByOwner("alice")).thenReturn(List.of());
+        when(friendRepository.findAllByOwner("alice")).thenReturn(List.of());
 
         mockMvc.perform(get("/api/profile/friends-birthdays").sessionAttr("CurrentUser", "alice"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.length()").value(0));
 
-        // 没好友时一个资料查询都不发（selectBatchIds 传空集合会拼出 IN ()）
-        verify(profileMapper, never()).selectBatchIds(any());
-        verify(profileMapper, never()).selectById(any(java.io.Serializable.class));
+        // 没好友时一个资料查询都不发（批量取传空集合会拼出 IN ()）
+        verify(profileRepository, never()).listByUsernames(any());
+        verify(profileRepository, never()).find(anyString());
     }
 }

@@ -1,7 +1,7 @@
 package com.smart.chat.messaging.api;
 
-import com.smart.chat.messaging.infrastructure.persistence.FriendPO;
-import com.smart.chat.messaging.infrastructure.persistence.FriendMapper;
+import com.smart.chat.messaging.domain.friend.Friend;
+import com.smart.chat.messaging.domain.friend.FriendRepository;
 import com.smart.chat.identity.domain.AccountDirectory;
 import com.smart.chat.sharedkernel.web.ApiResponse;
 import com.smart.chat.messaging.infrastructure.transport.ChatSessionRegistry;
@@ -25,6 +25,7 @@ import static org.mockito.Mockito.when;
 
 /**
  * 57 在线人数按角色区分：管理员统计全站所有在线用户，普通用户只统计通讯录好友里的在线人数。
+ * <p>好友名单改从 {@link FriendRepository} 端口取（原来直接摸 FriendMapper）。
  */
 @ExtendWith(MockitoExtension.class)
 class PresenceControllerTest {
@@ -36,7 +37,7 @@ class PresenceControllerTest {
     private AccountDirectory accounts;
 
     @Mock
-    private FriendMapper friendMapper;
+    private FriendRepository friendRepository;
 
     @InjectMocks
     private PresenceController controller;
@@ -45,6 +46,10 @@ class PresenceControllerTest {
         HttpSession session = mock(HttpSession.class);
         lenient().when(session.getAttribute("CurrentUser")).thenReturn(username);
         return session;
+    }
+
+    private static Friend edge(String owner, String peer) {
+        return Friend.add(owner, peer, 1L);
     }
 
     @Test
@@ -58,7 +63,7 @@ class PresenceControllerTest {
         assertThat(response.data().onlineCount()).isEqualTo(3);
         assertThat(response.data().users()).containsExactlyInAnyOrder("alice", "bob", "admin");
         // 管理员不需要查好友表
-        verify(friendMapper, never()).findAllByOwner("admin");
+        verify(friendRepository, never()).findAllByOwner("admin");
     }
 
     @Test
@@ -67,8 +72,8 @@ class PresenceControllerTest {
         when(accounts.find("alice")).thenReturn(Optional.of(
                 new AccountDirectory.Account("alice", "alice", false, "138****0001")));
         // alice 的通讯录：bob 与 dave（carol 不是好友）
-        when(friendMapper.findAllByOwner("alice"))
-                .thenReturn(List.of(FriendPO.of("alice", "bob"), FriendPO.of("alice", "dave")));
+        when(friendRepository.findAllByOwner("alice"))
+                .thenReturn(List.of(edge("alice", "bob"), edge("alice", "dave")));
 
         ApiResponse<PresenceController.OnlineVO> response = controller.online(sessionOf("alice"));
 
@@ -81,7 +86,7 @@ class PresenceControllerTest {
         when(registry.onlineUsers()).thenReturn(Set.of("alice", "bob"));
         when(accounts.find("alice")).thenReturn(Optional.of(
                 new AccountDirectory.Account("alice", "alice", false, "138****0001")));
-        when(friendMapper.findAllByOwner("alice")).thenReturn(List.of());
+        when(friendRepository.findAllByOwner("alice")).thenReturn(List.of());
 
         ApiResponse<PresenceController.OnlineVO> response = controller.online(sessionOf("alice"));
 
