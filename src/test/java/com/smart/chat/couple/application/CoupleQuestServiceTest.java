@@ -2,8 +2,8 @@ package com.smart.chat.couple.application;
 
 import com.smart.chat.couple.infrastructure.persistence.CoupleQuestOvertimePO;
 import com.smart.chat.couple.infrastructure.persistence.CoupleQuestOvertimeMapper;
-import com.smart.chat.couple.infrastructure.persistence.CoupleSpacePO;
-import com.smart.chat.couple.infrastructure.persistence.CoupleSpaceMapper;
+import com.smart.chat.couple.domain.space.CoupleSpace;
+import com.smart.chat.couple.domain.space.CoupleSpaceRepository;
 import com.smart.chat.sharedkernel.web.BusinessException;
 import com.smart.chat.messaging.infrastructure.transport.ImPushService;
 import org.junit.jupiter.api.BeforeEach;
@@ -38,7 +38,7 @@ import static org.mockito.Mockito.when;
 class CoupleQuestServiceTest {
 
     @Mock
-    private CoupleSpaceMapper spaceMapper;
+    private CoupleSpaceRepository spaceRepository;
     @Mock
     private CoupleQuestOvertimeMapper overtimeMapper;
     @Mock
@@ -53,13 +53,9 @@ class CoupleQuestServiceTest {
 
     @BeforeEach
     void setUp() {
-        CoupleSpacePO space = new CoupleSpacePO();
-        space.setId("s1");
-        space.setUserA("alice");
-        space.setUserB("bob");
-        space.setStatus(CoupleSpacePO.STATUS_ACTIVE);
-        lenient().when(spaceMapper.findActiveByUser("alice")).thenReturn(Optional.of(space));
-        lenient().when(spaceMapper.findActiveByUser("bob")).thenReturn(Optional.of(space));
+        CoupleSpace space = CoupleSpace.restore("s1", "alice", "bob", CoupleSpace.STATUS_ACTIVE, 0L, null, null, null, null, null, null, null);
+        lenient().when(spaceRepository.findActiveByMember("alice")).thenReturn(Optional.of(space));
+        lenient().when(spaceRepository.findActiveByMember("bob")).thenReturn(Optional.of(space));
 
         lenient().when(overtimeMapper.find(eq("s1"), any(), any())).thenAnswer(inv -> overtimes.stream()
                 .filter(o -> o.getDay().equals(inv.getArgument(1)) && o.getFromUser().equals(inv.getArgument(2)))
@@ -116,7 +112,7 @@ class CoupleQuestServiceTest {
 
     @Test
     void noSpaceIs404() {
-        when(spaceMapper.findActiveByUser("carol")).thenReturn(Optional.empty());
+        when(spaceRepository.findActiveByMember("carol")).thenReturn(Optional.empty());
         assertThatThrownBy(() -> service.board("carol"))
                 .isInstanceOf(BusinessException.class).hasMessageContaining("情侣空间");
         verify(overtimeMapper, never()).insert(any(CoupleQuestOvertimePO.class));

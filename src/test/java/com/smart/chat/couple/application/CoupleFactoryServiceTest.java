@@ -2,8 +2,8 @@ package com.smart.chat.couple.application;
 
 import com.smart.chat.couple.infrastructure.persistence.CouplePointLedgerPO;
 import com.smart.chat.couple.infrastructure.persistence.CouplePointLedgerMapper;
-import com.smart.chat.couple.infrastructure.persistence.CoupleSpacePO;
-import com.smart.chat.couple.infrastructure.persistence.CoupleSpaceMapper;
+import com.smart.chat.couple.domain.space.CoupleSpace;
+import com.smart.chat.couple.domain.space.CoupleSpaceRepository;
 import com.smart.chat.couple.infrastructure.persistence.CoupleSpinTaskPO;
 import com.smart.chat.couple.infrastructure.persistence.CoupleSpinTaskMapper;
 import com.smart.chat.sharedkernel.web.BusinessException;
@@ -40,7 +40,7 @@ import static org.mockito.Mockito.when;
 class CoupleFactoryServiceTest {
 
     @Mock
-    private CoupleSpaceMapper spaceMapper;
+    private CoupleSpaceRepository spaceRepository;
     @Mock
     private CoupleSpinTaskMapper spinMapper;
     @Mock
@@ -57,13 +57,9 @@ class CoupleFactoryServiceTest {
 
     @BeforeEach
     void setUp() {
-        CoupleSpacePO space = new CoupleSpacePO();
-        space.setId("s1");
-        space.setUserA("alice");
-        space.setUserB("bob");
-        space.setStatus(CoupleSpacePO.STATUS_ACTIVE);
-        lenient().when(spaceMapper.findActiveByUser("alice")).thenReturn(Optional.of(space));
-        lenient().when(spaceMapper.findActiveByUser("bob")).thenReturn(Optional.of(space));
+        CoupleSpace space = CoupleSpace.restore("s1", "alice", "bob", CoupleSpace.STATUS_ACTIVE, 0L, null, null, null, null, null, null, null);
+        lenient().when(spaceRepository.findActiveByMember("alice")).thenReturn(Optional.of(space));
+        lenient().when(spaceRepository.findActiveByMember("bob")).thenReturn(Optional.of(space));
 
         lenient().when(spinMapper.findByWeek(eq("s1"), any())).thenAnswer(inv -> tasks.stream()
                 .filter(t -> t.getWeek().equals(inv.getArgument(1))).toList());
@@ -160,7 +156,7 @@ class CoupleFactoryServiceTest {
 
     @Test
     void noSpaceIs404() {
-        when(spaceMapper.findActiveByUser("carol")).thenReturn(Optional.empty());
+        when(spaceRepository.findActiveByMember("carol")).thenReturn(Optional.empty());
         assertThatThrownBy(() -> service.board("carol"))
                 .isInstanceOf(BusinessException.class).hasMessageContaining("情侣空间");
     }

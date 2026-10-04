@@ -1,7 +1,7 @@
 package com.smart.chat.couple.application;
 
-import com.smart.chat.couple.infrastructure.persistence.CoupleSpaceMapper;
-import com.smart.chat.couple.infrastructure.persistence.CoupleSpacePO;
+import com.smart.chat.couple.domain.space.CoupleSpaceRepository;
+import com.smart.chat.couple.domain.space.CoupleSpace;
 import com.smart.chat.couple.infrastructure.persistence.CoupleWishMapper;
 import com.smart.chat.couple.infrastructure.persistence.CoupleWishPO;
 import com.smart.chat.messaging.domain.CoupleEventPublisher;
@@ -38,7 +38,7 @@ class CoupleWishServiceTest {
     private static final String SPACE = "s1";
 
     @Mock
-    private CoupleSpaceMapper spaceMapper;
+    private CoupleSpaceRepository spaceRepository;
     @Mock
     private CoupleWishMapper wishMapper;
     @Mock
@@ -82,13 +82,9 @@ class CoupleWishServiceTest {
     }
 
     private void stubSpace() {
-        CoupleSpacePO space = new CoupleSpacePO();
-        space.setId(SPACE);
-        space.setUserA("alice");
-        space.setUserB("bob");
-        space.setStatus(CoupleSpacePO.STATUS_ACTIVE);
-        space.setCreated(System.currentTimeMillis());
-        lenient().when(spaceMapper.findActiveByUser(anyString())).thenReturn(Optional.of(space));
+        CoupleSpace space = CoupleSpace.restore(SPACE, "alice", "bob", CoupleSpace.STATUS_ACTIVE,
+                System.currentTimeMillis(), null, null, null, null, null, null, null);
+        lenient().when(spaceRepository.findActiveByMember(anyString())).thenReturn(Optional.of(space));
     }
 
     @Test
@@ -249,7 +245,7 @@ class CoupleWishServiceTest {
 
     @Test
     void noSpaceThrowsTheStandardFourOhFour() {
-        when(spaceMapper.findActiveByUser("solo")).thenReturn(Optional.empty());
+        when(spaceRepository.findActiveByMember("solo")).thenReturn(Optional.empty());
         assertThatThrownBy(() -> service.board("solo"))
                 .isInstanceOf(BusinessException.class).hasMessage("还没有建立情侣空间，先邀请一位好友吧");
     }

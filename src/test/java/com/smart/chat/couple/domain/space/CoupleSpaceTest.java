@@ -1,5 +1,7 @@
 package com.smart.chat.couple.domain.space;
 
+import com.smart.chat.couple.domain.RuleViolation;
+
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -31,7 +33,7 @@ class CoupleSpaceTest {
         CoupleSpace space = CoupleSpace.open("alice", "bob", 1L);
         assertThat(space.partnerOf("alice")).isEqualTo("bob");
         assertThat(space.partnerOf("bob")).isEqualTo("alice");
-        assertThatThrownBy(() -> space.partnerOf("carol")).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> space.partnerOf("carol")).isInstanceOf(RuleViolation.class);
     }
 
     @Test
@@ -49,9 +51,9 @@ class CoupleSpaceTest {
         assertThat(space.status()).isEqualTo(CoupleSpace.STATUS_DISSOLVED);
         assertThat(space.dissolvedAt()).isEqualTo(999L);
         assertThat(space.isActive()).isFalse();
-        assertThatThrownBy(() -> space.dissolve(1000L)).isInstanceOf(IllegalStateException.class);
-        assertThatThrownBy(() -> space.bindAnniversary("2026-10-01")).isInstanceOf(IllegalStateException.class);
-        assertThatThrownBy(() -> space.decorate("宣言", "classic", null)).isInstanceOf(IllegalStateException.class);
+        assertThatThrownBy(() -> space.dissolve(1000L)).isInstanceOf(RuleViolation.class);
+        assertThatThrownBy(() -> space.bindAnniversary("2026-10-01")).isInstanceOf(RuleViolation.class);
+        assertThatThrownBy(() -> space.decorate("宣言", "classic", null)).isInstanceOf(RuleViolation.class);
     }
 
     @Test
@@ -63,10 +65,10 @@ class CoupleSpaceTest {
         assertThat(space.stickers()).isEqualTo("a,b,c");
 
         assertThatThrownBy(() -> space.decorate(null, "neon", null))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(RuleViolation.class)
                 .hasMessageContaining("主题");
         assertThatThrownBy(() -> space.decorate(null, null, "1,2,3,4,5,6,7"))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(RuleViolation.class)
                 .hasMessageContaining("贴纸");
         // 上限本身要放过
         space.decorate(null, null, "1,2,3,4,5,6");

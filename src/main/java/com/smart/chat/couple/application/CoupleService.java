@@ -18,8 +18,8 @@ import com.smart.chat.couple.infrastructure.persistence.CoupleMoodMapper;
 import com.smart.chat.couple.infrastructure.persistence.CouplePointLedgerPO;
 import com.smart.chat.couple.infrastructure.persistence.CouplePointLedgerMapper;
 import com.smart.chat.couple.infrastructure.persistence.CoupleQuestOvertimeMapper;
-import com.smart.chat.couple.infrastructure.persistence.CoupleSpacePO;
-import com.smart.chat.couple.infrastructure.persistence.CoupleSpaceMapper;
+import com.smart.chat.couple.domain.space.CoupleSpace;
+import com.smart.chat.couple.domain.space.CoupleSpaceRepository;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.smart.chat.identity.domain.AccountDirectory;
 import com.smart.chat.sharedkernel.web.BusinessException;
@@ -101,7 +101,6 @@ public class CoupleService {
 
     // ========== 依赖 ==========
 
-    private final CoupleSpaceMapper spaceMapper;
     private final CoupleSpaceRepository spaceRepository;
     private final CoupleInviteMapper inviteMapper;
     private final CoupleAnniversaryMapper anniversaryMapper;
@@ -117,7 +116,7 @@ public class CoupleService {
     private final CoupleEventPublisher push;
 
     @SuppressWarnings("java:S107")
-    public CoupleService(CoupleSpaceMapper spaceMapper, CoupleSpaceRepository spaceRepository,
+    public CoupleService(CoupleSpaceRepository spaceRepository,
                          CoupleInviteMapper inviteMapper,
                          CoupleAnniversaryMapper anniversaryMapper, CoupleMoodMapper moodMapper,
                          CoupleActionMapper actionMapper, CoupleEchoDeedMapper deedMapper,
@@ -126,7 +125,6 @@ public class CoupleService {
                          CouplePointLedgerMapper ledgerMapper,
                          FriendshipChecker friendships, PeerProfileReader profiles,
                          AccountDirectory accounts, CoupleEventPublisher push) {
-        this.spaceMapper = spaceMapper;
         this.spaceRepository = spaceRepository;
         this.inviteMapper = inviteMapper;
         this.anniversaryMapper = anniversaryMapper;
@@ -160,10 +158,10 @@ public class CoupleService {
         if (!friendships.areFriends(me, targetName)) {
             throw new BusinessException(400, "只能邀请自己的好友，先去通讯录加个好友吧");
         }
-        if (spaceMapper.findActiveByUser(me).isPresent()) {
+        if (spaceRepository.findActiveByMember(me).isPresent()) {
             throw new BusinessException(409, "你已经在情侣空间里啦，先解除才能发起新邀请");
         }
-        if (spaceMapper.findActiveByUser(targetName).isPresent()) {
+        if (spaceRepository.findActiveByMember(targetName).isPresent()) {
             throw new BusinessException(409, "对方已经在别的情侣空间里了");
         }
         if (inviteMapper.findPendingBetween(me, targetName).isPresent()) {
@@ -191,18 +189,17 @@ public class CoupleService {
             throw new BusinessException(409, "该邀请已经处理过了");
         }
         String from = invite.getFromUser();
-        if (spaceMapper.findActiveByUser(me).isPresent() || spaceMapper.findActiveByUser(from).isPresent()) {
+        if (spaceRepository.findActiveByMember(me).isPresent() || spaceRepository.findActiveByMember(from).isPresent()) {
             throw new BusinessException(409, "无法同意：有一方已经进入其他情侣空间");
         }
         invite.setStatus(CoupleInvitePO.STATUS_ACCEPTED);
         invite.setUpdatedAt(System.currentTimeMillis());
         inviteMapper.updateById(invite);
 
-        String[] pair = CoupleSpacePO.ordered(from, me);
         // 建立走聚合工厂：字典序规范化与 ACTIVE 初值只在一处定义（couple.domain.space.CoupleSpace）
-        CoupleSpace opened = CoupleSpace.open(pair[0], pair[1], System.currentTimeMillis());
+        CoupleSpace opened = CoupleSpace.open(from, me, System.currentTimeMillis());
         spaceRepository.save(opened);
-        CoupleSpacePO space = requireSpace(me);
+        CoupleSpace space = requireSpace(me);
         push.pushCoupleEvent("invite-accepted", me, from, "对方同意啦！你们的情侣空间已开启 🎉");
         return toSpaceVO(space, me);
     }
@@ -238,10 +235,9 @@ public class CoupleService {
 
     /** 解除情侣空间：双方历史数据保留，但不再互相可见，各自可发起新邀请。 */
     public void dissolve(String me) {
-        CoupleSpacePO space = requireSpace(me);
-        space.setStatus(CoupleSpacePO.STATUS_DISSOLVED);
-        space.setDissolvedAt(System.currentTimeMillis());
-        spaceMapper.updateById(space);
+        CoupleSpace space = requireSpace(me);
+        space.dissolve(System.currentTimeMillis());
+        spaceRepository.save(space);
         push.pushCoupleEvent("dissolved", me, space.partnerOf(me), "对方解除了情侣空间 😢");
     }
 
@@ -251,22 +247,22 @@ public class CoupleService {
         // 待处理邀请返回全部（可能同时收到多人邀请），按时间新→旧
         List<InviteVO> incoming = inviteMapper.findPendingTo(me).stream().map(InviteVO::of).toList();
         List<InviteVO> outgoing = inviteMapper.findPendingFrom(me).stream().map(InviteVO::of).toList();
-        CoupleSpacePO space = spaceMapper.findActiveByUser(me).orElse(null);
+        CoupleSpace space = spaceRepository.findActiveByMember(me).orElse(null);
         if (space == null) {
             return new OverviewVO(null, incoming, outgoing, null, null);
         }
         // 首页只带今天双方的心情：它是「TA 今天怎么样」唯一的即时信号
         String day = today();
-        MoodVO mine = moodMapper.find(space.getId(), me, day).map(MoodVO::of).orElse(null);
-        MoodVO partner = moodMapper.find(space.getId(), space.partnerOf(me), day).map(MoodVO::of).orElse(null);
+        MoodVO mine = moodMapper.find(space.id(), me, day).map(MoodVO::of).orElse(null);
+        MoodVO partner = moodMapper.find(space.id(), space.partnerOf(me), day).map(MoodVO::of).orElse(null);
         return new OverviewVO(toSpaceVO(space, me), incoming, outgoing, mine, partner);
     }
 
     public SpaceVO setAnniversary(String me, String date) {
-        CoupleSpacePO space = requireSpace(me);
+        CoupleSpace space = requireSpace(me);
         String normalized = normalizeDate(date, "纪念日格式应为 yyyy-MM-dd");
-        space.setAnniversary(normalized);
-        spaceMapper.updateById(space);
+        space.bindAnniversary(normalized);
+        spaceRepository.save(space);
         push.pushCoupleEvent("anniversary-updated", me, space.partnerOf(me), "TA 更新了你们「在一起」的日子 📅");
         return toSpaceVO(space, me);
     }
@@ -284,8 +280,8 @@ public class CoupleService {
         if (!friendships.areFriends(me, name)) {
             throw new BusinessException(403, "只有好友才能查看恋爱状态");
         }
-        return spaceMapper.findActiveByUser(name)
-                .<RelationshipVO>map(space -> new RelationshipVO(true, daysTogether(space), space.getAnniversary()))
+        return spaceRepository.findActiveByMember(name)
+                .<RelationshipVO>map(space -> new RelationshipVO(true, daysTogether(space), space.anniversary()))
                 .orElse(new RelationshipVO(false, null, null));
     }
 
@@ -296,36 +292,9 @@ public class CoupleService {
      * 任一传 null 表示该项不修改；全部字段校验后一次性保存，双方推送 space-themed。
      */
     public SpaceVO updateProfile(String me, String slogan, String theme, String stickers) {
-        CoupleSpacePO space = requireSpace(me);
-        if (slogan != null) {
-            String text = slogan.trim();
-            if (text.length() > 60) {
-                throw new BusinessException(400, "宣言最多 60 字，留白也很美");
-            }
-            space.setSlogan(text.isEmpty() ? null : text);
-        }
-        if (theme != null) {
-            if (!CoupleSpacePO.THEMES.contains(theme)) {
-                throw new BusinessException(400, "这个主题还没上架哦");
-            }
-            space.setTheme(theme);
-        }
-        if (stickers != null) {
-            String normalized = stickers.trim();
-            if (!normalized.isEmpty()) {
-                String[] keys = normalized.split(",");
-                if (keys.length > CoupleSpacePO.STICKER_MAX) {
-                    throw new BusinessException(400, "贴纸墙最多佩戴 " + CoupleSpacePO.STICKER_MAX + " 枚");
-                }
-                for (String key : keys) {
-                    if (key.isBlank() || key.length() > 30) {
-                        throw new BusinessException(400, "贴纸选择有误，刷新后再试试");
-                    }
-                }
-            }
-            space.setStickers(normalized.isEmpty() ? null : normalized);
-        }
-        spaceMapper.updateById(space);
+        CoupleSpace space = requireSpace(me);
+        DomainRules.guard(() -> space.decorate(slogan, theme, stickers));
+        spaceRepository.save(space);
         push.pushCoupleEvent("space-themed", me, space.partnerOf(me), "TA 打扮了你们的小空间 ✨ 快去看看");
         return toSpaceVO(space, me);
     }
@@ -339,8 +308,8 @@ public class CoupleService {
     // ========== 3. 共享空间 ==========
 
     public List<AnniversaryVO> listAnniversaries(String me) {
-        CoupleSpacePO space = requireSpace(me);
-        return anniversaryMapper.findBySpace(space.getId()).stream().map(CoupleService::toAnniversaryVO).toList();
+        CoupleSpace space = requireSpace(me);
+        return anniversaryMapper.findBySpace(space.id()).stream().map(CoupleService::toAnniversaryVO).toList();
     }
 
     public AnniversaryVO createAnniversary(String me, String title, String date, Boolean yearly, String kind) {
@@ -350,7 +319,7 @@ public class CoupleService {
     /** F253 支持农历：calendarType=LUNAR 时 lunarMd（MMDD）为真源，eventDate 存首次换算出的公历日（date 可缺省）。 */
     public AnniversaryVO createAnniversary(String me, String title, String date, Boolean yearly, String kind,
                                            String calendarType, String lunarMd) {
-        CoupleSpacePO space = requireSpace(me);
+        CoupleSpace space = requireSpace(me);
         boolean lunar = CoupleAnniversaryPO.CALENDAR_LUNAR.equals(calendarType);
         LocalDate firstSolar = null;
         if (lunar) {
@@ -366,7 +335,7 @@ public class CoupleService {
         }
         String normalized = (date == null || date.isBlank()) && firstSolar != null
                 ? firstSolar.toString() : normalizeDate(date, "日期格式应为 yyyy-MM-dd");
-        CoupleAnniversaryPO row = CoupleAnniversaryPO.of(space.getId(),
+        CoupleAnniversaryPO row = CoupleAnniversaryPO.of(space.id(),
                 requireText(title, "纪念日名称不能为空（最多 60 字）", CoupleAnniversaryPO.TITLE_MAX),
                 normalized, yearly == null || yearly, me);
         row.setKind(normalizeAnniversaryKind(kind));
@@ -392,9 +361,9 @@ public class CoupleService {
     }
 
     public void deleteAnniversary(String me, String anniversaryId) {
-        CoupleSpacePO space = requireSpace(me);
+        CoupleSpace space = requireSpace(me);
         CoupleAnniversaryPO row = anniversaryMapper.selectById(anniversaryId);
-        if (row == null || !row.getSpaceId().equals(space.getId())) {
+        if (row == null || !row.getSpaceId().equals(space.id())) {
             throw new BusinessException(404, "纪念日不存在");
         }
         anniversaryMapper.deleteById(row.getId());
@@ -409,20 +378,20 @@ public class CoupleService {
      * mood 为 8 个固定键之一，note 为一句话心情（可空）。
      */
     public MoodVO saveMood(String me, String mood, String note) {
-        CoupleSpacePO space = requireSpace(me);
+        CoupleSpace space = requireSpace(me);
         if (mood == null || !CoupleMoodPO.MOOD_KEYS.contains(mood)) {
             throw new BusinessException(400, "心情不在可选范围内哦");
         }
         String text = requireOptional(note, "一句话心情最多 200 字", CoupleMoodPO.NOTE_MAX);
         String day = today();
-        CoupleMoodPO row = moodMapper.find(space.getId(), me, day).orElse(null);
+        CoupleMoodPO row = moodMapper.find(space.id(), me, day).orElse(null);
         if (row != null) {
             row.setMood(mood);
             row.setNote(text);
             row.setUpdatedAt(System.currentTimeMillis());
             moodMapper.updateById(row);
         } else {
-            row = CoupleMoodPO.of(space.getId(), me, day, mood, text);
+            row = CoupleMoodPO.of(space.id(), me, day, mood, text);
             moodMapper.insert(row);
         }
         push.pushCoupleEvent("mood-changed", me, space.partnerOf(me),
@@ -432,13 +401,13 @@ public class CoupleService {
 
     /** 双方最近 N 天（1-90，默认 14）的心情，按日期新→旧，只返回至少有一方记录的日子。 */
     public List<MoodDayVO> listMoods(String me, int days) {
-        CoupleSpacePO space = requireSpace(me);
+        CoupleSpace space = requireSpace(me);
         String partner = space.partnerOf(me);
         int limit = clampDays(days, 14);
         String startDay = LocalDate.now().minusDays(limit - 1L).toString();
         Map<String, CoupleMoodPO> mine = new HashMap<>();
         Map<String, CoupleMoodPO> theirs = new HashMap<>();
-        for (CoupleMoodPO row : moodMapper.findBySpace(space.getId())) {
+        for (CoupleMoodPO row : moodMapper.findBySpace(space.id())) {
             if (row.getMoodDay().compareTo(startDay) < 0) {
                 continue;
             }
@@ -469,17 +438,17 @@ public class CoupleService {
      * 会永远停在 0，header 数字就不再增长，所以整体换成活的数据源。
      */
     public IntimacyVO intimacy(String me) {
-        CoupleSpacePO space = requireSpace(me);
-        long moodDays = moodMapper.findBySpace(space.getId()).size();
+        CoupleSpace space = requireSpace(me);
+        long moodDays = moodMapper.findBySpace(space.id()).size();
         long bondDays = bondBothDays(space);
-        long deedCount = deedMapper.findBySpace(space.getId()).size();
-        long lampCount = overtimeMapper.findBySpace(space.getId()).stream()
+        long deedCount = deedMapper.findBySpace(space.id()).size();
+        long lampCount = overtimeMapper.findBySpace(space.id()).stream()
                 .filter(o -> o.getLampBy() != null && !o.getLampBy().isBlank())
                 .count();
-        long reflectCount = safewordUseMapper.findBySpace(space.getId()).stream()
+        long reflectCount = safewordUseMapper.findBySpace(space.id()).stream()
                 .filter(u -> u.getReflect() != null && !u.getReflect().isBlank())
                 .count();
-        long pointEarned = ledgerMapper.findBySpace(space.getId()).stream()
+        long pointEarned = ledgerMapper.findBySpace(space.id()).stream()
                 .filter(l -> CouplePointLedgerPO.TYPE_EARN.equals(l.getType()))
                 .mapToLong(l -> l.getPoints() == null ? 0 : l.getPoints()).sum();
 
@@ -508,11 +477,10 @@ public class CoupleService {
     /** 注销：解散所在空间并清理相关邀请。 */
     @Transactional
     public void purgeUser(String username) {
-        CoupleSpacePO space = spaceMapper.findActiveByUser(username).orElse(null);
+        CoupleSpace space = spaceRepository.findActiveByMember(username).orElse(null);
         if (space != null) {
-            space.setStatus(CoupleSpacePO.STATUS_DISSOLVED);
-            space.setDissolvedAt(System.currentTimeMillis());
-            spaceMapper.updateById(space);
+            space.dissolve(System.currentTimeMillis());
+            spaceRepository.save(space);
             push.pushCoupleEvent("dissolved", username, space.partnerOf(username), "对方账号已注销，情侣空间自动解除 😢");
         }
         inviteMapper.deleteAllInvolving(username);
@@ -521,9 +489,9 @@ public class CoupleService {
     // ========== 内部工具 ==========
 
     /** 贴贴双向往来的天数：同一天里两个人都发过动作才算一天（单向不计）。 */
-    private long bondBothDays(CoupleSpacePO space) {
+    private long bondBothDays(CoupleSpace space) {
         Map<String, Set<String>> byDay = new HashMap<>();
-        for (CoupleActionPO action : actionMapper.findBySpace(space.getId())) {
+        for (CoupleActionPO action : actionMapper.findBySpace(space.id())) {
             if (action.getCreated() == null) {
                 continue;
             }
@@ -534,8 +502,8 @@ public class CoupleService {
         return byDay.values().stream().filter(users -> users.size() >= 2).count();
     }
 
-    private CoupleSpacePO requireSpace(String me) {
-        return spaceMapper.findActiveByUser(me)
+    private CoupleSpace requireSpace(String me) {
+        return spaceRepository.findActiveByMember(me)
                 .orElseThrow(() -> new BusinessException(404, "还没有建立情侣空间，先邀请一位好友吧"));
     }
 
@@ -555,25 +523,25 @@ public class CoupleService {
         return invite;
     }
 
-    private SpaceVO toSpaceVO(CoupleSpacePO space, String me) {
+    private SpaceVO toSpaceVO(CoupleSpace space, String me) {
         String partner = space.partnerOf(me);
         PeerProfileReader.PeerProfile profile = profiles.read(partner).orElse(null);
         String nickname = profile == null || profile.nickname() == null || profile.nickname().isBlank()
                 ? partner : profile.nickname();
         String avatar = profile == null || profile.avatar() == null ? "" : profile.avatar();
         PartnerVO partnerVO = new PartnerVO(partner, nickname, avatar, push.isOnline(partner), space.nickOf(partner));
-        return new SpaceVO(space.getId(), partnerVO, space.getCreated(), space.getAnniversary(),
-                daysTogether(space), space.getSlogan(),
-                space.getTheme() == null ? "classic" : space.getTheme(), space.getStickers());
+        return new SpaceVO(space.id(), partnerVO, space.created(), space.anniversary(),
+                daysTogether(space), space.slogan(),
+                space.theme() == null ? "classic" : space.theme(), space.stickers());
     }
 
     /** 在一起天数：从纪念日（缺省取建立日）算到今天，含当天（建立当天 = 第 1 天）。 */
-    private long daysTogether(CoupleSpacePO space) {
+    private long daysTogether(CoupleSpace space) {
         LocalDate start;
         try {
-            start = LocalDate.parse(space.getAnniversary());
+            start = LocalDate.parse(space.anniversary());
         } catch (Exception e) {
-            start = Instant.ofEpochMilli(space.getCreated()).atZone(ZoneId.systemDefault()).toLocalDate();
+            start = Instant.ofEpochMilli(space.created()).atZone(ZoneId.systemDefault()).toLocalDate();
         }
         long days = ChronoUnit.DAYS.between(start, LocalDate.now()) + 1;
         return Math.max(days, 1);

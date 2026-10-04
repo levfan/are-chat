@@ -4,8 +4,8 @@ import com.smart.chat.couple.infrastructure.persistence.CoupleComfortPO;
 import com.smart.chat.couple.infrastructure.persistence.CoupleComfortMapper;
 import com.smart.chat.couple.infrastructure.persistence.CoupleMoodPO;
 import com.smart.chat.couple.infrastructure.persistence.CoupleMoodMapper;
-import com.smart.chat.couple.infrastructure.persistence.CoupleSpacePO;
-import com.smart.chat.couple.infrastructure.persistence.CoupleSpaceMapper;
+import com.smart.chat.couple.domain.space.CoupleSpace;
+import com.smart.chat.couple.domain.space.CoupleSpaceRepository;
 import com.smart.chat.sharedkernel.web.BusinessException;
 import com.smart.chat.messaging.infrastructure.transport.ImPushService;
 import org.junit.jupiter.api.Test;
@@ -37,7 +37,7 @@ import static org.mockito.Mockito.when;
 class CoupleComfortServiceTest {
 
     @Mock
-    private CoupleSpaceMapper spaceMapper;
+    private CoupleSpaceRepository spaceRepository;
 
     @Mock
     private CoupleComfortMapper comfortMapper;
@@ -51,17 +51,12 @@ class CoupleComfortServiceTest {
     @InjectMocks
     private CoupleComfortService comfortService;
 
-    private CoupleSpacePO space() {
-        CoupleSpacePO space = new CoupleSpacePO();
-        space.setId("s1");
-        space.setUserA("alice");
-        space.setUserB("bob");
-        space.setStatus(CoupleSpacePO.STATUS_ACTIVE);
-        return space;
+    private CoupleSpace space() {
+        return CoupleSpace.restore("s1", "alice", "bob", CoupleSpace.STATUS_ACTIVE, 0L, null, null, null, null, null, null, null);
     }
 
     private void stubSpace(String me) {
-        lenient().when(spaceMapper.findActiveByUser(me)).thenReturn(Optional.of(space()));
+        lenient().when(spaceRepository.findActiveByMember(me)).thenReturn(Optional.of(space()));
     }
 
     @Test
@@ -133,8 +128,8 @@ class CoupleComfortServiceTest {
 
     @Test
     void nightCareSkipsHandledComfortButRemindsUntouchedSadness() {
-        CoupleSpacePO space = space();
-        when(spaceMapper.findAllActive()).thenReturn(List.of(space));
+        CoupleSpace space = space();
+        when(spaceRepository.findAllActive()).thenReturn(List.of(space));
         String today = LocalDate.now().toString();
         CoupleMoodPO aliceSad = CoupleMoodPO.of("s1", "alice", today, "SAD", null);
         CoupleMoodPO bobFine = CoupleMoodPO.of("s1", "bob", today, "HAPPY", null);

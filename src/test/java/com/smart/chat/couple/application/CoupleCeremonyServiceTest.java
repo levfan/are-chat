@@ -4,8 +4,8 @@ import com.smart.chat.couple.infrastructure.persistence.CoupleCeremonyCouponPO;
 import com.smart.chat.couple.infrastructure.persistence.CoupleCeremonyCouponMapper;
 import com.smart.chat.couple.infrastructure.persistence.CouplePointLedgerPO;
 import com.smart.chat.couple.infrastructure.persistence.CouplePointLedgerMapper;
-import com.smart.chat.couple.infrastructure.persistence.CoupleSpacePO;
-import com.smart.chat.couple.infrastructure.persistence.CoupleSpaceMapper;
+import com.smart.chat.couple.domain.space.CoupleSpace;
+import com.smart.chat.couple.domain.space.CoupleSpaceRepository;
 import com.smart.chat.sharedkernel.web.BusinessException;
 import com.smart.chat.messaging.infrastructure.transport.ImPushService;
 import org.junit.jupiter.api.Test;
@@ -35,7 +35,7 @@ import static org.mockito.Mockito.when;
 class CoupleCeremonyServiceTest {
 
     @Mock
-    private CoupleSpaceMapper spaceMapper;
+    private CoupleSpaceRepository spaceRepository;
     @Mock
     private CoupleCeremonyCouponMapper couponMapper;
     @Mock
@@ -46,18 +46,12 @@ class CoupleCeremonyServiceTest {
     @InjectMocks
     private CoupleCeremonyService service;
 
-    private CoupleSpacePO space() {
-        CoupleSpacePO space = new CoupleSpacePO();
-        space.setId("s1");
-        space.setUserA("alice");
-        space.setUserB("bob");
-        space.setStatus(CoupleSpacePO.STATUS_ACTIVE);
-        space.setCreated(System.currentTimeMillis());
-        return space;
+    private CoupleSpace space() {
+        return CoupleSpace.restore("s1", "alice", "bob", CoupleSpace.STATUS_ACTIVE, System.currentTimeMillis(), null, null, null, null, null, null, null);
     }
 
     private void stubSpace(String me) {
-        lenient().when(spaceMapper.findActiveByUser(me)).thenReturn(Optional.of(space()));
+        lenient().when(spaceRepository.findActiveByMember(me)).thenReturn(Optional.of(space()));
     }
 
     private final class Bag {
@@ -168,7 +162,7 @@ class CoupleCeremonyServiceTest {
 
     @Test
     void noSpaceThrows404() {
-        when(spaceMapper.findActiveByUser("solo")).thenReturn(Optional.empty());
+        when(spaceRepository.findActiveByMember("solo")).thenReturn(Optional.empty());
         assertThatThrownBy(() -> service.overview("solo"))
                 .isInstanceOf(BusinessException.class).hasMessage("还没有建立情侣空间，先邀请一位好友吧");
     }

@@ -7,8 +7,8 @@ import com.smart.chat.couple.infrastructure.persistence.CoupleBondDayMapper;
 import com.smart.chat.couple.infrastructure.persistence.CoupleBondDayPO;
 import com.smart.chat.couple.infrastructure.persistence.CouplePointLedgerMapper;
 import com.smart.chat.couple.infrastructure.persistence.CouplePointLedgerPO;
-import com.smart.chat.couple.infrastructure.persistence.CoupleSpaceMapper;
-import com.smart.chat.couple.infrastructure.persistence.CoupleSpacePO;
+import com.smart.chat.couple.domain.space.CoupleSpaceRepository;
+import com.smart.chat.couple.domain.space.CoupleSpace;
 import com.smart.chat.messaging.domain.CoupleEventPublisher;
 import com.smart.chat.sharedkernel.web.BusinessException;
 import org.junit.jupiter.api.Test;
@@ -51,7 +51,7 @@ class CoupleStreakServiceTest {
     private static final String FOUR_DAYS_AGO = LocalDate.now().minusDays(4).toString();
 
     @Mock
-    private CoupleSpaceMapper spaceMapper;
+    private CoupleSpaceRepository spaceRepository;
     @Mock
     private CoupleBondDayMapper bondDayMapper;
     @Mock
@@ -94,8 +94,8 @@ class CoupleStreakServiceTest {
             return this;
         }
 
-        void stubSpace(CoupleSpacePO space) {
-            lenient().when(spaceMapper.findActiveByUser(anyString())).thenReturn(Optional.of(space));
+        void stubSpace(CoupleSpace space) {
+            lenient().when(spaceRepository.findActiveByMember(anyString())).thenReturn(Optional.of(space));
         }
 
         void checkin(String day, String source, String operator) {
@@ -126,14 +126,8 @@ class CoupleStreakServiceTest {
     }
 
     /** 空间是 30 天前建立的：看板自愈补的第 1 天不会串进本轮的连续段。 */
-    private CoupleSpacePO space() {
-        CoupleSpacePO space = new CoupleSpacePO();
-        space.setId(SPACE);
-        space.setUserA("alice");
-        space.setUserB("bob");
-        space.setStatus(CoupleSpacePO.STATUS_ACTIVE);
-        space.setCreated(LocalDate.now().minusDays(30).atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli());
-        return space;
+    private CoupleSpace space() {
+        return CoupleSpace.restore(SPACE, "alice", "bob", CoupleSpace.STATUS_ACTIVE, LocalDate.now().minusDays(30).atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli(), null, null, null, null, null, null, null);
     }
 
     @Test
@@ -287,9 +281,9 @@ class CoupleStreakServiceTest {
     @Test
     void togetherDayOneIsCheckedInWithoutAnyBonding() {
         Bag bag = new Bag().stub();
-        CoupleSpacePO fresh = space();
-        fresh.setCreated(System.currentTimeMillis());
-        when(spaceMapper.findActiveByUser("alice")).thenReturn(Optional.of(fresh));
+        CoupleSpace fresh = CoupleSpace.restore(SPACE, "alice", "bob", CoupleSpace.STATUS_ACTIVE,
+                System.currentTimeMillis(), null, null, null, null, null, null, null);
+        when(spaceRepository.findActiveByMember("alice")).thenReturn(Optional.of(fresh));
 
         CoupleStreakService.StreakBoardVO board = service.board("alice");
 
@@ -300,7 +294,7 @@ class CoupleStreakServiceTest {
 
     @Test
     void noSpaceThrowsTheStandardFourOhFour() {
-        when(spaceMapper.findActiveByUser("solo")).thenReturn(Optional.empty());
+        when(spaceRepository.findActiveByMember("solo")).thenReturn(Optional.empty());
         assertThatThrownBy(() -> service.board("solo"))
                 .isInstanceOf(BusinessException.class).hasMessage("还没有建立情侣空间，先邀请一位好友吧");
     }

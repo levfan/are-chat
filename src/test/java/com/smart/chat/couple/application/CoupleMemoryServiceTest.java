@@ -4,8 +4,8 @@ import com.smart.chat.couple.infrastructure.persistence.CoupleBondDayMapper;
 import com.smart.chat.couple.infrastructure.persistence.CoupleBondDayPO;
 import com.smart.chat.couple.infrastructure.persistence.CoupleQuestionAnswerMapper;
 import com.smart.chat.couple.infrastructure.persistence.CoupleQuestionAnswerPO;
-import com.smart.chat.couple.infrastructure.persistence.CoupleSpaceMapper;
-import com.smart.chat.couple.infrastructure.persistence.CoupleSpacePO;
+import com.smart.chat.couple.domain.space.CoupleSpaceRepository;
+import com.smart.chat.couple.domain.space.CoupleSpace;
 import com.smart.chat.couple.infrastructure.persistence.CoupleWishMapper;
 import com.smart.chat.couple.infrastructure.persistence.CoupleWishPO;
 import com.smart.chat.sharedkernel.web.BusinessException;
@@ -37,7 +37,7 @@ class CoupleMemoryServiceTest {
     private static final String SPACE = "s1";
 
     @Mock
-    private CoupleSpaceMapper spaceMapper;
+    private CoupleSpaceRepository spaceRepository;
     @Mock
     private CoupleBondDayMapper bondDayMapper;
     @Mock
@@ -50,15 +50,8 @@ class CoupleMemoryServiceTest {
     @InjectMocks
     private CoupleMemoryService service;
 
-    private CoupleSpacePO space() {
-        CoupleSpacePO space = new CoupleSpacePO();
-        space.setId(SPACE);
-        space.setUserA("alice");
-        space.setUserB("bob");
-        space.setStatus(CoupleSpacePO.STATUS_ACTIVE);
-        space.setCreated(LocalDate.of(2026, 6, 28).atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli());
-        space.setAnniversary("2026-06-28");
-        return space;
+    private CoupleSpace space() {
+        return CoupleSpace.restore(SPACE, "alice", "bob", CoupleSpace.STATUS_ACTIVE, LocalDate.of(2026, 6, 28).atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli(), "2026-06-28", null, null, null, null, null, null);
     }
 
     /** 从 endDay 往前数 n 天，铺成连续打卡日。 */
@@ -81,7 +74,7 @@ class CoupleMemoryServiceTest {
 
     @Test
     void hiddenPageIsGatedOnTheServerNotJustTheFrontend() {
-        when(spaceMapper.findActiveByUser("alice")).thenReturn(Optional.of(space()));
+        when(spaceRepository.findActiveByMember("alice")).thenReturn(Optional.of(space()));
         when(bondDayMapper.findBySpace(SPACE)).thenReturn(consecutive(90, LocalDate.now()));
         stubEmptyWishesAndAnswers();
 
@@ -93,14 +86,14 @@ class CoupleMemoryServiceTest {
 
     @Test
     void noSpaceThrowsTheStandardFourOhFour() {
-        when(spaceMapper.findActiveByUser("solo")).thenReturn(Optional.empty());
+        when(spaceRepository.findActiveByMember("solo")).thenReturn(Optional.empty());
         assertThatThrownBy(() -> service.memory("solo"))
                 .isInstanceOf(BusinessException.class).hasMessage("还没有建立情侣空间，先邀请一位好友吧");
     }
 
     @Test
     void unlockedPageShowsEveryTierStampedWithItsRealDay() {
-        when(spaceMapper.findActiveByUser("alice")).thenReturn(Optional.of(space()));
+        when(spaceRepository.findActiveByMember("alice")).thenReturn(Optional.of(space()));
         when(bondDayMapper.findBySpace(SPACE)).thenReturn(consecutive(100, LocalDate.now()));
         stubEmptyWishesAndAnswers();
 
@@ -121,7 +114,7 @@ class CoupleMemoryServiceTest {
 
     @Test
     void timelineOnlyCarriesEventsWithRealDates() {
-        when(spaceMapper.findActiveByUser("alice")).thenReturn(Optional.of(space()));
+        when(spaceRepository.findActiveByMember("alice")).thenReturn(Optional.of(space()));
         when(bondDayMapper.findBySpace(SPACE)).thenReturn(consecutive(120, LocalDate.now()));
         List<CoupleQuestionAnswerPO> answers = List.of(
                 CoupleQuestionAnswerPO.of(SPACE, "2026-09-30", 1, "今天最开心的一件事是什么？", "alice", "见到你"),

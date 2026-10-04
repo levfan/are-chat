@@ -1,7 +1,7 @@
 package com.smart.chat.couple.application;
 
-import com.smart.chat.couple.infrastructure.persistence.CoupleSpacePO;
-import com.smart.chat.couple.infrastructure.persistence.CoupleSpaceMapper;
+import com.smart.chat.couple.domain.space.CoupleSpace;
+import com.smart.chat.couple.domain.space.CoupleSpaceRepository;
 import com.smart.chat.couple.infrastructure.persistence.CoupleUserPinPO;
 import com.smart.chat.couple.infrastructure.persistence.CoupleUserPinMapper;
 import com.smart.chat.sharedkernel.web.BusinessException;
@@ -34,24 +34,18 @@ import static org.mockito.Mockito.when;
 class CouplePinServiceTest {
 
     @Mock
-    private CoupleSpaceMapper spaceMapper;
+    private CoupleSpaceRepository spaceRepository;
     @Mock
     private CoupleUserPinMapper pinMapper;
     @InjectMocks
     private CouplePinService service;
 
-    private CoupleSpacePO space() {
-        CoupleSpacePO space = new CoupleSpacePO();
-        space.setId("s1");
-        space.setUserA("alice");
-        space.setUserB("bob");
-        space.setStatus(CoupleSpacePO.STATUS_ACTIVE);
-        space.setCreated(System.currentTimeMillis());
-        return space;
+    private CoupleSpace space() {
+        return CoupleSpace.restore("s1", "alice", "bob", CoupleSpace.STATUS_ACTIVE, System.currentTimeMillis(), null, null, null, null, null, null, null);
     }
 
     private void stubSpace(String me) {
-        lenient().when(spaceMapper.findActiveByUser(me)).thenReturn(Optional.of(space()));
+        lenient().when(spaceRepository.findActiveByMember(me)).thenReturn(Optional.of(space()));
     }
 
     @Test
@@ -106,7 +100,7 @@ class CouplePinServiceTest {
 
     @Test
     void noSpaceThrows404() {
-        when(spaceMapper.findActiveByUser(anyString())).thenReturn(Optional.empty());
+        when(spaceRepository.findActiveByMember(anyString())).thenReturn(Optional.empty());
         assertThatThrownBy(() -> service.pins("ghost"))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("情侣空间");

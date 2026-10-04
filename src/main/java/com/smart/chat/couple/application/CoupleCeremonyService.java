@@ -4,8 +4,8 @@ import com.smart.chat.couple.infrastructure.persistence.CoupleCeremonyCouponPO;
 import com.smart.chat.couple.infrastructure.persistence.CoupleCeremonyCouponMapper;
 import com.smart.chat.couple.infrastructure.persistence.CouplePointLedgerPO;
 import com.smart.chat.couple.infrastructure.persistence.CouplePointLedgerMapper;
-import com.smart.chat.couple.infrastructure.persistence.CoupleSpacePO;
-import com.smart.chat.couple.infrastructure.persistence.CoupleSpaceMapper;
+import com.smart.chat.couple.domain.space.CoupleSpace;
+import com.smart.chat.couple.domain.space.CoupleSpaceRepository;
 import com.smart.chat.couple.domain.coupon.WishCoupon;
 import com.smart.chat.sharedkernel.web.BusinessException;
 import com.smart.chat.messaging.domain.CoupleEventPublisher;
@@ -34,14 +34,14 @@ public class CoupleCeremonyService {
     static final int COUPON_COST = 10;
     static final String COUPON_SPEND_PREFIX = "发出愿望券：";
 
-    private final CoupleSpaceMapper spaceMapper;
+    private final CoupleSpaceRepository spaceRepository;
     private final CoupleCeremonyCouponMapper couponMapper;
     private final CouplePointLedgerMapper ledgerMapper;
     private final CoupleEventPublisher push;
 
-    public CoupleCeremonyService(CoupleSpaceMapper spaceMapper, CoupleCeremonyCouponMapper couponMapper,
+    public CoupleCeremonyService(CoupleSpaceRepository spaceRepository, CoupleCeremonyCouponMapper couponMapper,
                                  CouplePointLedgerMapper ledgerMapper, CoupleEventPublisher push) {
-        this.spaceMapper = spaceMapper;
+        this.spaceRepository = spaceRepository;
         this.couponMapper = couponMapper;
         this.ledgerMapper = ledgerMapper;
         this.push = push;
@@ -62,7 +62,7 @@ public class CoupleCeremonyService {
 
     /** 券本总览（GET /overview）。 */
     public OverviewVO overview(String me) {
-        CoupleSpacePO space = requireSpace(me);
+        CoupleSpace space = requireSpace(me);
         return new OverviewVO(LocalDate.now().toString(),
                 couponsOf(space, CoupleCeremonyCouponPO.STATUS_OPEN),
                 couponsOf(space, CoupleCeremonyCouponPO.STATUS_USED),
@@ -73,12 +73,12 @@ public class CoupleCeremonyService {
 
     /** 发一张愿望券（券面自拟，先扣发券人的积分）。 */
     public OverviewVO issueCoupon(String me, String title) {
-        CoupleSpacePO space = requireSpace(me);
+        CoupleSpace space = requireSpace(me);
         // 券面规则、字数上限、余额闸门都在 WishCoupon 里；这里只管取余额和落库
         WishCoupon wish = rule(() -> WishCoupon.grant(title, me, balance(space, me)));
         String text = wish.title();
-        couponMapper.insert(CoupleCeremonyCouponPO.of(space.getId(), text, me, ""));
-        ledgerMapper.insert(CouplePointLedgerPO.of(space.getId(), me, CouplePointLedgerPO.TYPE_SPEND,
+        couponMapper.insert(CoupleCeremonyCouponPO.of(space.id(), text, me, ""));
+        ledgerMapper.insert(CouplePointLedgerPO.of(space.id(), me, CouplePointLedgerPO.TYPE_SPEND,
                 COUPON_SPEND_PREFIX + text, COUPON_COST));
         push.pushCoupleEvent("ceremony-coupon", me, space.partnerOf(me), "TA 给你发了一张愿望券：" + text);
         return overview(me);
@@ -86,9 +86,9 @@ public class CoupleCeremonyService {
 
     /** 核销一张愿望券（OPEN→USED，谁收到券谁说了算）。 */
     public OverviewVO useCoupon(String me, String id) {
-        CoupleSpacePO space = requireSpace(me);
+        CoupleSpace space = requireSpace(me);
         CoupleCeremonyCouponPO coupon = couponMapper.selectById(id);
-        if (coupon == null || !coupon.getSpaceId().equals(space.getId())) {
+        if (coupon == null || !coupon.getSpaceId().equals(space.id())) {
             throw new BusinessException(404, "这张愿望券不存在");
         }
         WishCoupon wish = WishCoupon.restore(coupon.getId(), coupon.getTitle(), coupon.getIssuer(),
@@ -105,8 +105,8 @@ public class CoupleCeremonyService {
     // ========== 聚合 ==========
 
     /** 本人积分余额 = 累计 EARN − 累计 SPEND。 */
-    private int balance(CoupleSpacePO space, String me) {
-        return ledgerMapper.findBySpace(space.getId()).stream()
+    private int balance(CoupleSpace space, String me) {
+        return ledgerMapper.findBySpace(space.id()).stream()
                 .filter(l -> me.equals(l.getFromUser()))
                 .mapToInt(l -> CouplePointLedgerPO.TYPE_EARN.equals(l.getType())
                         ? (l.getPoints() == null ? 0 : l.getPoints())
@@ -114,9 +114,9 @@ public class CoupleCeremonyService {
                 .sum();
     }
 
-    private List<CouponVO> couponsOf(CoupleSpacePO space, String status) {
+    private List<CouponVO> couponsOf(CoupleSpace space, String status) {
         List<CouponVO> list = new ArrayList<>();
-        for (CoupleCeremonyCouponPO coupon : couponMapper.findBySpace(space.getId())) {
+        for (CoupleCeremonyCouponPO coupon : couponMapper.findBySpace(space.id())) {
             if (status.equals(coupon.getStatus())) {
                 list.add(new CouponVO(coupon.getId(), coupon.getTitle(), coupon.getStatus(), coupon.getRef(),
                         coupon.getIssuer(), coupon.getUsedBy(), coupon.getCreated()));
@@ -139,8 +139,8 @@ public class CoupleCeremonyService {
         return trimmed;
     }
 
-    private CoupleSpacePO requireSpace(String me) {
-        return spaceMapper.findActiveByUser(me)
+    private CoupleSpace requireSpace(String me) {
+        return spaceRepository.findActiveByMember(me)
                 .orElseThrow(() -> new BusinessException(404, "还没有建立情侣空间，先邀请一位好友吧"));
     }
 }

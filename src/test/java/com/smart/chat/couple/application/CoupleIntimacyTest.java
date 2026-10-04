@@ -14,8 +14,8 @@ import com.smart.chat.couple.infrastructure.persistence.CouplePointLedgerPO;
 import com.smart.chat.couple.infrastructure.persistence.CouplePointLedgerMapper;
 import com.smart.chat.couple.infrastructure.persistence.CoupleQuestOvertimePO;
 import com.smart.chat.couple.infrastructure.persistence.CoupleQuestOvertimeMapper;
-import com.smart.chat.couple.infrastructure.persistence.CoupleSpacePO;
-import com.smart.chat.couple.infrastructure.persistence.CoupleSpaceMapper;
+import com.smart.chat.couple.domain.space.CoupleSpace;
+import com.smart.chat.couple.domain.space.CoupleSpaceRepository;
 import com.smart.chat.identity.application.AppUserService;
 import com.smart.chat.messaging.infrastructure.persistence.FriendMapper;
 import com.smart.chat.messaging.infrastructure.transport.ImPushService;
@@ -48,7 +48,7 @@ import static org.mockito.Mockito.when;
 class CoupleIntimacyTest {
 
     @Mock
-    private CoupleSpaceMapper spaceMapper;
+    private CoupleSpaceRepository spaceRepository;
     @Mock
     private CoupleInviteMapper inviteMapper;
     @Mock
@@ -81,12 +81,8 @@ class CoupleIntimacyTest {
 
     @BeforeEach
     void setUp() {
-        CoupleSpacePO space = new CoupleSpacePO();
-        space.setId("s1");
-        space.setUserA("alice");
-        space.setUserB("bob");
-        space.setStatus(CoupleSpacePO.STATUS_ACTIVE);
-        lenient().when(spaceMapper.findActiveByUser(any())).thenReturn(Optional.of(space));
+        CoupleSpace space = CoupleSpace.restore("s1", "alice", "bob", CoupleSpace.STATUS_ACTIVE, 0L, null, null, null, null, null, null, null);
+        lenient().when(spaceRepository.findActiveByMember(any())).thenReturn(Optional.of(space));
         lenient().when(moodMapper.findBySpace("s1")).thenReturn(List.of());
         lenient().when(actionMapper.findBySpace("s1")).thenReturn(List.of());
         lenient().when(deedMapper.findBySpace("s1")).thenReturn(List.of());

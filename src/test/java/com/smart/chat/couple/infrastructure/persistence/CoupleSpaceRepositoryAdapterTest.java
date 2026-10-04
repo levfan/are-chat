@@ -8,6 +8,9 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.util.List;
+import java.util.Optional;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
@@ -75,12 +78,28 @@ class CoupleSpaceRepositoryAdapterTest {
         CoupleSpacePO po = CoupleSpacePO.of("alice", "bob");
         po.setId("s3");
         po.setNickA("宝宝");
-        when(spaceMapper.findActiveByUser("bob")).thenReturn(java.util.Optional.of(po));
+        when(spaceMapper.findActiveByUser("bob")).thenReturn(Optional.of(po));
 
         CoupleSpace space = repository.findActiveByMember("bob").orElseThrow();
 
         assertThat(space.id()).isEqualTo("s3");
         assertThat(space.partnerOf("bob")).isEqualTo("alice");
         assertThat(space.nickOf("alice")).isEqualTo("宝宝");
+    }
+
+    @Test
+    void batchReadsMapEveryRowIntoAnAggregate() {
+        CoupleSpacePO active = CoupleSpacePO.of("alice", "bob");
+        active.setId("s4");
+        CoupleSpacePO dissolved = CoupleSpacePO.of("carol", "dave");
+        dissolved.setId("s5");
+        dissolved.setStatus(CoupleSpacePO.STATUS_DISSOLVED);
+        when(spaceMapper.findAllActive()).thenReturn(List.of(active));
+        when(spaceMapper.selectList(null)).thenReturn(List.of(active, dissolved));
+        when(spaceMapper.selectById("s5")).thenReturn(dissolved);
+
+        assertThat(repository.findAllActive()).extracting(CoupleSpace::id).containsExactly("s4");
+        assertThat(repository.findAll()).extracting(CoupleSpace::id).containsExactly("s4", "s5");
+        assertThat(repository.findById("s5").orElseThrow().status()).isEqualTo(CoupleSpace.STATUS_DISSOLVED);
     }
 }

@@ -3,8 +3,8 @@ package com.smart.chat.couple.application;
 import com.smart.chat.couple.infrastructure.content.CoupleQuestionBank;
 import com.smart.chat.couple.infrastructure.persistence.CoupleQuestionAnswerMapper;
 import com.smart.chat.couple.infrastructure.persistence.CoupleQuestionAnswerPO;
-import com.smart.chat.couple.infrastructure.persistence.CoupleSpaceMapper;
-import com.smart.chat.couple.infrastructure.persistence.CoupleSpacePO;
+import com.smart.chat.couple.domain.space.CoupleSpaceRepository;
+import com.smart.chat.couple.domain.space.CoupleSpace;
 import com.smart.chat.messaging.domain.CoupleEventPublisher;
 import com.smart.chat.sharedkernel.web.BusinessException;
 import org.junit.jupiter.api.Test;
@@ -39,7 +39,7 @@ class CoupleQuestionServiceTest {
     private static final String DAY = LocalDate.now().toString();
 
     @Mock
-    private CoupleSpaceMapper spaceMapper;
+    private CoupleSpaceRepository spaceRepository;
     @Mock
     private CoupleQuestionAnswerMapper answerMapper;
     @Mock
@@ -76,13 +76,9 @@ class CoupleQuestionServiceTest {
     }
 
     private void stubSpace() {
-        CoupleSpacePO space = new CoupleSpacePO();
-        space.setId(SPACE);
-        space.setUserA("alice");
-        space.setUserB("bob");
-        space.setStatus(CoupleSpacePO.STATUS_ACTIVE);
-        space.setCreated(System.currentTimeMillis());
-        lenient().when(spaceMapper.findActiveByUser(anyString())).thenReturn(Optional.of(space));
+        CoupleSpace space = CoupleSpace.restore(SPACE, "alice", "bob", CoupleSpace.STATUS_ACTIVE,
+                System.currentTimeMillis(), null, null, null, null, null, null, null);
+        lenient().when(spaceRepository.findActiveByMember(anyString())).thenReturn(Optional.of(space));
     }
 
     @Test
@@ -164,7 +160,7 @@ class CoupleQuestionServiceTest {
 
     @Test
     void noSpaceThrowsTheStandardFourOhFour() {
-        when(spaceMapper.findActiveByUser("solo")).thenReturn(Optional.empty());
+        when(spaceRepository.findActiveByMember("solo")).thenReturn(Optional.empty());
         assertThatThrownBy(() -> service.today("solo"))
                 .isInstanceOf(BusinessException.class).hasMessage("还没有建立情侣空间，先邀请一位好友吧");
     }

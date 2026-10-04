@@ -5,8 +5,8 @@ import com.smart.chat.couple.infrastructure.persistence.CoupleComfortPO;
 import com.smart.chat.couple.infrastructure.persistence.CoupleComfortMapper;
 import com.smart.chat.couple.infrastructure.persistence.CoupleMoodPO;
 import com.smart.chat.couple.infrastructure.persistence.CoupleMoodMapper;
-import com.smart.chat.couple.infrastructure.persistence.CoupleSpacePO;
-import com.smart.chat.couple.infrastructure.persistence.CoupleSpaceMapper;
+import com.smart.chat.couple.domain.space.CoupleSpace;
+import com.smart.chat.couple.domain.space.CoupleSpaceRepository;
 import com.smart.chat.couple.domain.comfort.ComfortRequest;
 import com.smart.chat.sharedkernel.web.BusinessException;
 import com.smart.chat.messaging.domain.CoupleEventPublisher;
@@ -27,14 +27,14 @@ import static com.smart.chat.couple.application.DomainRules.rule;
 @Service
 public class CoupleComfortService {
 
-    private final CoupleSpaceMapper spaceMapper;
+    private final CoupleSpaceRepository spaceRepository;
     private final CoupleComfortMapper comfortMapper;
     private final CoupleMoodMapper moodMapper;
     private final CoupleEventPublisher push;
 
-    public CoupleComfortService(CoupleSpaceMapper spaceMapper, CoupleComfortMapper comfortMapper,
+    public CoupleComfortService(CoupleSpaceRepository spaceRepository, CoupleComfortMapper comfortMapper,
                                 CoupleMoodMapper moodMapper, CoupleEventPublisher push) {
-        this.spaceMapper = spaceMapper;
+        this.spaceRepository = spaceRepository;
         this.comfortMapper = comfortMapper;
         this.moodMapper = moodMapper;
         this.push = push;
@@ -58,10 +58,10 @@ public class CoupleComfortService {
     // ========== F60 求抱抱 ==========
 
     public ComfortBoardVO comfortBoard(String me) {
-        CoupleSpacePO space = requireSpace(me);
+        CoupleSpace space = requireSpace(me);
         String partner = space.partnerOf(me);
         String today = LocalDate.now().toString();
-        List<ComfortVO> history = comfortMapper.findBySpace(space.getId()).stream()
+        List<ComfortVO> history = comfortMapper.findBySpace(space.id()).stream()
                 .map(c -> toVO(c))
                 .toList();
         ComfortVO mine = history.stream()
@@ -76,12 +76,12 @@ public class CoupleComfortService {
     /** 求抱抱：一键告诉 TA「我现在很难过/委屈/累…」（每人每天一条，重复提交视为更新感受）。 */
     public ComfortBoardVO askForComfort(String me, String feeling) {
         guard(() -> ComfortRequest.ask(me, feeling));
-        CoupleSpacePO space = requireSpace(me);
+        CoupleSpace space = requireSpace(me);
         String partner = space.partnerOf(me);
         String today = LocalDate.now().toString();
-        CoupleComfortPO existing = comfortMapper.find(space.getId(), me, today);
+        CoupleComfortPO existing = comfortMapper.find(space.id(), me, today);
         if (existing == null) {
-            comfortMapper.insert(CoupleComfortPO.of(space.getId(), me, feeling));
+            comfortMapper.insert(CoupleComfortPO.of(space.id(), me, feeling));
         } else {
             existing.setFeeling(feeling);
             existing.setHandled(false);
@@ -104,10 +104,10 @@ public class CoupleComfortService {
     /** 回应 TA 的求抱抱：只有对方能回应，回应后求抱抱的人会收到抱抱与那句话。 */
     public ComfortVO handleComfort(String me, String note) {
         String words = rule(() -> ComfortRequest.requireNote(note));
-        CoupleSpacePO space = requireSpace(me);
+        CoupleSpace space = requireSpace(me);
         String partner = space.partnerOf(me);
         String today = LocalDate.now().toString();
-        CoupleComfortPO pending = comfortMapper.find(space.getId(), partner, today);
+        CoupleComfortPO pending = comfortMapper.find(space.id(), partner, today);
         if (pending == null) {
             throw new BusinessException(404, "TA 今天还没有发过求抱抱哦");
         }
@@ -135,10 +135,10 @@ public class CoupleComfortService {
 
     /** 双方心情的同频程度：一致天数占比 + 当前是否同步 + 连续同步天数。 */
     public MoodSyncVO moodSync(String me) {
-        CoupleSpacePO space = requireSpace(me);
+        CoupleSpace space = requireSpace(me);
         String partner = space.partnerOf(me);
-        Map<String, String> mine = moodMap(space.getId(), me);
-        Map<String, String> theirs = moodMap(space.getId(), partner);
+        Map<String, String> mine = moodMap(space.id(), me);
+        Map<String, String> theirs = moodMap(space.id(), partner);
         long bothDays = 0;
         long syncedDays = 0;
         for (Map.Entry<String, String> entry : mine.entrySet()) {
@@ -188,13 +188,13 @@ public class CoupleComfortService {
     public void remindNightCare() {
         String today = LocalDate.now().toString();
         List<String> negatives = List.of("SAD", "ANGRY", "SICK", "TIRED");
-        for (CoupleSpacePO space : spaceMapper.findAllActive()) {
-            for (String user : List.of(space.getUserA(), space.getUserB())) {
-                CoupleMoodPO mood = moodMapper.find(space.getId(), user, today).orElse(null);
+        for (CoupleSpace space : spaceRepository.findAllActive()) {
+            for (String user : List.of(space.userA(), space.userB())) {
+                CoupleMoodPO mood = moodMapper.find(space.id(), user, today).orElse(null);
                 if (mood == null || !negatives.contains(mood.getMood())) {
                     continue;
                 }
-                CoupleComfortPO comfort = comfortMapper.find(space.getId(), user, today);
+                CoupleComfortPO comfort = comfortMapper.find(space.id(), user, today);
                 if (comfort != null && comfort.isHandled()) {
                     continue; // 已经被接住，不打扰
                 }
@@ -212,8 +212,8 @@ public class CoupleComfortService {
                 c.isHandled(), c.getHandledNote(), c.getHandledAt());
     }
 
-    private CoupleSpacePO requireSpace(String me) {
-        return spaceMapper.findActiveByUser(me)
+    private CoupleSpace requireSpace(String me) {
+        return spaceRepository.findActiveByMember(me)
                 .orElseThrow(() -> new BusinessException(404, "还没有建立情侣空间，先邀请一位好友吧"));
     }
 }

@@ -4,6 +4,7 @@ import com.smart.chat.couple.domain.space.CoupleSpace;
 import com.smart.chat.couple.domain.space.CoupleSpaceRepository;
 import org.springframework.stereotype.Component;
 
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -24,6 +25,21 @@ public class CoupleSpaceRepositoryAdapter implements CoupleSpaceRepository {
     @Override
     public Optional<CoupleSpace> findActiveByMember(String username) {
         return spaceMapper.findActiveByUser(username).map(CoupleSpaceRepositoryAdapter::toDomain);
+    }
+
+    @Override
+    public Optional<CoupleSpace> findById(String id) {
+        return Optional.ofNullable(spaceMapper.selectById(id)).map(CoupleSpaceRepositoryAdapter::toDomain);
+    }
+
+    @Override
+    public List<CoupleSpace> findAllActive() {
+        return spaceMapper.findAllActive().stream().map(CoupleSpaceRepositoryAdapter::toDomain).toList();
+    }
+
+    @Override
+    public List<CoupleSpace> findAll() {
+        return spaceMapper.selectList(null).stream().map(CoupleSpaceRepositoryAdapter::toDomain).toList();
     }
 
     @Override

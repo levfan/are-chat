@@ -8,8 +8,8 @@ import com.smart.chat.couple.infrastructure.persistence.CoupleBondDayMapper;
 import com.smart.chat.couple.infrastructure.persistence.CoupleBondDayPO;
 import com.smart.chat.couple.infrastructure.persistence.CoupleQuestionAnswerMapper;
 import com.smart.chat.couple.infrastructure.persistence.CoupleQuestionAnswerPO;
-import com.smart.chat.couple.infrastructure.persistence.CoupleSpaceMapper;
-import com.smart.chat.couple.infrastructure.persistence.CoupleSpacePO;
+import com.smart.chat.couple.domain.space.CoupleSpaceRepository;
+import com.smart.chat.couple.domain.space.CoupleSpace;
 import com.smart.chat.couple.infrastructure.persistence.CoupleWishMapper;
 import com.smart.chat.couple.infrastructure.persistence.CoupleWishPO;
 import com.smart.chat.sharedkernel.web.BusinessException;
@@ -48,16 +48,16 @@ public class CoupleMemoryService {
                            String intimacyTitle, String unlockedDay, List<TimelineItemVO> timeline) {
     }
 
-    private final CoupleSpaceMapper spaceMapper;
+    private final CoupleSpaceRepository spaceRepository;
     private final CoupleBondDayMapper bondDayMapper;
     private final CoupleQuestionAnswerMapper answerMapper;
     private final CoupleWishMapper wishMapper;
     private final CoupleService coupleService;
 
-    public CoupleMemoryService(CoupleSpaceMapper spaceMapper, CoupleBondDayMapper bondDayMapper,
+    public CoupleMemoryService(CoupleSpaceRepository spaceRepository, CoupleBondDayMapper bondDayMapper,
                                CoupleQuestionAnswerMapper answerMapper, CoupleWishMapper wishMapper,
                                CoupleService coupleService) {
-        this.spaceMapper = spaceMapper;
+        this.spaceRepository = spaceRepository;
         this.bondDayMapper = bondDayMapper;
         this.answerMapper = answerMapper;
         this.wishMapper = wishMapper;
@@ -67,25 +67,25 @@ public class CoupleMemoryService {
     // ========== 读 ==========
 
     public MemoryVO memory(String me) {
-        CoupleSpacePO space = requireSpace(me);
-        BondStreak streak = streakOf(space.getId());
+        CoupleSpace space = requireSpace(me);
+        BondStreak streak = streakOf(space.id());
         if (streak.longestStreak() < REQUIRED_DAYS) {
             throw new BusinessException(400, "这一页要连续贴满 " + REQUIRED_DAYS + " 天才打开，现在还差 "
                     + (REQUIRED_DAYS - streak.longestStreak()) + " 天");
         }
 
-        List<CoupleBondDayPO> checkins = bondDayMapper.findBySpace(space.getId());
+        List<CoupleBondDayPO> checkins = bondDayMapper.findBySpace(space.id());
         int makeupDays = 0;
         for (CoupleBondDayPO row : checkins) {
             if (row.makeupFlag()) {
                 makeupDays++;
             }
         }
-        List<CoupleQuestionAnswerPO> answers = answerMapper.findBySpace(space.getId());
+        List<CoupleQuestionAnswerPO> answers = answerMapper.findBySpace(space.id());
         int bothAnswered = bothAnsweredDays(answers);
         List<Wish> wishes = new ArrayList<>();
         int fulfilled = 0;
-        for (CoupleWishPO row : wishMapper.findBySpace(space.getId())) {
+        for (CoupleWishPO row : wishMapper.findBySpace(space.id())) {
             Wish wish = Wish.restore(row.getId(), row.getOwnerUser(), row.getCreatorUser(), row.getTitle(),
                     row.getNote(), row.getStatus(), row.getPreparedBy(), row.getPreparedAt(), row.getFulfilledAt());
             wishes.add(wish);
@@ -107,14 +107,14 @@ public class CoupleMemoryService {
 
     // ========== 内部 ==========
 
-    private List<TimelineItemVO> buildTimeline(CoupleSpacePO space,
+    private List<TimelineItemVO> buildTimeline(CoupleSpace space,
                                                List<CoupleQuestionAnswerPO> answers, List<Wish> wishes,
                                                BondStreak streak) {
         // 保留类事件（建立、解锁、答完的题、实现的愿望）一条都不能被截掉——
         // 截断如果按日期取前 80，100 天里最早的那几次解锁就正好消失在轴尾。
         List<TimelineItemVO> kept = new ArrayList<>();
-        kept.add(new TimelineItemVO(dayOf(space.getCreated() == null ? System.currentTimeMillis()
-                : space.getCreated()).toString(), "space", "情侣空间开启 🎉", "这一天你们点头了"));
+        kept.add(new TimelineItemVO(dayOf(space.created() <= 0 ? System.currentTimeMillis()
+                : space.created()).toString(), "space", "情侣空间开启 🎉", "这一天你们点头了"));
 
         for (StreakTier tier : StreakTier.values()) {
             LocalDate at = streak.unlockedAt(tier);
@@ -215,12 +215,12 @@ public class CoupleMemoryService {
         return BondStreak.of(days, LocalDate.now());
     }
 
-    private long daysTogether(CoupleSpacePO space) {
+    private long daysTogether(CoupleSpace space) {
         LocalDate start;
         try {
-            start = LocalDate.parse(space.getAnniversary());
+            start = LocalDate.parse(space.anniversary());
         } catch (Exception e) {
-            start = dayOf(space.getCreated() == null ? System.currentTimeMillis() : space.getCreated());
+            start = dayOf(space.created() <= 0 ? System.currentTimeMillis() : space.created());
         }
         return Math.max(java.time.temporal.ChronoUnit.DAYS.between(start, LocalDate.now()) + 1, 1);
     }
@@ -229,8 +229,8 @@ public class CoupleMemoryService {
         return Instant.ofEpochMilli(millis).atZone(ZoneId.systemDefault()).toLocalDate();
     }
 
-    private CoupleSpacePO requireSpace(String me) {
-        return spaceMapper.findActiveByUser(me)
+    private CoupleSpace requireSpace(String me) {
+        return spaceRepository.findActiveByMember(me)
                 .orElseThrow(() -> new BusinessException(404, "还没有建立情侣空间，先邀请一位好友吧"));
     }
 }

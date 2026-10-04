@@ -4,8 +4,8 @@ import com.smart.chat.couple.infrastructure.persistence.CoupleEchoDeedPO;
 import com.smart.chat.couple.infrastructure.persistence.CoupleEchoDeedMapper;
 import com.smart.chat.couple.infrastructure.persistence.CouplePointLedgerPO;
 import com.smart.chat.couple.infrastructure.persistence.CouplePointLedgerMapper;
-import com.smart.chat.couple.infrastructure.persistence.CoupleSpacePO;
-import com.smart.chat.couple.infrastructure.persistence.CoupleSpaceMapper;
+import com.smart.chat.couple.domain.space.CoupleSpace;
+import com.smart.chat.couple.domain.space.CoupleSpaceRepository;
 import com.smart.chat.sharedkernel.web.BusinessException;
 import com.smart.chat.messaging.infrastructure.transport.ImPushService;
 import org.junit.jupiter.api.BeforeEach;
@@ -39,7 +39,7 @@ import static org.mockito.Mockito.when;
 class CoupleEchoServiceTest {
 
     @Mock
-    private CoupleSpaceMapper spaceMapper;
+    private CoupleSpaceRepository spaceRepository;
     @Mock
     private CoupleEchoDeedMapper deedMapper;
     @Mock
@@ -57,13 +57,9 @@ class CoupleEchoServiceTest {
 
     @BeforeEach
     void setUp() {
-        CoupleSpacePO space = new CoupleSpacePO();
-        space.setId("s1");
-        space.setUserA("alice");
-        space.setUserB("bob");
-        space.setStatus(CoupleSpacePO.STATUS_ACTIVE);
-        lenient().when(spaceMapper.findActiveByUser("alice")).thenReturn(Optional.of(space));
-        lenient().when(spaceMapper.findActiveByUser("bob")).thenReturn(Optional.of(space));
+        CoupleSpace space = CoupleSpace.restore("s1", "alice", "bob", CoupleSpace.STATUS_ACTIVE, 0L, null, null, null, null, null, null, null);
+        lenient().when(spaceRepository.findActiveByMember("alice")).thenReturn(Optional.of(space));
+        lenient().when(spaceRepository.findActiveByMember("bob")).thenReturn(Optional.of(space));
 
         lenient().when(deedMapper.findByUser(eq("s1"), any())).thenAnswer(inv -> deeds.stream()
                 .filter(d -> d.getFromUser().equals(inv.getArgument(1))).toList());
@@ -153,7 +149,7 @@ class CoupleEchoServiceTest {
 
     @Test
     void noSpaceIs404() {
-        when(spaceMapper.findActiveByUser("carol")).thenReturn(Optional.empty());
+        when(spaceRepository.findActiveByMember("carol")).thenReturn(Optional.empty());
         assertThatThrownBy(() -> service.vault("carol"))
                 .isInstanceOf(BusinessException.class).hasMessageContaining("情侣空间");
         verify(ledgerMapper, never()).insert(any(CouplePointLedgerPO.class));

@@ -4,8 +4,8 @@ import com.smart.chat.couple.infrastructure.persistence.CoupleCatchSafewordPO;
 import com.smart.chat.couple.infrastructure.persistence.CoupleCatchSafewordMapper;
 import com.smart.chat.couple.infrastructure.persistence.CoupleCatchSafewordUsePO;
 import com.smart.chat.couple.infrastructure.persistence.CoupleCatchSafewordUseMapper;
-import com.smart.chat.couple.infrastructure.persistence.CoupleSpacePO;
-import com.smart.chat.couple.infrastructure.persistence.CoupleSpaceMapper;
+import com.smart.chat.couple.domain.space.CoupleSpace;
+import com.smart.chat.couple.domain.space.CoupleSpaceRepository;
 import com.smart.chat.sharedkernel.web.BusinessException;
 import com.smart.chat.messaging.infrastructure.transport.ImPushService;
 import org.junit.jupiter.api.BeforeEach;
@@ -38,7 +38,7 @@ import static org.mockito.Mockito.when;
 class CoupleCatchServiceTest {
 
     @Mock
-    private CoupleSpaceMapper spaceMapper;
+    private CoupleSpaceRepository spaceRepository;
     @Mock
     private CoupleCatchSafewordMapper safewordMapper;
     @Mock
@@ -56,14 +56,9 @@ class CoupleCatchServiceTest {
 
     @BeforeEach
     void setUp() {
-        CoupleSpacePO space = new CoupleSpacePO();
-        space.setId("s1");
-        space.setUserA("alice");
-        space.setUserB("bob");
-        space.setStatus(CoupleSpacePO.STATUS_ACTIVE);
-        space.setAnniversary(DAY);
-        lenient().when(spaceMapper.findActiveByUser("alice")).thenReturn(Optional.of(space));
-        lenient().when(spaceMapper.findActiveByUser("bob")).thenReturn(Optional.of(space));
+        CoupleSpace space = CoupleSpace.restore("s1", "alice", "bob", CoupleSpace.STATUS_ACTIVE, 0L, DAY, null, null, null, null, null, null);
+        lenient().when(spaceRepository.findActiveByMember("alice")).thenReturn(Optional.of(space));
+        lenient().when(spaceRepository.findActiveByMember("bob")).thenReturn(Optional.of(space));
 
         lenient().when(safewordMapper.findBySpace("s1")).thenAnswer(inv -> List.copyOf(words));
         lenient().when(safewordMapper.find(eq("s1"), any())).thenAnswer(inv -> words.stream()
@@ -162,7 +157,7 @@ class CoupleCatchServiceTest {
     @Test
     void missingRowsAre404AndNoSpaceIs404() {
         assertThatThrownBy(() -> service.reflectUse("alice", "nope", "x")).isInstanceOf(BusinessException.class);
-        when(spaceMapper.findActiveByUser("carol")).thenReturn(Optional.empty());
+        when(spaceRepository.findActiveByMember("carol")).thenReturn(Optional.empty());
         assertThatThrownBy(() -> service.board("carol")).isInstanceOf(BusinessException.class);
         verify(useMapper, never()).insert(any(CoupleCatchSafewordUsePO.class));
     }

@@ -6,8 +6,8 @@ import com.smart.chat.couple.infrastructure.persistence.CouplePointLedgerPO;
 import com.smart.chat.couple.infrastructure.persistence.CouplePointLedgerMapper;
 import com.smart.chat.couple.infrastructure.persistence.CoupleScratchPO;
 import com.smart.chat.couple.infrastructure.persistence.CoupleScratchMapper;
-import com.smart.chat.couple.infrastructure.persistence.CoupleSpacePO;
-import com.smart.chat.couple.infrastructure.persistence.CoupleSpaceMapper;
+import com.smart.chat.couple.domain.space.CoupleSpace;
+import com.smart.chat.couple.domain.space.CoupleSpaceRepository;
 import com.smart.chat.sharedkernel.web.BusinessException;
 import com.smart.chat.messaging.infrastructure.transport.ImPushService;
 import org.junit.jupiter.api.Test;
@@ -39,7 +39,7 @@ import static org.mockito.Mockito.when;
 class CoupleSurpriseServiceTest {
 
     @Mock
-    private CoupleSpaceMapper spaceMapper;
+    private CoupleSpaceRepository spaceRepository;
 
     @Mock
     private CoupleScratchMapper scratchMapper;
@@ -55,17 +55,12 @@ class CoupleSurpriseServiceTest {
     @InjectMocks
     private CoupleSurpriseService service;
 
-    private CoupleSpacePO space() {
-        CoupleSpacePO space = new CoupleSpacePO();
-        space.setId("s1");
-        space.setUserA("alice");
-        space.setUserB("bob");
-        space.setStatus(CoupleSpacePO.STATUS_ACTIVE);
-        return space;
+    private CoupleSpace space() {
+        return CoupleSpace.restore("s1", "alice", "bob", CoupleSpace.STATUS_ACTIVE, 0L, null, null, null, null, null, null, null);
     }
 
     private void stubSpace(String me) {
-        lenient().when(spaceMapper.findActiveByUser(me)).thenReturn(Optional.of(space()));
+        lenient().when(spaceRepository.findActiveByMember(me)).thenReturn(Optional.of(space()));
     }
 
     @Test

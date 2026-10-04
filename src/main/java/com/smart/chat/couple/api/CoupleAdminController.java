@@ -2,8 +2,8 @@ package com.smart.chat.couple.api;
 
 import com.smart.chat.couple.infrastructure.persistence.CoupleActionMapper;
 import com.smart.chat.couple.infrastructure.persistence.CoupleEchoDeedMapper;
-import com.smart.chat.couple.infrastructure.persistence.CoupleSpacePO;
-import com.smart.chat.couple.infrastructure.persistence.CoupleSpaceMapper;
+import com.smart.chat.couple.domain.space.CoupleSpace;
+import com.smart.chat.couple.domain.space.CoupleSpaceRepository;
 import com.smart.chat.identity.domain.AccountDirectory;
 import com.smart.chat.sharedkernel.web.ApiResponse;
 import com.smart.chat.sharedkernel.web.BusinessException;
@@ -31,15 +31,15 @@ public class CoupleAdminController {
                                 long totalDeeds, long spacesCreatedThisMonth) {
     }
 
-    private final CoupleSpaceMapper spaceMapper;
+    private final CoupleSpaceRepository spaceRepository;
     private final CoupleActionMapper actionMapper;
     private final CoupleEchoDeedMapper deedMapper;
     private final AccountDirectory accounts;
 
     @SuppressWarnings("java:S107")
-    public CoupleAdminController(CoupleSpaceMapper spaceMapper, CoupleActionMapper actionMapper,
+    public CoupleAdminController(CoupleSpaceRepository spaceRepository, CoupleActionMapper actionMapper,
                                  CoupleEchoDeedMapper deedMapper, AccountDirectory accounts) {
-        this.spaceMapper = spaceMapper;
+        this.spaceRepository = spaceRepository;
         this.actionMapper = actionMapper;
         this.deedMapper = deedMapper;
         this.accounts = accounts;
@@ -54,26 +54,26 @@ public class CoupleAdminController {
         } catch (BusinessException e) {
             throw new BusinessException(403, "仅管理员可查看运营看板");
         }
-        List<CoupleSpacePO> all = spaceMapper.selectList(null);
-        long active = all.stream().filter(s -> CoupleSpacePO.STATUS_ACTIVE.equals(s.getStatus())).count();
+        List<CoupleSpace> all = spaceRepository.findAll();
+        long active = all.stream().filter(CoupleSpace::isActive).count();
         long dissolved = all.size() - active;
         LocalDate now = LocalDate.now();
         long avgDays = active == 0 ? 0
                 : (long) all.stream()
-                        .filter(s -> CoupleSpacePO.STATUS_ACTIVE.equals(s.getStatus()))
+                        .filter(CoupleSpace::isActive)
                         .mapToLong(s -> {
                             LocalDate start;
                             try {
-                                start = LocalDate.parse(s.getAnniversary());
+                                start = LocalDate.parse(s.anniversary());
                             } catch (Exception e) {
-                                start = Instant.ofEpochMilli(s.getCreated()).atZone(ZoneId.systemDefault()).toLocalDate();
+                                start = Instant.ofEpochMilli(s.created()).atZone(ZoneId.systemDefault()).toLocalDate();
                             }
                             return Math.max(ChronoUnit.DAYS.between(start, now) + 1, 1);
                         })
                         .average().orElse(0);
         String monthPrefix = now.toString().substring(0, 7);
         long createdThisMonth = all.stream()
-                .filter(s -> Instant.ofEpochMilli(s.getCreated()).atZone(ZoneId.systemDefault())
+                .filter(s -> Instant.ofEpochMilli(s.created()).atZone(ZoneId.systemDefault())
                         .toLocalDate().toString().startsWith(monthPrefix))
                 .count();
         return ApiResponse.ok(new CoupleStatsVO(active, dissolved, avgDays,

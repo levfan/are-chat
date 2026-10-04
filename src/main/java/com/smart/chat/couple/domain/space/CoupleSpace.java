@@ -1,5 +1,7 @@
 package com.smart.chat.couple.domain.space;
 
+import com.smart.chat.couple.domain.RuleViolation;
+
 import java.util.Set;
 import java.util.UUID;
 
@@ -10,9 +12,11 @@ import java.util.UUID;
  * <ul>
  *   <li>userA/userB 永远是用户名（区分大小写）字典序小者为 A，全系统只在这一处规范化；</li>
  *   <li>一个空间只能从 ACTIVE 走到 DISSOLVED，且解散要落解散时刻；</li>
- *   <li>主题必须在白名单内，贴纸佩戴数不超过 {@link #STICKER_MAX}。</li>
+ *   <li>主题必须在白名单内，贴纸佩戴数不超过 {@link #STICKER_MAX}，爱称与宣言各有长度闸。</li>
  * </ul>
- * 与持久化模型（{@code CoupleSpacePO}）的换算只发生在 infrastructure 的仓储适配器里。
+ * 违规一律抛 {@link RuleViolation}，消息就是用户看到的那句原话（话术属于领域，见
+ * {@code couple.domain.RuleViolation}）；与持久化模型（{@code CoupleSpacePO}）的换算只发生在
+ * infrastructure 的仓储适配器里。
  */
 public final class CoupleSpace {
 
@@ -23,6 +27,12 @@ public final class CoupleSpace {
     public static final Set<String> THEMES = Set.of("classic", "cherry", "ocean", "forest", "night");
     /** F28 贴纸墙佩戴上限 */
     public static final int STICKER_MAX = 6;
+    /** 专属爱称上限（F105） */
+    public static final int NICK_MAX = 30;
+    /** 空间宣言上限（F27） */
+    public static final int SLOGAN_MAX = 60;
+    /** 一枚贴纸的 key 最长多少，超了就是前端传错了 */
+    public static final int STICKER_KEY_MAX = 30;
 
     private final String id;
     private final String userA;
@@ -99,68 +109,85 @@ public final class CoupleSpace {
         return userA.equals(username) ? nickA : nickB;
     }
 
-    /** 爱称只能由另一半来改，本人不能给自己起 */
-    public void renamePartner(String me, String nick) {
+    /** 爱称只能由另一半来改，本人不能给自己起；空串等于清除，最长 {@link #NICK_MAX} 个字。返回落定的爱称（null 表示已清除）。 */
+    public String renamePartner(String me, String nick) {
         String partner = partnerOf(me);
-        if (userA.equals(partner)) {
-            nickA = blankToNull(nick);
-        } else {
-            nickB = blankToNull(nick);
+        String cleaned = nick == null ? null : nick.trim();
+        if (cleaned != null && cleaned.length() > NICK_MAX) {
+            throw new RuleViolation("爱称最长 " + NICK_MAX + " 个字");
         }
+        cleaned = blankToNull(cleaned);
+        if (userA.equals(partner)) {
+            nickA = cleaned;
+        } else {
+            nickB = cleaned;
+        }
+        return cleaned;
     }
 
     // ===== 状态迁移 =====
 
     /** 解散：只有进行中的空间能解散，且必须落解散时刻 */
     public void dissolve(long at) {
-        if (!isActive()) {
-            throw new IllegalStateException("这个空间已经解散了");
-        }
+        requireActive("这个空间已经解散了");
         this.status = STATUS_DISSOLVED;
         this.dissolvedAt = at;
     }
 
-    /** 绑定「在一起」的日子（yyyy-MM-dd 的格式校验由调用方在入口做，这里是业务合法性） */
+    /** 绑定「在一起」的日子（yyyy-MM-dd 的解析由 application 在入口做，这里守业务合法性） */
     public void bindAnniversary(String date) {
-        if (!isActive()) {
-            throw new IllegalStateException("已解散的空间不再改纪念日");
-        }
+        requireActive("已解散的空间不再改纪念日");
         this.anniversary = blankToNull(date);
     }
 
-    /** 宣言 + 主题 + 贴纸墙三件套：主题与贴纸数量都在这里有闸 */
+    /** 宣言 + 主题 + 贴纸墙三件套：每一项的闸都在这里，任一传 null 表示该项不修改 */
     public void decorate(String slogan, String theme, String stickers) {
-        if (!isActive()) {
-            throw new IllegalStateException("已解散的空间不能改装扮");
+        requireActive("已解散的空间不能改装扮");
+        String newSlogan = slogan;
+        if (slogan != null) {
+            String text = slogan.trim();
+            if (text.length() > SLOGAN_MAX) {
+                throw new RuleViolation("宣言最多 " + SLOGAN_MAX + " 字，留白也很美");
+            }
+            newSlogan = text.isEmpty() ? null : text;
         }
         if (theme != null && !THEMES.contains(theme)) {
-            throw new IllegalArgumentException("没有这个空间主题：" + theme);
+            throw new RuleViolation("这个主题还没上架哦");
         }
-        if (stickers != null && countStickers(stickers) > STICKER_MAX) {
-            throw new IllegalArgumentException("贴纸最多佩戴 " + STICKER_MAX + " 枚");
+        String newStickers = stickers;
+        if (stickers != null) {
+            String normalized = stickers.trim();
+            if (!normalized.isEmpty()) {
+                String[] keys = normalized.split(",");
+                if (keys.length > STICKER_MAX) {
+                    throw new RuleViolation("贴纸墙最多佩戴 " + STICKER_MAX + " 枚");
+                }
+                for (String key : keys) {
+                    if (key.isBlank() || key.length() > STICKER_KEY_MAX) {
+                        throw new RuleViolation("贴纸选择有误，刷新后再试试");
+                    }
+                }
+            }
+            newStickers = normalized.isEmpty() ? null : normalized;
         }
-        this.slogan = blankToNull(slogan);
+        this.slogan = newSlogan;
         if (theme != null) {
             this.theme = theme;
         }
         if (stickers != null) {
-            this.stickers = blankToNull(stickers);
+            this.stickers = newStickers;
         }
     }
 
-    private static int countStickers(String csv) {
-        int n = 0;
-        for (String part : csv.split(",")) {
-            if (!part.isBlank()) {
-                n++;
-            }
+    private void requireActive(String whyNot) {
+        if (!isActive()) {
+            throw new RuleViolation(whyNot);
         }
-        return n;
     }
 
     private void requireMember(String me) {
         if (!contains(me)) {
-            throw new IllegalArgumentException("不是这个空间的成员：" + me);
+            throw new RuleViolation("不是这个空间的成员：" + me);
         }
     }
 

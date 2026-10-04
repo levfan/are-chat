@@ -4,8 +4,8 @@ import com.smart.chat.couple.domain.question.DailyQuestion;
 import com.smart.chat.couple.infrastructure.content.CoupleQuestionBank;
 import com.smart.chat.couple.infrastructure.persistence.CoupleQuestionAnswerMapper;
 import com.smart.chat.couple.infrastructure.persistence.CoupleQuestionAnswerPO;
-import com.smart.chat.couple.infrastructure.persistence.CoupleSpaceMapper;
-import com.smart.chat.couple.infrastructure.persistence.CoupleSpacePO;
+import com.smart.chat.couple.domain.space.CoupleSpaceRepository;
+import com.smart.chat.couple.domain.space.CoupleSpace;
 import com.smart.chat.messaging.domain.CoupleEventPublisher;
 import com.smart.chat.sharedkernel.web.BusinessException;
 import org.springframework.stereotype.Service;
@@ -46,13 +46,13 @@ public class CoupleQuestionService {
     public record HistoryListVO(List<HistoryVO> items, int answeredDays, int bothAnsweredDays) {
     }
 
-    private final CoupleSpaceMapper spaceMapper;
+    private final CoupleSpaceRepository spaceRepository;
     private final CoupleQuestionAnswerMapper answerMapper;
     private final CoupleEventPublisher push;
 
-    public CoupleQuestionService(CoupleSpaceMapper spaceMapper, CoupleQuestionAnswerMapper answerMapper,
+    public CoupleQuestionService(CoupleSpaceRepository spaceRepository, CoupleQuestionAnswerMapper answerMapper,
                                  CoupleEventPublisher push) {
-        this.spaceMapper = spaceMapper;
+        this.spaceRepository = spaceRepository;
         this.answerMapper = answerMapper;
         this.push = push;
     }
@@ -61,16 +61,16 @@ public class CoupleQuestionService {
 
     /** 今日一问：题目 + 我的回答 + （双方都答完才有的）TA 的回答。 */
     public TodayVO today(String me) {
-        CoupleSpacePO space = requireSpace(me);
+        CoupleSpace space = requireSpace(me);
         return todayOf(space, me);
     }
 
-    TodayVO todayOf(CoupleSpacePO space, String me) {
+    TodayVO todayOf(CoupleSpace space, String me) {
         String day = LocalDate.now().toString();
-        int index = CoupleQuestionBank.indexOf(space.getId(), day);
+        int index = CoupleQuestionBank.indexOf(space.id(), day);
         String question = CoupleQuestionBank.textAt(index);
-        CoupleQuestionAnswerPO mine = answerMapper.find(space.getId(), day, me).orElse(null);
-        CoupleQuestionAnswerPO theirs = answerMapper.find(space.getId(), day, space.partnerOf(me)).orElse(null);
+        CoupleQuestionAnswerPO mine = answerMapper.find(space.id(), day, me).orElse(null);
+        CoupleQuestionAnswerPO theirs = answerMapper.find(space.id(), day, space.partnerOf(me)).orElse(null);
         DailyQuestion view = DailyQuestion.of(day, index, question,
                 mine == null ? null : mine.getAnswer(), theirs == null ? null : theirs.getAnswer());
         return new TodayVO(day, index, view.question(),
@@ -82,10 +82,10 @@ public class CoupleQuestionService {
 
     /** 回看最近 N 天（1-90，默认 14）：没答的一侧留空，答完才互看。 */
     public HistoryListVO history(String me, Integer days) {
-        CoupleSpacePO space = requireSpace(me);
+        CoupleSpace space = requireSpace(me);
         int limit = days == null || days <= 0 ? 14 : Math.min(days, HISTORY_MAX);
         String startDay = LocalDate.now().minusDays(limit - 1L).toString();
-        List<CoupleQuestionAnswerPO> rows = answerMapper.findBySpaceFrom(space.getId(), startDay);
+        List<CoupleQuestionAnswerPO> rows = answerMapper.findBySpaceFrom(space.id(), startDay);
         List<String> dayKeys = new ArrayList<>();
         for (CoupleQuestionAnswerPO row : rows) {
             if (!dayKeys.contains(row.getDay())) {
@@ -117,22 +117,22 @@ public class CoupleQuestionService {
 
     /** 回答（或改写今天的答案）：闸门在 DailyQuestion，返回整份今日视图。 */
     public TodayVO answer(String me, String text) {
-        CoupleSpacePO space = requireSpace(me);
+        CoupleSpace space = requireSpace(me);
         String answer = rule(() -> DailyQuestion.requireAnswerText(text));
         String day = LocalDate.now().toString();
-        int index = CoupleQuestionBank.indexOf(space.getId(), day);
+        int index = CoupleQuestionBank.indexOf(space.id(), day);
         String question = CoupleQuestionBank.textAt(index);
-        Optional<CoupleQuestionAnswerPO> existing = answerMapper.find(space.getId(), day, me);
+        Optional<CoupleQuestionAnswerPO> existing = answerMapper.find(space.id(), day, me);
         if (existing.isPresent()) {
             CoupleQuestionAnswerPO row = existing.get();
             row.setAnswer(answer);
             row.setUpdatedAt(System.currentTimeMillis());
             answerMapper.updateById(row);
         } else {
-            answerMapper.insert(CoupleQuestionAnswerPO.of(space.getId(), day, index, question, me, answer));
+            answerMapper.insert(CoupleQuestionAnswerPO.of(space.id(), day, index, question, me, answer));
         }
         String partner = space.partnerOf(me);
-        boolean partnerAnswered = answerMapper.find(space.getId(), day, partner).isPresent();
+        boolean partnerAnswered = answerMapper.find(space.id(), day, partner).isPresent();
         push.pushCoupleEvent("question-answered", me, partner,
                 partnerAnswered ? "你们今天的每日一问都答完啦 💬 可以互看"
                         : "TA 答了今天的每日一问 💬 你也答一个就能互相看到");
@@ -147,12 +147,12 @@ public class CoupleQuestionService {
      */
     public void remindDailyQuestion() {
         String day = LocalDate.now().toString();
-        for (CoupleSpacePO space : spaceMapper.findAllActive()) {
-            if (answerMapper.findBySpaceAndDay(space.getId(), day).size() >= 2) {
+        for (CoupleSpace space : spaceRepository.findAllActive()) {
+            if (answerMapper.findBySpaceAndDay(space.id(), day).size() >= 2) {
                 continue;
             }
-            String question = CoupleQuestionBank.textAt(CoupleQuestionBank.indexOf(space.getId(), day));
-            push.pushCoupleEventBoth("question-daily", space.getUserA(), space.getUserA(), space.getUserB(),
+            String question = CoupleQuestionBank.textAt(CoupleQuestionBank.indexOf(space.id(), day));
+            push.pushCoupleEventBoth("question-daily", space.userA(), space.userA(), space.userB(),
                     "今天的每日一问：" + question + " 💬 两个人都答完才能互看");
         }
     }
@@ -178,8 +178,8 @@ public class CoupleQuestionService {
         return null;
     }
 
-    private CoupleSpacePO requireSpace(String me) {
-        return spaceMapper.findActiveByUser(me)
+    private CoupleSpace requireSpace(String me) {
+        return spaceRepository.findActiveByMember(me)
                 .orElseThrow(() -> new BusinessException(404, "还没有建立情侣空间，先邀请一位好友吧"));
     }
 }
