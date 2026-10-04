@@ -1,7 +1,7 @@
 # ADR-0002：MyBatis-Plus 实体降级为 `*PO`，业务名让给领域聚合
 
-- 状态：已采纳（2026-10-04），**先只用于 couple 上下文**
-- 相关：`docs/ddd/02-layering.md` 第三节
+- 状态：已采纳（2026-10-04），**第 4 条已于 2026-10-05 由 ADR-0008 第 2 条废止**：`*PO` 改名推广到全部五个上下文，本 ADR 第 1～3 条对每个上下文同样成立
+- 相关：`docs/ddd/02-layering.md` 第三节、`docs/adr/0008-tactical-refactor-covers-all-contexts.md`
 
 ## 背景
 
@@ -12,7 +12,7 @@
 1. `couple` 上下文的 19 个实体改名为 `*PO` 并归 `couple/infrastructure/persistence`，只保留映射职责（`@TableName` 值、列名、`@TableId(IdType.INPUT)` 原样不动）。
 2. 业务名（`CoupleSpace`、`CoupleMood`…）**让给** `couple/domain/model` 里的聚合与值对象。
 3. PO ↔ 聚合的翻译只发生在 `infrastructure/persistence/*RepositoryImpl` 适配器内。
-4. 其余四个上下文暂不执行本 ADR（实体仍叫原名、仍在 `infrastructure/persistence`），在其改造轮次再套同一条规则。
+4. ~~其余四个上下文暂不执行本 ADR（实体仍叫原名、仍在 `infrastructure/persistence`），在其改造轮次再套同一条规则。~~ ——这条"再套"在 2026-10-05 兑现了，见 ADR-0008 第 2 条。
 
 ## 理由
 

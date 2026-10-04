@@ -6,10 +6,11 @@
 
 ```
 <context>/
-├── api/                     入站适配：@RestController + 请求体 record + 响应 VO
-├── application/             用例编排：Service（事务边界、幂等闸门、编排端口），不含业务判定
+├── api/                     入站适配：@RestController + 请求体 record
+├── application/             用例编排：Service（事务边界、幂等闸门、编排端口）+ 对外投影 VO（见 ADR-0008 第 5 条）
+│                            ★ 不得 import 本上下文 infrastructure.persistence：取数一律经 domain 的仓储端口
 ├── domain/                  领域层：model（聚合/实体/值对象）、policy（判定规则）、event、repository（端口接口）
-│                            ★ 纯 Java：不得 import Spring web、MyBatis、fastjson、HttpSession、ApiResponse
+│                            ★ 纯 Java：不得 import Spring web、MyBatis、fastjson、HttpSession、ApiResponse，也不得带容器/ORM 注解
 └── infrastructure/          出站适配：persistence（PO + Mapper + 端口实现适配器）、content（静态内容库）、
                              transport / notify / scheduler / boot
 ```
@@ -20,7 +21,7 @@
 api → application → domain ← infrastructure
 ```
 
-`domain` 不依赖任何其它层；`infrastructure` 实现 `domain` 声明的端口（依赖倒置）。**允许** `application` 直接用 PO 吗？——**只有状态为「未改造」的上下文允许**，且必须在 `docs/ddd/03-phase-plan.md` 的状态表里显式记账，并由守卫测试的 allowlist 兜住（见第五节）。
+`domain` 不依赖任何其它层；`infrastructure` 实现 `domain` 声明的端口（依赖倒置）。**`application` 直接用 PO 吗？——不允许**（ADR-0008 第 2、3 条把这条推平到五个上下文）：过渡期仍在直接摸 PO 的上下文由守卫的 `TACTICAL_PENDING` 集合逐上下文记账，**该集合只能缩短，且必须与实测违规一致**（收口了还留在账上，守卫同样红）。
 
 ## 二、四类文件的归属判据
 
@@ -60,11 +61,12 @@ MyBatis-Plus 的实体同时扮演了「表映射」和「业务对象」两件�
 
 ## 五、违规怎么被拦住
 
-不引 ArchUnit（本机 Maven 离线仓库无该依赖，见 `docs/adr/0004`），改由 `src/test/java/com/smart/chat/ArchitectureGuardTest` 直接读源码做四条断言：
+不引 ArchUnit（本机 Maven 离线仓库无该依赖，见 `docs/adr/0004`），改由 `src/test/java/com/smart/chat/ArchitectureGuardTest` 直接读源码做五条断言：
 
-1. `domain/**` 不得 import `org.springframework.web` / `org.apache.ibatis` / `com.baomidou` / `jakarta.servlet` / `com.smart.chat.*.api` / `*.infrastructure`；
+1. `domain/**` 不得 import `org.springframework.web` / `org.apache.ibatis` / `com.baomidou` / `jakarta.servlet` / `com.smart.chat.*.api` / `*.infrastructure`，**也不得出现 `@Component/@Service/@Repository/@Autowired/@Resource/@TableName/@TableId/@TableField`**（按正则匹配，全限定写法一样拦）；
 2. `infrastructure/**` 不得 import 同上下文的 `api`；
 3. 上下文之间：`<A>/domain` 之外，`<A>/**` 不得 import `<B>/application` 或 `<B>/infrastructure`（只能 import `<B>/domain` 的端口，或走 `sharedkernel`）；
-4. 业务上下文只许 import `bootstrap.properties.*`（`@ConfigurationProperties` 值绑定，实测 5 处）；import `bootstrap.config.*` 就是装配层被业务反向依赖，违规。
+4. 业务上下文只许 import `bootstrap.properties.*`（`@ConfigurationProperties` 值绑定，实测 5 处）；import `bootstrap.config.*` 就是装配层被业务反向依赖，违规；
+5. `application/**` 与 `domain/**` 不得 import **本上下文**的 `infrastructure.persistence`——PO 与 Mapper 被封在 `infrastructure` 内，取数一律经 `domain` 的仓储端口（ADR-0008 第 2、3 条把这条推平到五个上下文）。
 
-未改造上下文（messaging/identity/platform/filestorage）对第 1、3 条**逐条登记在 allowlist**，allowlist 只能缩短不能加长——防止债务在新代码里悄悄扩大。守卫本身要证明能变红（临时插一条违规 import，测试必须失败）。
+第 5 条在改造期用 `TACTICAL_PENDING` 集合记账，但它**不是豁免名单**：`tacticalLedgerMatchesReality` 断言该集合必须与「实测仍有 PO 外泄的上下文」完全相等——收口了还挂着（账本过期假装还在改）和没收口就摘掉（放过违规）两边都红。守卫新规则逐条做过注入违规的变红实测，台账见 `03-phase-plan.md` 第 2.7 节。
