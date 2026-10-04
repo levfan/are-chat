@@ -342,21 +342,61 @@ score = 心情条数×1 + 贴贴双向往来天数×2 + 今日留灯天数×3 + 
 
 跨仓改动一律分批 commit、数据库脚本独立成 commit；**本轮不 push**，等用户过一遍再推。
 
-## 九、执行进度账（跨会话续接用，每轮更新）
+## 九、执行进度账（本轮已收官）
 
-基线（本轮开工前实测，判定"有没有改坏"的对照物）：
+**结论：裁剪已全部落地，两仓构建与测试双绿，未 push。**
 
-| 项 | 基线值 | 取法 |
+### 9.1 收口后的规模（全部为实测，不是估算）
+
+| 维度 | 裁剪前 | 现在 | 判据来源 |
+|---|---:|---:|---|
+| 后端 couple 包 java 文件 | 292 | **74** | `find src/main/java/com/smart/chat/couple -name '*.java' \| wc -l` 实测（本表早前记的 78 是删干净前的草稿数） |
+| 后端 Controller | 30 | **13** | 源码扫描 |
+| 后端 HTTP 映射 | 793（v7 快照） | **57** | `@*Mapping` 抽取 |
+| couple_* 表 | 297 建过 | **19 存活**（V50 drop 193 + V51 drop 85） | 实体 `@TableName` 反查 |
+| 前端功能卡 | 110（registry） | **10** | registry 计数 |
+| 前端页签 | 11（含 5 组子页签） | **3**（today/life/gift，无子页签） | CoupleView |
+| 前端情侣组件 | 40 | **13**（含 registry/Collapsible） | ls 计数 |
+| `api/couple.ts` 方法 | 565（2096 行） | **57（218 行）** | 按后端存活端点逐条比对 |
+| `types/index.ts` | 403 个类型 / 4132 行 | **200 个 / 1974 行**（情侣死类型删 203） | 分词引用扫描 |
+| `stores/couple.ts` | 3453 行 | **370 行** | wc |
+| 后端情侣 WS 事件 | ~472 | **37** | Service/Job 源码抽取 |
+
+### 9.2 验收台账（每步的实际退出码）
+
+| 步骤 | 命令 | 结果 |
 |---|---|---|
-| 后端全量测试 | **272 用例，Failures 0 / Errors 0，`MVN_EXIT=0`，BUILD SUCCESS** | `mvn -o test > .tmp-audit/base-be-test.log 2>&1` 后读日志内 `MVN_EXIT` |
-| 前端单测 | **182 用例全过（7 个 spec 文件），`FE_TEST_EXIT=0`** | `pnpm test > .tmp-audit/base-fe-test.log` |
-| 前端构建 | **`FE_BUILD_EXIT=0`，built in 1.06s** | `pnpm build > .tmp-audit/base-fe-build.log` |
-| 情侣空间现存卡 | **110 张**（`coupleCards.registry.ts`） | `grep -c "{ key: 'couple-"` |
-| 后端 couple 包 | **292 个 java 文件 / 30 个 Controller / 104 个带 `@TableName` 的实体** | `.tmp-audit/dep-graph.mjs` |
-| 前端 api 方法 | **565 个**（`coupleApi` 1 + 13 个独立 api 组） | `.tmp-audit/fe-api-map.mjs` |
+| 裁剪前基线 | `mvn -o test` | 272 用例 0 失败，MVN_EXIT=0 |
+| 裁剪前基线 | `pnpm test` / `pnpm build` | 182 用例 / build，双 EXIT=0 |
+| 第十六轮（整模块清零 17 个） | `mvn -o test` | 184 用例 0 失败，EXIT=0 |
+| 第十七轮（9 模块定向删） | `mvn -q -o clean compile` | EXIT=0 |
+| 心动值改算 | `mvn -o test` | 158 用例 0 失败，EXIT=0 |
+| V51 + schema 同步 | `mvn -o test`（H2 空库全量重放） | Successfully applied 51 migrations，now at v51，EXIT=0 |
+| 结构对账 | `verify-v51.mjs` | 297 − 278 = 19，四条集合等式闭合 |
+| 前端裁剪后 | `pnpm build` / `pnpm test` | EXIT=0 / 74 用例全过（含一条 mock 覆盖守卫） |
+| 收尾清码 | `pnpm build` / `pnpm test` | EXIT=0 / EXIT=0（CoupleView 死代码与 coupleTheme.ts 删除后复跑） |
+| 前后端契约 | `contract-check.mjs` 24 对 | 逐字段（名+顺序）零不一致 |
+| WS 事件对账 | 后端 `pushCouple*` 抽取 40 项 − 2 个私信域 − 1 个实参字面量 = 37，与 `are-chat-web/wiki/ws-events.md` 表内 37 项做集合差 | 双向「只在一边」均为空 |
 
-> 注意：`are-chat-map` skill 里写的「57 Controller / 793 映射 / 310 表 / 615 用例」是裁剪前的历史快照，本轮之后一律以上表为准，收尾时按第八节第 7 步更新该 skill。
+守卫可证伪性（都是先证明它会红才当证据用）：
+- 保留清单命中数断言：把一张卡名改错 → 命中 9 → 抛错；
+- `gen-v51` 的 `alive ∩ drop = ∅` 与 `V50∪V51 = 应删全集` 两条集合等式；
+- `sync-schema-v51` 改成先算后写，算术不闭合即拒写盘；
+- `prune-api` 首轮跑出「保留 0 / 删除 565」正是因为归一化顺序错，被"保留数应等于端点数"这条对账暴露；
+- `prune-api-imports` / `prune-types` 都带"随机取一个判为活的类型反查"的自证，且踩过一次真坑：脚本里的 `\b` 被批量编辑退化成退格符，判据静默全空——现在一律改用标识符分词集合；
+- **新增**：`gen-wiki-api-layer.mjs` 的「说明列不得抽到代码」守卫——注入一段 `http.postJson<...>` 假文案后脚本 EXIT=1 并逐行点名，先证明能红；同一脚本另带「方法数必须 57」「每个方法必须抽到 URL」两条。
+- **新增**：`couple.spec.ts` 的「mock 工厂必须覆盖 api/couple.ts 的每个方法」守卫——删掉 `comfortCards`（`beforeEach` 完全不引用的方法）→ `Tests 2 failed \| 22 passed`，报 `mock 工厂缺：coupleApi.comfortCards`；反向证据也记着：删 `sendAction` 时**没有**这条守卫会 23/23 全绿，说明「逐个列出 mock」本身不是守卫，用例真点到的路径才是。
 
-| 模块 | 目标留卡 | 后端 | 前端 |
-|---|---:|---|---|
-| （执行中逐项勾选，见下方「执行流水」） | | | |
+### 9.3 保留的 19 张表与 10 张卡的对应
+
+地基 5：`couple_space` `couple_invite` `couple_anniversary` `couple_notify` `couple_user_pin`
+心动值供数 1：`couple_point_ledger`（三赚一花全保留）
+卡 14：mood(+mood_reaction) / action / comfort / catch_safeword(+use) / dine_ticket / echo_deed / ceremony_coupon / spin_task / quest_overtime / scratch / mystery_box
+
+### 9.4 有意没做的事（下次别当缺陷顺手"修"）
+
+1. **前端未做真后端逐按钮巡检**：本轮只跑了 vitest（74 用例）与 vue-tsc，没有起后端+浏览器逐卡点击。按 v7 的教训，只有真后端巡检能照出运行时 500 与"点了没反应"，**这项待做**。
+2. **`docs/couple-features-v3~v7.md` 未同步删减**：那些是历史规格，保留原样作为决策留痕；只在 `docs/couple-features.md` 顶部加了一条「历史记录，非现役清单」的指路横幅，正文一字未改。现役口径以本文档第四节 + 两仓 `*-map` skill 为准。
+3. **wiki 已与代码逐条重核**：后端 `Home/architecture/api/couple-space/database/modules/scheduled-jobs`、前端 `Home/architecture/pages-routing/state-management/api-layer/ws-events/testing/dev-guide` 全部按现役代码改过（api-layer 由 `gen-wiki-api-layer.mjs` 从源码生成，不手抄）；`docs/acceptance-v5~v7.md` 是带时间戳的验收记录，按其自身口径不动。
+4. **心动值阶梯阈值未重标定**（仍 0/50/150/300/500/800/1300）：换成六项活数据源后同样日子的分会变，故意不动，避免"裁剪即掉级"的观感；若要重标定请单独提一次。
+5. **两仓均未 push**：本轮按任务既定口径只做到本地 commit，等人工过一遍。

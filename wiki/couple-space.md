@@ -1,112 +1,74 @@
 # 情侣空间业务全景
 
-> 本页回答：couple 包按 F 批次做了哪些功能域、各自对应哪个 Controller、以及贯穿全局的核心业务规则与内容库。
+> 本页回答：couple 包现在有哪些功能、各自对应哪个 Controller/Service/表，以及贯穿全局的核心业务规则与内容库。
+
+**2026-10-04 系统裁剪后的现役口径**：全模块按五维打分（操作轻简 / 吸引兴趣 / 情绪价值 / 具体不虚 / 日常频次）排序后**只保留 10 张功能卡**。
+排序表、切线规则与落选理由的唯一依据是 [../docs/couple-trim-ranking.md](../docs/couple-trim-ranking.md)，本页是它落地后的代码事实。
+现役规模：**74 个 java 文件 / 13 个 Controller / 57 个映射 / 19 张 `couple_*` 表 / 37 个 WS 事件**。
 
 ## 聚合根与基本设定
 
-- `CoupleSpace` 是唯一聚合根：绑定后双方固定存为 `userA`/`userB`（**字典序小者为 A**），`partnerOf(me)` 取对方；各功能表均带 `space_id` 外键列。
+- `CoupleSpace` 是唯一聚合根：绑定后双方固定存为 `userA`/`userB`（**字典序小者为 A**），`partnerOf(me)` 取对方；各功能表都带 `space_id` 列。
 - 建立流程：`POST /api/couple/invites` 邀请 → 对方 accept（事件 `invite-accepted`）；解除走 `/dissolve`（事件 `dissolved`）。
-- Service 统一经 `requireSpace(me)` 拿有效空间，无效抛 404。
-- 所有互动数据双方可见（个别"待收/在途"状态对对方隐藏，见规则表）。
-- 运营侧：`CoupleAdminController` `/api/couple/admin/stats` 仅管理员（F45）。
+- Service 一律经 `requireSpace(me)` 拿有效空间，拿不到抛 404「还没有建立情侣空间，先邀请一位好友吧」——前端各处 `safeLoad` 静默降级依赖这句。
+- 互动数据双方可见；「在途/保密」态由**服务端读时过滤**而不是靠前端不渲染（例：安全词的复盘只有喊停人自己能补）。
+- 运营侧：`CoupleAdminController /api/couple/admin/stats` 仅管理员，统计项只吃仍在线的 `couple_action` 与 `couple_echo_deed`。
 
-## 核心业务规则（跨功能域复用的机制）
+## 保留的 10 张卡
 
-| 规则 | 机制 | 典型用例 |
-|---|---|---|
-| **双答互见** | 一方作答只见自己；双方都答完才互见并触发 `pushCoupleEventBoth` | 今日一问（couple_answer）、默契大考验、心灵感应、真心话、如果问答、灵魂一问、每周高光互评、月度互评、十年之约 |
-| **stableHash 按天/周稳定** | `CoupleRitualBank.stableHash`（FNV-1a），以 空间+epochDay（或+周） 为种子，同一天同空间双方抽到同一内容 | 今日一问题库轮换、每日挑战、任务卡、情话抽卡、周末盲选、银发情话、刮刮乐按周发券 |
-| **周一锚** | 周报/周度功能以周一为周起点（不是自然周日起） | 默契周报、经营周报、每周高光互评、家庭会议（周锚=周一） |
-| **主理人轮换** | 以周一日号奇偶在 userA/userB 间单双周轮换；非主理人排本周期计划返回 403 | F181 本周主理人（`couple_week_host`） |
-| **状态机只前进** | 多阶段状态仅允许单向推进，不能回退 | 技能交换 OPEN→TAKEN→DONE、美食 WANT→EATEN、情绪SOS SENT→HELD、自定义成就 OPEN→ISSUED、策划案 IDEA→LOCKED→DONE、情话Battle OPEN→FULL→DONE、漂流瓶 FLOATING→REPLIED、愿望券 OPEN→USED、决议 PENDING→PASSED/VETOED |
-| **每人限额/频控** | 每日/同时在途数量限制，重复提交视为更新或 400 | 求抱抱每天 1 条、道歉券同时最多 2 张有效、信任币每天 1 枚、玫瑰每天 3 朵、浇水每天 1 次、心灵感应每天 3 轮、比划猜每天 5 轮、催办 1 小时冷却、封官待任命最多 2 个、感谢工资一月一次 |
-| **惰性结算/懒生成** | 读时评估、无到点任务：到期状态在下次读取或下一次扫描时结算 | 刮刮乐周卡懒生成、守护兽心情惰性衰减、隐藏成就读时达标自动 insert+推双方、花园首次访问自动开垦 |
-| **预告→延迟送达** | 存时只发预告事件，内容定时送达 | 情话储蓄罐（存时 `love-bank-deposit` 预告，21:00 利息送达）、悄悄话慢递信箱、醒来第一条（睡前封存次日达）、心动闹钟/思念速递（Job 每分钟扫描） |
-| **判分权在前端/出题人** | 后端只出正确答案索引或把判分权给出题人 | 恋爱问答机（正确索引随题返回）、词典小考、出题考TA（作答对对方隐藏，判分后公开） |
-| **提案人回避** | 发起方不能自己完成生效动作 | 条约盖章只能对方、家规提案人不能自签、技能交换不能自揭摊、树洞不能自问自答、安心话只能收对方存的、董事会决议本人不能裁自己的案、金点子只能对方采纳、头衔任命章只能本人盖 |
+| 卡 key | 功能 | Controller（前缀） | Service | 表 | 关键规则 |
+|---|---|---|---|---|---|
+| `couple-mood` | 心情日记 | `CoupleController` `/api/couple` | `CoupleService` | `couple_mood` | 每人每天一条，重复提交=改写；被心动值与深夜陪伴消费 |
+| `couple-bond` | 贴贴宫格 | `CoupleBondController` `/bond` | `CoupleBondService` | `couple_action` | 7 种动作；里程碑按累计计数推 `bond-milestone`；带专属爱称与心情回应 |
+| `couple-comfort` | 求抱抱 | `CoupleCareController` `/care` | `CoupleComfortService` | `couple_comfort` | 感受五白名单，每人每天一条；**回应只有对方能发**；23:00 未被接住才推 `night-care` |
+| `couple-catch-safeword` | 安全词与暂停复盘 | `CoupleCatchController` `/catch` | `CoupleCatchService` | `couple_catch_safeword`, `..._use` | 没约定就喊不出口；一天一人只记一次；复盘只有喊停本人能补；`usedTodayMine/Partner` 由后端下发 |
+| `couple-dine-today` | 今晚饭桌 | `CoupleDiningController` `/dining` | `CoupleDiningService` | `couple_dine_ticket` | 每人一票，撞菜推 `dine-hit`；裁决 = 当日票池去重后按 `stableHash(space\|dine-verdict\|day)` 取一道，**两人刷新结果一致** |
+| `couple-fy-spin` | 家务轮盘 | `CoupleFactoryController` `/factory` | `CoupleFactoryService` | `couple_spin_task` | 一周一转 ≤8 项；**自己的活自己认不了账**；认账后本人才能打勾；干完 +3 分、周全清双方各 +2 |
+| `couple-quest-overtime` | 加班预报与留灯 | `CoupleQuestController` `/quest` | `CoupleQuestService` | `couple_quest_overtime` | 13-23 钳制；**灯卡只有对方能留**且 TA 必须已预报；每人每天一行可改写 |
+| `couple-echo-deed` | 好事簿 | `CoupleEchoController` `/echo` | `CoupleEchoService` | `couple_echo_deed` | 同日同人同内容 400；分给**被记的那位**（+2），加星再 +1；加星只归记录人且按行幂等 |
+| `couple-cere-coupon` | 愿望券本 | `CoupleCeremonyController` `/ceremony` | `CoupleCeremonyService` | `couple_ceremony_coupon` | 发券先扣发券人 10 分（余额不足 400 并点名去好事簿）；OPEN→USED 已核销再核 400 |
+| `couple-surprise` | 刮刮乐与盲盒 | `CoupleSurpriseController` `/surprise` | `CoupleSurpriseService` | `couple_scratch`, `couple_mystery_box` | 券周卡懒生成两张；未刮开时对收券人隐藏券面；**只有送券人能点已兑现**（+5 归送券人）；盲盒到日才可拆且装盒人不能自拆 |
 
-## F 批次功能域总表
+地基（不是一张卡，删不得）：`CoupleController` 的邀请建立 / 纪念日 / 空间个性化 / `relationship-of` / **心动值**，`CoupleNotifyController`（F41 通知中心），`CouplePinController`（F207 常用收藏）。
 
-按迁移批次叙述（F 编号为产品功能批次号；细节以代码为准）。
+## 心动值与积分（裁剪后重算的口径）
 
-### 基础期（V1–V14，F1–F48）
+- **心动值** `CoupleService.intimacy()` 是**读时算、无表**：
+  `心情条数×1 + 贴贴双向往来天数×2 + 好事簿条数×2 + 留灯次数×3 + 安全词复盘次数×2 + 台账累计 EARN×1`。
+  六项全部由保留卡供数（原「互道早安/晚安」「每日一问双答」两项随功能下线被移除，留着就是永远为 0 的死项）。
+  **7 级阶梯阈值未重标定**：0/50/150/300/500/800/1300 → 怦然心动 / 心动初启 / 甜甜热恋 / 形影不离 / 心有灵犀 / 相依相伴 / 相守一生。回归锁在 `CoupleIntimacyTest`。
+- **积分台账** `couple_point_ledger` 保留，闭环是「三赚一花」：
+  EARN = 好事簿（+2/+1）、家务轮盘（+3/+2）、刮刮乐核销（+5）；SPEND = 愿望券本发券（−10）。
+  归属人有两处反直觉、以源码为准：**好事簿的分给「被记的那位」**（做事的人拿分），**刮刮乐的分给「送券人」**（`redeemScratch` 只允许 `fromUser` 点）。
 
-| 批次 | 功能域 | Controller 前缀 | 关键规则/说明 |
-|---|---|---|---|
-| V1 | 邀请绑定、约定承诺卡、早晚安打卡、今日一问、共享清单、共同日历（纪念日） | `/api/couple` | 一问双答互见 + 按 epochDay 轮换 105 题库；纪念日双方可改 |
-| V3 | 心情日记 | `/api/couple` moods | 每人每天一条+一句话，双方可见，形成双曲线 |
-| V4 | 悄悄话信箱 | `/api/couple` letters | deliverAt 空=立即可拆，非空=7 天内慢递；未到期对收件人隐藏；仅发件人可撤回（未拆时） |
-| V5 | 恋爱条约 / 双方城市 / 心愿基金 | `/api/couple` pacts·cities·funds | 条约一方提出对方盖章生效；城市匹配内置库算时差距离；基金存够自动达成庆祝 |
-| V6 | 贴贴动作 / 心情回应 / 专属爱称 | `/api/couple/bond` | 一键小动作流水、里程碑统计；回应 TA 的心情（抱抱/亲亲/加油/摸摸头） |
-| V7 | 甜蜜任务卡 / 默契大考验 | `/api/couple/ritual` | 任务卡按天稳定生成重复拉取同一张；默契第二人提交即结算 |
-| V8 | 情绪天气预报 / 情绪急救箱 / 和好卡 / 夸夸墙 / 生理期 | `/api/couple/care` | 连续低落提醒对方（Job）；和好卡对方接受即和好；夸夸卡签收 |
-| V9 | 时光胶囊 / 倒数日 | `/api/couple/memory` | 胶囊 30~365 天（后放宽）封→到期 Job 提醒→收件人开；徽章墙/那年今天/月报为实时聚合 |
-| V10 | 记账本 / 家务轮值 / 约会规划 / 双人习惯 / 暗号小本本 | `/api/couple/life` | 金额单位分；家务 ALTERNATE 每次轮换自动换人；习惯打卡幂等 |
-| V11 | 空间个性化 F26-F28 | `/api/couple` profile | 一句话宣言/主题/贴纸墙，挂空间头部 |
-| V12 | 私聊心动时刻 F36 | `/api/messages` hearts | IM 侧标记，双方可标/取消 |
-| V13 | 通知中心 F41 / 生日 F42 | `/api/couple/notify`、`/api/profile` | 所有情侣推送落库 `couple_notify` 供离线补看；生日资料+好友生日列表 |
-| V14 | 第一次清单 F46 / 一问互评 F48 | `/api/couple/memory` firsts、`/api/couple` answers/{day}/react | 互评每人每天一条可改 |
+## 核心业务规则（跨卡通用）
 
-### 主题批次（V15–V33，F50–F249）
+1. **每人每天一行**的地方一律 upsert，改写不重复推送（mood / comfort / safeword use / dine ticket / overtime）。
+2. **"只有对方能…"**是本模块的情绪价值支点：留灯、回应求抱抱、盲盒开箱、安全词复盘的归属都在服务端校验，前端只负责把不该出现的按钮收口成禁用态。
+3. **列表都被 LIMIT 钳制**（如用 `uses` 算 `monthUses`、看板各列表 ≤20/≤30）：需要"全量计数"时后端直查原始表，不从已钳制的列表回算。
+4. 静态内容只增不改顺序；按天/按空间稳定取值统一走 `CoupleRitualBank.stableHash`（FNV-1a）。
+5. 文案一律中文口语化带 emoji，业务失败抛 `BusinessException(400, 人话)`，前端 `ElMessage.error` 直透不重写。
 
-| 批次 | 主题 | Controller 前缀 | 功能与规则要点 |
-|---|---|---|---|
-| F50-F59 | 惊喜与期待 | `/api/couple/surprise`、`/api/couple/garden` | 刮刮乐（周卡懒生成→刮开→送券人核销闭环）；恋爱盲盒（装盒最早明天开，到日开箱）；心动闹钟（24h 内定时）；思念速递（5~30min 随机延迟）；藏宝图（埋任务+奖品→挖宝）；告白重现（每年今天 Job 重播）；花园（浇水 0-6 阶段、缺水会蔫、浇水复活）；每日玫瑰（每人 3 朵+随机花语）；幸运签（每天为 TA 抽一支可覆盖）；生日彩蛋 F59/F92（Job 读 UserProfile.birthday，前 3 天 `birthday-eve` 预告） |
-| F60-F69 | 懂我与被接住 | `/api/couple/care`（扩展）、`/api/couple/makeup`、`/api/couple/talk` | 求抱抱（每天 1 条，按感受抽 3 张安慰话术卡，回应"把抱抱和那句话送过去"）；矛盾复盘（双方各写一份，齐了合成和好锦囊）；道歉券（同时 2 张有效，对方收下）；真心话（空间+天稳定同题，双答互见+存档）；匿名树洞（在途限 1 个，回答后揭晓身份）；心灵感应（题库选项作答，每天 3 轮，双答自动结算）；情话储蓄罐（存入只发预告，21:00 利息送达）；F63 陪聊话题卡 / F64 情绪同步率 / F65 深夜陪伴为无表聚合 |
-| F70-F79 | 共同养成 | `/api/couple/growth` | 双人挑战赛（空间+天稳定一题，双完成达成）；恋爱存折（每天一笔小事+连续天数 5 档里程碑）；百日之约（单活跃约定、每日打卡满 100 天自动达成、可中止）；心愿互换（许愿/接单/实现）；共读计划（各自报进度，双方到终点完结）；旅行心愿地图（钉地点/打卡去过）；追剧清单（共同集数到总集数完结）；恋爱词典（专属词汇）；下次一定（登记/1h 冷却催办/兑现）；F77 星座配对纯静态（元素相性+稳定哈希恒定评语） |
-| F80-F89 | 回忆资产 | `/api/couple/chronicle`、`/api/couple/keepsake` | 恋爱编年史（firsts/纪念日/胶囊/兑现/旅行/真心话按年聚合倒序）；考古卡（随机挖 30 天前旧记录）；问答机（真实数据出选择题）；周年报告（6 项统计+情绪化 summary）；生日回顾（TA 生日 MM-dd 历史事件，无生日 404）；甜蜜语录册 / 电影票根（1-5 星缺省满分）/ 我们的歌单——均双方可整理；F87 胶囊到期 Job（09:05） |
-| F92 / F95-F96（V18 后无新表批次） | 今日视图与生日彩蛋 | `/api/couple/today` | F95 今日看点（挑战/真心话/心情/存折/百日打卡 + 最近到期胶囊聚合）；F96 年度热力日历（多源按天计数分级 0-3）；F92 并入生日前 3 天 `birthday-eve` 预告推送 |
-| F100-F109 | 沟通增强 | `/api/couple/comm` | 安静小屋/冷静角（同时仅一场，双方留软话即和好）；情绪接力（抛→接住并回抛）；比划猜词（静态词库，提示不含原词，错 3 次结算）；故事接龙（轮流接句，可完结）；道歉三部曲（送出→收下）；心情词汇量（每人每天一词）；F100 翻译器/F105 小考/F106 合成器/F109 晚安电台为静态库或聚合 |
-| F110-F119 | 异地恋·时空同步 | `/api/couple/distance` | 隔空牵手（双方当天都点亮才算）；双城想念计量（同天互想=双向奔赴）；作息重合表；下次见面信（写→见面打卡后拆）；云约会清单（空白项从灵感库抽）；异地平安卡（出发/到家一键）；见面日记（同天一条可补记）；异地能量（离上次见面越久越满，见面归零，30 天周期）；异地报告 |
-| F120-F129 | 确定感·安全感 | `/api/couple/secure` | 安全感账户（存安心话→对方收下）；恋爱体检（5 项聚合）；十年之约（双写凑齐推双方）；愿景板（同词共鸣）；承诺博物馆（双章才展出）；信任存折（每日 1 币）；恋爱年轮（按年聚合）；纪念日大日子分类（couple_anniversary.kind，在 CoupleController 创建参数）；双人契约打卡；守护兽（领养/照料，心情惰性衰减） |
-| F130-F139 | 趣味游戏 | `/api/couple/play` | 一百问（答一题解锁 TA 同题答案）；出题考TA（判分权在出题人，判分前作答对对方隐藏）；心动概率/塔罗/恋爱天气（静态+日抽）；世界情话课（16 课今日一课+收藏）；周末盲选（周卡双方提交，stableHash 配对开奖）；情话Battle（OPEN→FULL→DONE 互投结算）；抽象画（seed 前端生成 SVG 入画廊） |
-| F140-F149 | 深度陪伴 | `/api/couple/daily-life` | 今日主题曲（按日抽）；梦境手账；美食地图（WANT→EATEN 打卡评分）；TA 使用手册（TASTE/NOGO/FAV/QUIRK）；情绪 SOS（SENT→HELD，在途 1 条）；每日三问（双答触发 both 推送）；夸夸生成器+接头暗号（无表按日抽）；自定义成就（OPEN→ISSUED 双人证书）；恋爱仪表盘（待办/回忆两列聚合） |
-| F150-F159 | 成长系 | `/api/couple/coach` | 21 天习惯搭子（表 `couple_habit_streak`，避开 V10 couple_habit；每日 1 打卡满目标自动 DONE）；感恩便签墙；情绪颗粒度日记（40 词 5 族每日 1 记可改）；每周高光互评（周一锚，双提名推 both）；共读一分钟（无表短文按日抽+每日感想）；拖延互助所（催办 1h 冷却、立事人宣布完成）；早安能量站（无表）；优点存折；成长年度关键词（聚合出坚持力/感恩力/觉察力） |
-| F160-F169 | 文字浪漫 | `/api/couple/poem` | 情诗接龙（每人每天一句，今日执笔人按 space+day hash）；三行情书（对方点赞）；醒来第一条（睡前封存次日 deliver_day 送达+已读回执）；心情漂流瓶（FLOATING→REPLIED 回信）；数字密码情书（前端编码，对方解码上报）；灵魂提问盲盒（24 问按日抽，双答才互见）；贴纸手账（每日 1 页可改+贴纸白名单）；语录机/情书模板 8 封/贴纸库 16 枚（无表） |
-| F170-F179 | 默契亲密 | `/api/couple/spark` | 爱语测评（12 题静态卷，计分重测覆盖）与对照卡（双结果门槛+相处建议）；心动闪光速记；「如果」问答（20 问按日抽，双答互见，先答者=默契之星）；动作暗语本；同频共振（10s 窗口先后按键，差 ≤500ms 命中推 both）；默契仪表盘（bestMs+双答天数+心动邮戳+暗语加权 0-100）；心动日历（等级 1-3 钳制 upsert）；同频排行榜（bestMs 升序 top10）；默契周报（周一锚聚合） |
-| F180-F189 | 生活经营 | `/api/couple/manage` | 家庭会议纪要（周一锚，议题→决议→关闭推 both）；本周主理人（奇偶周轮换，非主理人排计划 403）；技能交换所（OPEN→TAKEN→DONE，不能自揭摊）；月度互评（星级 1-5 钳制，双评互见）；家庭应急卡（各填一份互见，至少一项）；情侣存档点（每月 upsert，温度 1-100 钳制）；家务积分市场（EARN 默认 5 分钳 1-200，兑换校验本人余额，奖励 6 项静态）；五年计划双轨（MINE/OURS，OURS 认领一人一半，只进不退）；纪念日策划案（未来 400 天窗口，IDEA→LOCKED→DONE）；经营周报（周一锚聚合无新表） |
-| F190-F199 | 时光博物馆 | `/api/couple/museum` | 纪录片分镜（三幕缺一不可）；博物馆展品（文字档案+可选藏品日）；去年今日对比镜（按自然年聚合，无表）；银发情话机（12 句按 space+day 稳定抽）；恋爱高频词（多源文本 CJK bigram 词云，停用词过滤，count≥2 top12，无表）；隐藏彩蛋成就（6 枚定义在 Bank，读时达标自动 insert+推 both，一人解锁全空间可见）；家规宪法（条款/修正案，提案人不能自签，对方签字推 both，重签幂等）；免打扰时段（每人一份 HH:mm 起止不可相同，covers 支持跨零点，供前端弹窗过滤）；首页问候引擎（6 时段模板+days together+quietNow，无表）；年度记忆书目录（当年 12 章计数，空月"空白页"占位，无表） |
-| F207 | 常用收藏 | `/api/couple/pin` | 每人 pin ≤6 个功能卡键，GET 双方列表 / POST 全量覆盖 upsert（去空白去重、键长≤40） |
-| F210-F219 | 两个人的饭桌 | `/api/couple/dining` | 今晚饭票（每人每天一票，撞菜推 both dine-hit）；吃什么裁决（票池去重按 space+day stableHash，双方刷新一致）；吃过星评（1-5 钳制）；踩雷库（同名 400，谁提议谁划掉）；本周菜单（周一锚，留空擦格）；拿手菜（周 upsert 推 TA）；点单机（5 心情→饮品静态）；搭伙车（双方各锁才 LOCKED 推 both，仅本人删自己未锁菜）；饭桌话题卡（24 条按日稳定抽+打卡幂等）；年度干饭账（星评 top5/踩雷/票/菜单聚合） |
-| F220-F229 | 体温同步·作息与健康 | `/api/couple/cozy` | 晚安同熄灯（双方当晚都点=熄灯，连击满 7 晚推 both）；睡眠报告单（晨间各报昨夜 1-5 星钳制+梦话≤70 字，本人当日可改）；数羊房（60s 窗口内累计满 10 下数完，超时窗口重置，双方数完推 both 比用时）；喝水接力（我干一杯 TA 杯子加一格，对方 3h 未回在总览带轻提醒标记）；冷暖互报（城市+体感+气温文字当日可改，一键叮嘱添衣同一人一天一次）；熬夜守护（「早点睡」陪伴卡一天一张幂等，文案按空间+日+人稳定）；周末慢生活（每周各提一件不赶小事，凑齐两提推 both，双方都打卡推 both 回放）；疼痛对策本（每人一本≤300 字随时改；TA 不适日一键按其对策执行送达）；抱抱计量器（自报 1-99 几下，破 10/50/100/520/1000 里程碑推 both）；月度安眠小结（聚合无表：双熄灯夜/最长连击/平均星/数羊完成/总杯数，同步指数 40+30+15+15 封顶 100） |
-| F230-F239 | 小日子·仪式感 | `/api/couple/ceremony` | 建国纪念日（自定义小日子：名≤60 字+起始日+是否每年重复，一次性过期后无下一届）；老黄历（小日子+couple_anniversary+couple_countdown 三源合并倒数 top15，宜/忌俏皮话按空间+日 stableHash 稳定，近 3 天内到过没过齐补催一句）；过法任务卡（每小日子最多 3 条）；庆祝打卡（当日幂等，该小日子全部过法打满推 both，否则推 TA）；爱情保险柜（每月各交一句"夸 TA"保费可改写，双方交齐=满一月，满 3/6/12 月 payout 愿望券按 ref 幂等推 both）；续约仪式（每满 100 天或周年当天可签，非续约日 400；双方都签推 both，长卷倒序）；愿望券本（自头发券/核销 OPEN→USED，一人说了算）；小日子史册（一年一页：当年打勾数+过法总数+该日体感）；年度加冕（仅 520/1231/01-01 出现，按当年打卡数评 top3 小日子）；当日体感（一人一天一句可改写不重推，双留推 both，总览带次年今日对比） |
-| F240-F249 | 我们公司 | `/api/couple/board` | 头衔任命（给 TA 封官，每人待任命最多 2 个；被任命者本人盖章才生效，已生效不可重复盖）；董事会决议（提案→附议通过或一票否决，提案人不能裁自己的案，veto_by/decided_at 全程留痕）；年度股东大会（述职≤500 字+明年小目标≤200 字，同年可改写，双提交互见）；发薪日（每月各发一句"感谢工资"限购，同时向 F186 `couple_point_ledger` 插 EARN 5 分流；发薪日取当月最早一次）；金点子箱（一句话提案，只能采纳 TA 的点子、采纳即生成决议走表决）；例会签到（10s 窗口内双签到=召开会议，只推一次 both）；职级公示/公司名片/公司周报（均无表聚合：按台账累计赚分定实习生→合伙人 6 档、拼文字名片、周一锚本周决议/点子/赚分） |
+## 内容库（现役 8 个）
 
-### 其他散布功能
+| 库 | 供谁用 |
+|---|---|
+| `CoupleRitualBank` | `stableHash` 全模块共用（饭桌裁决、盲盒/刮刮乐取面、轮盘开场） |
+| `CoupleTalkBank` | 求抱抱话术卡、陪聊话题卡、深夜陪伴文案 |
+| `CoupleCatchBank` | 安全词的约定/喊停/复盘三套话术与 kind 标签 |
+| `CoupleEchoBank` | 好事簿记下与加星话术、年报称号（年报已下线，话术仍在用） |
+| `CoupleFactoryBank` | 轮盘开场、欠账提醒、生活委员头衔 |
+| `CoupleQuestBank` | 加班与留灯话术 |
+| `CoupleSurpriseBank` | 刮刮乐券面池、盲盒任务灵感、花语、幸运签 |
+| `CoupleTermBank` | `CoupleService` 的农历生日换算（`lunarToSolar/solarToLunar`）仍依赖它 |
 
-- F29+F30 恋爱月报 / 数据总览：`/api/couple/memory` monthly-report、data-overview。
-- F31 心动加成 / F33 互动热力图 / F34 心情曲线 / F35 恋爱红绿灯：`/api/couple/game`（互动按项计分、24 点清零；最近 12 周热力；30 天心情走势）。
-- F44 恋爱中徽章：`GET /api/couple/relationship-of/{username}`（好友资料卡展示是否在恋爱中+在一起天数）。
-- F45 运营看板：`/api/couple/admin/stats`（仅管理员）。
-- F92 生日彩蛋 + 前 3 天 `birthday-eve` 预告（Job）；F95/F96 今日看点与年度热力日历（`/api/couple/today`）。
-- 代码注释中未出现 F32、F37–F40、F43、F47、F49、F90/F91/F93/F94、F97–F99、F200-F206、F208-F209、F246 等编号——对应批次或未单独立项，勿凭编号臆测功能，以 [api.md](api.md) 总表为准。
+`CoupleCities`（双城城市库）、`CoupleQuestions`（今日一问题库 105 题）、`CoupleCeremonyBank`、`CoupleDiningBank` 以及 `CoupleChatBank`/`Codex`/`Cozy`/`Focus`/`Growth`/`Laugh`/`Legacy`/`Play` 等已随功能彻底无引用而删除。
 
-## 内容库 Bank 一览（静态，只增不改顺序）
+## 分层模板（加新卡照抄）
 
-| Bank | 内容 | 取用方式 |
-|---|---|---|
-| `CoupleQuestions` | 今日一问题库 105 题 11 主题 | 按 epochDay 轮换 |
-| `CoupleRitualBank` | 甜蜜任务/默契题/情话/运势/晚安故事 + `stableHash`（FNV-1a） | 按天+空间稳定 |
-| `CoupleSurpriseBank` | 刮刮乐券面 24 种/盲盒灵感 16 条/花语 8 种/幸运签 20 支 | stableHash 按周抽券 |
-| `CoupleTalkBank` | 安慰话术 5 感受×5 条/陪聊话题 20/真心话题 30/感应选题 24+选项/深夜关怀文案 | 按天稳定取真心话题 |
-| `CoupleGrowthBank` | 每日挑战 40 条/存折里程碑 5 档/星座 12 座元素相性+评语 12 条 | 空间+天稳定一题 |
-| `CoupleCommBank` | 比划猜词/故事接龙开头/情绪词汇 | — |
-| `CoupleDistanceBank` | 异地恋文案与云约会灵感等 | — |
-| `CoupleSecurityBank` | 安全感域文案 | — |
-| `CouplePraiseBank` | 夸夸语料 | — |
-| `CouplePlayBank` | 一百问 100/塔罗 22 张/恋爱天气 5 种/情话课 16 课/心动概率文案 5 档 | 按天稳定 |
-| `CoupleDailyLifeBank` | 主题曲 30 首/夸夸 100 条/接头暗号 20 句 | 夸夸取 3 条用 hash>>16 分段 |
-| `CoupleCoachBank` | 情绪词 5 族 40/共读短文 20 段/早安能量 20 组 | 按天稳定 |
-| `CouplePoemBank` | 灵魂 24 问/语录模板 8/情书模板 8 封/手账贴纸 16 枚 | 按天稳定 |
-| `CoupleSparkBank` | 五爱语档案+12 题测评卷/「如果」脑洞 20 问 | 按天稳定 |
-| `CoupleManageBank` | 家务积分兑换奖励 6 项（电影选片权/免洗碗金牌/爱心早餐/游戏不限时/二十分钟抱抱/任意愿望卡） | — |
-| `CoupleMuseumBank` | 银发情话 12 句/隐藏成就 6 枚（THANKS_10·FLASH_5·JOURNAL_7·SIGNAL_3·WHATIF_10·SYNC_HIT_1）/首页问候 6 时段模板 | 按 space+day 稳定 |
-| `CoupleCozyBank` | 喝水轻提醒 6 句/熬夜陪伴卡 6 张/叮嘱添衣话术 5 条 | 按 space+day（陪伴卡与叮嘱再 +user）稳定 |
-| `CoupleCeremonyBank` | 今日宜 8 条/今日忌 8 条/补催话术 3 条（模板含 %s 小日子名）/payout 券面/加冕开场 3 条 | 按 space+day 或 space+年份稳定 |
-| `CoupleBoardBank` | 职级阶梯 6 档（门槛 0/20/60/150/300/600 累计赚分：实习生→正式职员→小组主管→部门经理→公司总监→合伙人）/名片收尾 4 句 | 定档按台账分数；收尾按 space 稳定 |
-
-## 与 IM / 前端的联动
-
-- 情侣事件统一走 `ImPushService.pushCoupleEvent(Both)` 并落库 `couple_notify`（F41）；新事件名必须在前端 `stores/couple.ts` 的 `handleCoupleEvent` 注册 case（见 are-chat-web-map skill）。
-- 生日彩蛋跨包读 im 的 `UserProfile.birthday`（Job 内直接引用，属允许的单向依赖）。
-- 文案语气：可爱、口语化、带 emoji——规范本身见 `.agents/skills/are-chat-map/SKILL.md` 第五节。
+1. 实体：`@Data @TableName` + `@TableId(IdType.INPUT)` + 静态 `of()` 工厂 + 常量（`*_MAX`、`STATUS_*`）。
+   **`Integer`/`Long` 位字段禁止配 `isXxx()` 布尔 helper**（与 Lombok 的 `getXxx()` 撞成歧义 getter，MyBatis 反射会随机抛 `ambiguous type`，实测让整页 500）——位判断一律命名 `xxxFlag()`。
+2. Mapper：`@Mapper interface X extends BaseMapperCompat<T>`，常用查询写 default 方法。
+3. Service：构造注入（final 字段 + 构造器），VO 用嵌套 `record`，写接口返回整份聚合 VO 让前端整体替换。
+4. Controller：`@RestController @RequestMapping("/api/couple/xxx")`，请求体用 record，每方法一句 javadoc（`wiki/api.md` 的端点说明就是抓这句生成的）。
+5. 新增/删除表必须走 Flyway 增量脚本并同步 `schema.sql`（见 `.agents/skills/db-migration`）；新增 WS 事件必须同步前端 `stores/couple.ts` 的 case。
