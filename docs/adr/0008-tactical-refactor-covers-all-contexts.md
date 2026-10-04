@@ -50,7 +50,7 @@ ADR-0005 决定「只有 `couple` 做战术改造，其余四个上下文停在�
 | 3 守卫第 5 条 + 账本 | `TACTICAL_PENDING` 现为**空集**；账本清空后注入不带 import 的 `Supplier<...persistence.CoupleUserPinPO>` 仍双双变红，还原后 6/6 绿 |
 | 4 platform / filestorage 补 domain | 各 8 个 domain 文件、2 与 1 个端口，都不是空包 |
 | 5 VO 留 application | 全仓 `find src/main/java -name '*VO.java'` = 0 个独立文件，VO 仍是 Service 内嵌 record，JSON 字段名与顺序未动 |
-| 6 不引事件总线 | 44 个 WS 事件名与推送时机集合与基线**逐条一致**（`ddd-contract.mjs` diff = 0） |
+| 6 不引事件总线 | 44 个 WS 事件名与推送时机集合与基线**逐条一致**（`tools/ddd-contract.mjs` diff = 0） |
 | 7 不做 CQRS / 不拆模块 | 无新模块、无新依赖（`pom.xml` 本轮零改动） |
 
 执行中额外发现并修掉的两个"守卫自己会漏"的洞（都因实测而改，不是设计时想到）：

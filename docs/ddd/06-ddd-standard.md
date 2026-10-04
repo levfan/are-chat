@@ -33,7 +33,7 @@
 |---|---|---|
 | C1 | 守卫测试是活的：注入违规必须变红 | 每条规则都做过注入实测（见第三节台账） |
 | C2 | 债务账本与实测相等，不许过期挂账 | `ArchitectureGuardTest.tacticalLedgerMatchesReality`（账本 ≠ 实测违规集合就红，两个方向都拦） |
-| C3 | 行为等价可复核：路由、WS 事件名、VO 字段、对外文案 | `.tmp-audit/ddd-contract.mjs` 对基线 commit 与工作树做集合 diff |
+| C3 | 行为等价可复核：路由、WS 事件名、VO 字段、对外文案 | `tools/ddd-contract.mjs`（随仓库入库）对基线 commit 与工作树各跑一次，逐条比 routes / events / strings 三个多重集；允许的差异只有「中文原话改成片段+常量拼接」，且必须贴证据说明拼出的整句一字不差 |
 
 ## 二、完成度判定（2026-10-05 收口时实测）
 
@@ -79,7 +79,7 @@
 | platform+filestorage 收口 | `mvn -o test`（分支 ddd/platfs） | 329 用例，仅账本条目红 |
 | couple 全量收口 + 账本清空 | `mvn -o clean test` | **563 用例 0 失败 MVN_EXIT=0，BUILD SUCCESS** |
 | 账本清空后的变异证明 | 在 `CouplePinService` 注入不带 import 的 `Supplier<...persistence.CoupleUserPinPO>` | `persistenceTypesStayBehindRepositoryPorts` + `tacticalLedgerMatchesReality` 双双变红（报出 `内联引用 com.smart.chat.couple.infrastructure.persistence.CoupleUserPinPO`）；还原（`git diff` 为空）后 6/6 绿 |
-| 对外契约 | `ddd-contract.mjs 80ef002` vs 工作树（全 `src/main/java`） | 路由 **137 种 0 消失 0 新增**；WS 事件 **44 种 0 消失 0 新增**；中文文案 1215→1220 种，差异逐条核过 |
+| 对外契约 | `node tools/ddd-contract.mjs <基线commit|WORK> <目录>` 两侧输出做集合 diff（全 `src/main/java`） | 路由 **137 种 0 消失 0 新增**；WS 事件 **44 种 0 消失 0 新增**；中文文案 1215→1220 种，差异逐条核过 |
 
 ### 契约差异的完整交代（不做"差不多"）
 
