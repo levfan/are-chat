@@ -1,7 +1,7 @@
 package com.smart.chat.messaging.api;
 
-import com.smart.chat.messaging.infrastructure.persistence.FriendPO;
-import com.smart.chat.messaging.infrastructure.persistence.FriendMapper;
+import com.smart.chat.messaging.domain.friend.Friend;
+import com.smart.chat.messaging.domain.friend.FriendRepository;
 import com.smart.chat.identity.domain.AccountDirectory;
 import com.smart.chat.sharedkernel.web.ApiResponse;
 import com.smart.chat.sharedkernel.web.Sessions;
@@ -27,12 +27,13 @@ public class PresenceController {
 
     private final ChatSessionRegistry registry;
     private final AccountDirectory accounts;
-    private final FriendMapper friendMapper;
+    private final FriendRepository friendRepository;
 
-    public PresenceController(ChatSessionRegistry registry, AccountDirectory accounts, FriendMapper friendMapper) {
+    public PresenceController(ChatSessionRegistry registry, AccountDirectory accounts,
+                              FriendRepository friendRepository) {
         this.registry = registry;
         this.accounts = accounts;
-        this.friendMapper = friendMapper;
+        this.friendRepository = friendRepository;
     }
 
     @GetMapping("/online")
@@ -47,7 +48,7 @@ public class PresenceController {
         } else {
             // 普通用户：仅通讯录好友中的在线者（自己不算自己的好友）
             Set<String> friends = Set.copyOf(
-                    friendMapper.findAllByOwner(username).stream().map(FriendPO::getFriendUsername).toList());
+                    friendRepository.findAllByOwner(username).stream().map(Friend::friendUsername).toList());
             users = online.stream().filter(friends::contains).sorted().toList();
         }
         return ApiResponse.ok(new OnlineVO(users.size(), users));

@@ -1,7 +1,6 @@
 package com.smart.chat.messaging.api;
 
 import com.smart.chat.messaging.application.PrivateMessageService;
-import com.smart.chat.messaging.infrastructure.persistence.PrivateMessagePO;
 import com.smart.chat.sharedkernel.web.ApiResponse;
 import com.smart.chat.sharedkernel.web.Sessions;
 import jakarta.servlet.http.HttpSession;
@@ -63,7 +62,7 @@ public class PrivateMessageController {
     }
 
     @PostMapping("/{peer}")
-    public ApiResponse<PrivateMessagePO> send(@PathVariable String peer,
+    public ApiResponse<PrivateMessageService.SentMessageVO> send(@PathVariable String peer,
                                             @RequestBody SendMessageRequest req,
                                             HttpSession session) {
         return ApiResponse.ok(messageService.send(Sessions.requireUser(session), peer, req.content(), req.type(), req.replyToId()));
@@ -83,7 +82,7 @@ public class PrivateMessageController {
 
     /** 编辑自己 2 分钟内发出的文本消息。 */
     @PutMapping("/{id}")
-    public ApiResponse<PrivateMessagePO> edit(@PathVariable String id, @RequestBody EditMessageRequest req,
+    public ApiResponse<PrivateMessageService.SentMessageVO> edit(@PathVariable String id, @RequestBody EditMessageRequest req,
                                             HttpSession session) {
         return ApiResponse.ok(messageService.edit(Sessions.requireUser(session), id, req.content()));
     }

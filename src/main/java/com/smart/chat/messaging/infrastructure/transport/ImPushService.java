@@ -4,7 +4,7 @@ import com.smart.chat.messaging.domain.AnnouncementBroadcaster;
 import com.smart.chat.messaging.domain.CoupleEventPublisher;
 import com.smart.chat.messaging.domain.NotifySinkRegistry;
 import com.smart.chat.messaging.domain.OutboundNotifySink;
-import com.smart.chat.messaging.infrastructure.persistence.PrivateMessagePO;
+import com.smart.chat.messaging.domain.conversation.PrivateMessage;
 import com.alibaba.fastjson2.JSON;
 import com.smart.chat.messaging.infrastructure.transport.ChatSessionRegistry;
 import org.springframework.stereotype.Component;
@@ -18,10 +18,9 @@ public class ImPushService implements CoupleEventPublisher, AnnouncementBroadcas
 
     public record DmPayload(String type, String msgId, String from, String to,
                             String content, String msgType, String replyToId, Boolean edited, Long created) {
-        public static DmPayload of(PrivateMessagePO m) {
-            return new DmPayload("dm", m.getId(), m.getFromUser(), m.getToUser(),
-                    m.getContent(), m.getMsgType(), m.getReplyToId(),
-                    Integer.valueOf(1).equals(m.getEdited()), m.getCreated());
+        public static DmPayload of(PrivateMessage m) {
+            return new DmPayload("dm", m.id(), m.fromUser(), m.toUser(),
+                    m.content(), m.msgType(), m.replyToId(), m.editedFlag(), m.created());
         }
     }
 
@@ -100,16 +99,16 @@ public class ImPushService implements CoupleEventPublisher, AnnouncementBroadcas
         }
     }
 
-    public void pushDm(PrivateMessagePO message) {
-        push(message.getToUser(), DmPayload.of(message));
+    public void pushDm(PrivateMessage message) {
+        push(message.toUser(), DmPayload.of(message));
     }
 
     public void pushTyping(String from, String to, boolean typing) {
         push(to, new TypingPayload("typing", from, to, typing));
     }
 
-    public void pushRecall(PrivateMessagePO message) {
-        push(message.getToUser(), new RecallPayload("recall", message.getFromUser(), message.getToUser(), message.getId()));
+    public void pushRecall(PrivateMessage message) {
+        push(message.toUser(), new RecallPayload("recall", message.fromUser(), message.toUser(), message.id()));
     }
 
     public void pushFriendEvent(String type, String username, String requestId) {
@@ -117,20 +116,20 @@ public class ImPushService implements CoupleEventPublisher, AnnouncementBroadcas
     }
 
     /** 回应推给会话双方（发起方也收一份，多端同步）。 */
-    public void pushReaction(PrivateMessagePO message, String by, String emoji, boolean added) {
-        ReactionPayload payload = new ReactionPayload("reaction", message.getId(), by, emoji, added,
-                message.getFromUser(), message.getToUser());
-        push(message.getFromUser(), payload);
-        if (!message.getFromUser().equals(message.getToUser())) {
-            push(message.getToUser(), payload);
+    public void pushReaction(PrivateMessage message, String by, String emoji, boolean added) {
+        ReactionPayload payload = new ReactionPayload("reaction", message.id(), by, emoji, added,
+                message.fromUser(), message.toUser());
+        push(message.fromUser(), payload);
+        if (!message.fromUser().equals(message.toUser())) {
+            push(message.toUser(), payload);
         }
     }
 
-    public void pushEdit(PrivateMessagePO message) {
-        EditPayload payload = new EditPayload("message-edit", message.getId(),
-                message.getFromUser(), message.getToUser(), message.getContent());
-        push(message.getFromUser(), payload);
-        push(message.getToUser(), payload);
+    public void pushEdit(PrivateMessage message) {
+        EditPayload payload = new EditPayload("message-edit", message.id(),
+                message.fromUser(), message.toUser(), message.content());
+        push(message.fromUser(), payload);
+        push(message.toUser(), payload);
     }
 
     /** reader 已读完与 peer 的会话：把回执推给 peer。 */

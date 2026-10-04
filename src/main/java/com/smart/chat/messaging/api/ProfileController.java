@@ -1,11 +1,12 @@
 package com.smart.chat.messaging.api;
 
-import com.smart.chat.messaging.infrastructure.persistence.FriendMapper;
-import com.smart.chat.messaging.infrastructure.persistence.UserProfilePO;
-import com.smart.chat.messaging.infrastructure.persistence.UserProfileMapper;
+import com.smart.chat.messaging.domain.friend.Friend;
+import com.smart.chat.messaging.domain.friend.FriendRepository;
+import com.smart.chat.messaging.domain.friend.FriendshipGate;
+import com.smart.chat.messaging.domain.profile.UserProfile;
+import com.smart.chat.messaging.domain.profile.UserProfileRepository;
 import com.smart.chat.identity.domain.AccountDirectory;
 import com.smart.chat.sharedkernel.web.ApiResponse;
-import com.smart.chat.sharedkernel.web.BusinessException;
 import com.smart.chat.sharedkernel.web.Sessions;
 import jakarta.servlet.http.HttpSession;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -16,15 +17,18 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.time.LocalDate;
-import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.stream.Collectors;
+
+import static com.smart.chat.messaging.application.DomainRules.guard;
 
 /**
  * 个人资料：预设 emoji 头像 + 昵称 + 个性签名 + 生日；好友资料卡仅好友可见。
+ * <p>
+ * 字段的取值范围（昵称 1~32、签名 ≤100、头像只能选预设色档、在线状态三档、生日两种格式）
+ * 是 {@link UserProfile} 的规则，这里只负责「请求里没传的字段不动」和投影响应。
  */
 @RestController
 @RequestMapping("/api/profile")
@@ -32,9 +36,9 @@ public class ProfileController {
 
     public record ProfileVO(String username, String nickname, String signature, String avatar, String presenceStatus,
                             String birthday) {
-        static ProfileVO of(UserProfilePO p) {
-            return new ProfileVO(p.getUsername(), p.getNickname(), p.getSignature(), p.getAvatar(),
-                    p.getPresenceStatus() == null ? "online" : p.getPresenceStatus(), p.getBirthday());
+        static ProfileVO of(UserProfile p) {
+            return new ProfileVO(p.username(), p.nickname(), p.signature(), p.avatar(), p.presenceStatusForView(),
+                    p.birthday());
         }
     }
 
@@ -46,13 +50,14 @@ public class ProfileController {
     public record FriendBirthdayVO(String username, String nickname, String birthday, long daysUntil, boolean today) {
     }
 
-    private final UserProfileMapper profileMapper;
-    private final FriendMapper friendMapper;
+    private final UserProfileRepository profileRepository;
+    private final FriendRepository friendRepository;
     private final AccountDirectory accounts;
 
-    public ProfileController(UserProfileMapper profileMapper, FriendMapper friendMapper, AccountDirectory accounts) {
-        this.profileMapper = profileMapper;
-        this.friendMapper = friendMapper;
+    public ProfileController(UserProfileRepository profileRepository, FriendRepository friendRepository,
+                             AccountDirectory accounts) {
+        this.profileRepository = profileRepository;
+        this.friendRepository = friendRepository;
         this.accounts = accounts;
     }
 
@@ -66,58 +71,35 @@ public class ProfileController {
     @GetMapping("/{username}")
     public ApiResponse<ProfileVO> ofFriend(@PathVariable String username, HttpSession session) {
         String me = Sessions.requireUser(session);
-        if (friendMapper.findByOwnerAndFriend(me, username).isEmpty()) {
-            throw new BusinessException(403, "只有好友才能查看资料卡");
-        }
+        guard(() -> FriendshipGate.requireProfileCardVisible(
+                friendRepository.findByOwnerAndFriend(me, username).isPresent()));
         return ApiResponse.ok(ProfileVO.of(ensureProfile(username)));
     }
 
     @PutMapping
     public ApiResponse<ProfileVO> update(@RequestBody UpdateProfileRequest req, HttpSession session) {
         String username = Sessions.requireUser(session);
-        UserProfilePO profile = ensureProfile(username);
+        UserProfile profile = ensureProfile(username);
         if (req.nickname() != null) {
-            String nickname = req.nickname().trim();
-            if (nickname.isEmpty() || nickname.length() > 32) {
-                throw new BusinessException(400, "昵称需为 1~32 个字");
-            }
-            profile.setNickname(nickname);
+            guard(() -> profile.changeNickname(req.nickname()));
             // 登录后修改昵称：同步 app_user（auth/me、管理后台用户列表显示的就是这里的昵称）
-            accounts.updateNickname(username, nickname);
+            accounts.updateNickname(username, profile.nickname());
         }
         if (req.signature() != null) {
-            String signature = req.signature().trim();
-            if (signature.length() > 100) {
-                throw new BusinessException(400, "签名最长 100 个字");
-            }
-            profile.setSignature(signature);
+            guard(() -> profile.changeSignature(req.signature()));
         }
         if (req.avatar() != null && !req.avatar().isBlank()) {
-            String avatar = req.avatar().trim();
-            if (avatar.length() > 8) {
-                throw new BusinessException(400, "头像请从预设色档中选择");
-            }
-            profile.setAvatar(avatar);
+            guard(() -> profile.changeAvatar(req.avatar()));
         }
         if (req.presenceStatus() != null && !req.presenceStatus().isBlank()) {
-            String status = req.presenceStatus().trim();
-            if (!Set.of("online", "busy", "away").contains(status)) {
-                throw new BusinessException(400, "在线状态仅支持 online / busy / away");
-            }
-            profile.setPresenceStatus(status);
+            guard(() -> profile.changePresenceStatus(req.presenceStatus()));
         }
         // F42 生日：yyyy-MM-dd 或 MM-dd，空串 = 清除
         if (req.birthday() != null) {
-            String birthday = req.birthday().trim();
-            if (birthday.isEmpty()) {
-                profile.setBirthday(null);
-            } else {
-                validateBirthday(birthday);
-                profile.setBirthday(birthday);
-            }
+            guard(() -> profile.changeBirthday(req.birthday()));
         }
-        profile.setUpdatedAt(System.currentTimeMillis());
-        profileMapper.updateById(profile);
+        profile.markUpdated(System.currentTimeMillis());
+        profileRepository.save(profile);
         return ApiResponse.ok(ProfileVO.of(profile));
     }
 
@@ -127,75 +109,41 @@ public class ProfileController {
         String me = Sessions.requireUser(session);
         List<FriendBirthdayVO> list = new ArrayList<>();
         LocalDate today = LocalDate.now();
-        var friends = friendMapper.findAllByOwner(me);
+        List<Friend> friends = friendRepository.findAllByOwner(me);
         // 资料一次批量取：原先每个好友 selectById 一次，好友越多这个接口越慢（N+1）
-        List<String> peers = friends.stream().map(f -> f.getFriendUsername()).toList();
-        Map<String, UserProfilePO> profileMap = peers.isEmpty() ? Map.of()
-                : profileMapper.selectBatchIds(peers).stream()
-                        .collect(Collectors.toMap(UserProfilePO::getUsername, p -> p));
-        for (var friend : friends) {
-            UserProfilePO profile = profileMap.get(friend.getFriendUsername());
-            String birthday = profile == null ? null : profile.getBirthday();
-            if (birthday == null || birthday.isBlank()) {
+        List<String> peers = friends.stream().map(Friend::friendUsername).toList();
+        Map<String, UserProfile> profileMap = peers.isEmpty() ? Map.of()
+                : profileRepository.listByUsernames(peers).stream()
+                        .collect(Collectors.toMap(UserProfile::username, p -> p));
+        for (Friend friend : friends) {
+            UserProfile profile = profileMap.get(friend.friendUsername());
+            if (profile == null) {
                 continue;
             }
-            String monthDay = birthday.length() >= 10 ? birthday.substring(5) : birthday;
-            LocalDate next;
-            try {
-                next = LocalDate.parse(today.getYear() + "-" + monthDay, DateTimeFormatter.ofPattern("yyyy-MM-dd"));
-            } catch (Exception e) {
+            var daysUntil = profile.daysUntilBirthday(today);
+            if (daysUntil.isEmpty()) {
                 continue;
             }
-            if (next.isBefore(today)) {
-                next = next.plusYears(1);
-            }
-            long days = java.time.temporal.ChronoUnit.DAYS.between(today, next);
-            String nickname = profile.getNickname();
-            list.add(new FriendBirthdayVO(friend.getFriendUsername(),
-                    nickname == null || nickname.isBlank() ? friend.getFriendUsername() : nickname,
-                    birthday, days, days == 0));
+            long days = daysUntil.getAsLong();
+            String nickname = profile.nickname();
+            list.add(new FriendBirthdayVO(friend.friendUsername(),
+                    nickname == null || nickname.isBlank() ? friend.friendUsername() : nickname,
+                    profile.birthday(), days, days == 0));
         }
         list.sort((a, b) -> Long.compare(a.daysUntil(), b.daysUntil()));
         return ApiResponse.ok(list);
     }
 
-    /** 生日格式校验：yyyy-MM-dd 或 MM-dd。 */
-    private void validateBirthday(String birthday) {
-        boolean ok = false;
-        try {
-            LocalDate.parse(birthday, DateTimeFormatter.ofPattern("yyyy-MM-dd"));
-            ok = true;
-        } catch (Exception ignored) {
-            // 尝试下一种格式
-        }
-        if (!ok) {
-            try {
-                LocalDate.parse("2000-" + birthday, DateTimeFormatter.ofPattern("yyyy-MM-dd"));
-                ok = birthday.length() == 5;
-            } catch (Exception ignored) {
-                // 保持 false
-            }
-        }
-        if (!ok) {
-            throw new BusinessException(400, "生日格式应为 yyyy-MM-dd 或 MM-dd");
-        }
-    }
-
-    private UserProfilePO ensureProfile(String username) {
-        UserProfilePO profile = profileMapper.selectById(username);
-        if (profile == null) {
-            profile = new UserProfilePO();
-            profile.setUsername(username);
-            profile.setNickname(username);
-            profile.setSignature("");
-            profile.setAvatar("c0");
-            profile.setPresenceStatus("online");
-            profile.setUpdatedAt(System.currentTimeMillis());
-            profileMapper.insert(profile);
-        }
-        if (profile.getPresenceStatus() == null) {
-            profile.setPresenceStatus("online");
-        }
+    /** 老用户可能还没有资料行：第一次读到就按建档口径补一行（改造前后完全一致）。 */
+    private UserProfile ensureProfile(String username) {
+        UserProfile profile = profileRepository.find(username)
+                .orElseGet(() -> {
+                    UserProfile fresh = UserProfile.provision(username, username, UserProfile.DEFAULT_AVATAR,
+                            System.currentTimeMillis());
+                    profileRepository.save(fresh);
+                    return fresh;
+                });
+        profile.fillPresenceStatusIfMissing();
         return profile;
     }
 }

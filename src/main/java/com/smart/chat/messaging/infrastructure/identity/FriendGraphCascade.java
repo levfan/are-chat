@@ -1,6 +1,6 @@
 package com.smart.chat.messaging.infrastructure.identity;
 
-import com.smart.chat.messaging.infrastructure.persistence.FriendMapper;
+import com.smart.chat.messaging.domain.friend.FriendRepository;
 import com.smart.chat.identity.domain.AccountCascade;
 import org.springframework.stereotype.Component;
 
@@ -8,15 +8,14 @@ import org.springframework.stereotype.Component;
 @Component
 public class FriendGraphCascade implements AccountCascade {
 
-    private final FriendMapper friendMapper;
+    private final FriendRepository friendRepository;
 
-    public FriendGraphCascade(FriendMapper friendMapper) {
-        this.friendMapper = friendMapper;
+    public FriendGraphCascade(FriendRepository friendRepository) {
+        this.friendRepository = friendRepository;
     }
 
     @Override
     public void onDeactivated(String username) {
-        friendMapper.deleteAllByOwner(username);
-        friendMapper.deleteAllByFriend(username);
+        friendRepository.deleteAllEdgesOf(username);
     }
 }
