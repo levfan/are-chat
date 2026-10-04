@@ -16,14 +16,27 @@
 
 ## 二、改造状态表（唯一权威，改一处代码就改一行）
 
-| 上下文 | 分层 | domain 纯度 | 跨上下文依赖 | allowlist 记账 |
-|---|---|---|---|---|
-| `couple` | 四层齐备 | **达标**（Phase B 后 domain 不 import 框架） | 只经端口 | — |
-| `messaging` | api/application/infrastructure（无 domain） | 未改造 | 暂时直连 `sharedkernel` + 内部 | Phase D 登记，逐条列出 |
-| `identity` | 同上 | 未改造 | 同上 | 同上 |
-| `platform` | 同上 | 未改造 | 同上 | 同上 |
-| `filestorage` | 同上 | 未改造 | 同上 | 同上 |
+实测于 2026-10-04 Phase A/C/D 收官后（判据：`ArchitectureGuardTest` 4 条 + `.tmp-audit/ddd-deps.mjs` 现扫）：
 
+| 上下文 | 分层实况 | domain 层 | 跨上下文 | 备注 |
+|---|---|---|---|---|
+| `identity` | api/application/domain/infrastructure | **有**（AccountDirectory、Account、AccountCascade、ProfileProvisioner、WelcomeMessenger、AdminAlerter、AdminNotifyChannel） | **零出向依赖**，纯上游 | 账号是谁都要问的通用域，方向理应当如此 |
+| `messaging` | api/application/domain/infrastructure | **有**（发布语言 7 个：CoupleEventPublisher、PresenceReader、AnnouncementBroadcaster、PeerProfileReader、FriendshipChecker、OutboundNotifySink、NotifySinkRegistry） | → identity.domain | 传输细节（帧格式、payload、注册表）不再外泄 |
+| `couple` | api/application/infrastructure | **无——Phase B 未做** | → identity.domain、messaging.domain | 10 张卡与心动值的领域规则目前长在 `CoupleService` 里；分层与方向已就位，补聚合/端口是纯增量 |
+| `platform` | api/application/infrastructure | 无 | → identity.domain、messaging.domain | 公告端点已从 identity 归位回来（路由未变） |
+| `filestorage` | api/application/infrastructure | 无 | 只到 sharedkernel/bootstrap.properties | 4 个文件，暂无改造需求 |
+
+**Phase B 待做的具体事**（写清楚，别让它变成"以后再说"）：19 个 `@TableName` 实体改名 `*PO`（ADR-0002）；抽 `couple.domain` 的 CoupleSpace 聚合、IntimacyCalculator（心动值六项加权，`CoupleIntimacyTest` 已锁死权重与阈值）、Repository 端口与适配器。**不动**的行为口径：WS 事件名、路由、响应字段、心动值分值。
+
+## 2.5 验收台账（本轮实际退出码，不是计划）
+
+| 步骤 | 命令 | 结果 |
+|---|---|---|
+| Phase A 搬包 | `mvn -q -o clean compile` / `mvn -o test` | EXIT=0 / 158 用例 0 失败 MVN_EXIT=0；纯移动证据：170 个移动文件里 169 个正文（剥 package/import 后）逐字节一致 |
+| 竞态修复对照 | HEAD 独立 worktree 打同一处屏障后 `mvn -o test` | 158 用例 0 失败 EXIT=0（证明修复与搬包无关） |
+| Phase C 断环 | `mvn -o test` | 158 用例 0 失败 MVN_EXIT=0；包级环 4 → 0 |
+| 端口化 | `mvn -o test` | 158 用例 0 失败；跨上下文越界 24 → 0 |
+| Phase D 守卫 | `mvn -o test` | **162 用例 0 失败 MVN_EXIT=0**（158 + 4 条守卫）；四条均做过反向注入变红，其中 domain 纯净一条曾为假绿已修 |
 ## 三、硬约束（全程适用，来自仓库既有红线）
 
 - 不动数据库：本轮无表结构变化，**不产出 V 脚本**（若过程中发现必须动表，停下改走 db-migration 规范）。

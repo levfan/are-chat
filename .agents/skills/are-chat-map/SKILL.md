@@ -70,20 +70,21 @@ Service → ImPushService.pushCoupleEvent(Both) ─┬→ WS 帧 {type:'couple',
 - 运行：`mvn spring-boot:run`（8080）；打包 `mvn -q -B package` 后按 Dockerfile/deploy 部署
 - 数表：`grep -c "^CREATE TABLE" src/main/resources/schema.sql`
 
-## 二、包结构（com.smart.chat）
+## 二、包结构（com.smart.chat，2026-10-04 DDD 改造后）
 
-| 包 | 职责 | 关键类 |
-|---|---|---|
-| `auth` | 注册审批/登录/管理员 | AppUserService, AdminService, AuthController |
-| `im` | 好友/私信/在线状态/资料/推送 | FriendService, PrivateMessageService, ImPushService, PresenceService, UserProfile, BaseMapperCompat |
-| `couple` | 情侣空间（核心业务，见下节） | CoupleService + 各功能 Service/Controller |
-| `room` | 聊天室 WebSocket | ChatSessionRegistry, ChatWebSocketBridge |
-| `system` | 系统配置/公告/审计 | Announcement 相关 |
-| `upload` | 文件上传 | FileStorageService（本地存储） |
-| `tools` | 健康检查/工具 | — |
-| `notify` | 管理员推送 | AdminNotifyService |
-| `common` | ApiResponse/BusinessException/Sessions | — |
-| `config` | 配置类 | FileStorageProperties 等 |
+按**限界上下文**分包，每个上下文内部四层（api / application / domain / infrastructure）。判据与守卫见 `docs/ddd/` 与 `src/test/java/com/smart/chat/ArchitectureGuardTest`（后者属于 `mvn test`，违规直接红）。
+
+| 上下文 | 域分类 | 由旧包合成 | 现状 |
+|---|---|---|---|
+| `couple` | **核心域** | couple | api(13 Controller) / application(11 Service) / infrastructure(persistence 19 PO+19 Mapper、content 8 库、scheduler 3 Job、notify、account)；**domain 层尚未建**（Phase B 待做，清单见 docs/ddd/03 第二节） |
+| `messaging` | 支撑域 | im + room（合并后那条 im/room 互依赖自然消失） | domain 有 7 个发布语言端口（CoupleEventPublisher / PresenceReader / AnnouncementBroadcaster / PeerProfileReader / FriendshipChecker / OutboundNotifySink / NotifySinkRegistry），transport 归 infrastructure |
+| `identity` | 通用域 | auth | **零出向上下文依赖**的纯上游；domain 有 AccountDirectory（别人问账号只用它，含 Account 最小视图）与 AccountCascade / ProfileProvisioner / WelcomeMessenger / AdminAlerter / AdminNotifyChannel 五个「我需要别人配合」的端口 |
+| `platform` | 通用域 | system + notify + tools | 公告管理端点已从 identity 归位到 `AnnouncementAdminController`，路由 `/api/admin/announcements*` 一字未改 |
+| `filestorage` | 通用域 | upload | 4 个文件，未做战术改造 |
+| `sharedkernel` | 共享内核 | common + `BaseMapperCompat` | 只放 ApiResponse / BusinessException / Sessions / GlobalExceptionHandler + ORM 基类；**禁止再往里塞业务类型** |
+| `bootstrap` | 装配层 | config | WebConfig / WebSocketConfig / FastJsonWebConfig / MybatisPlusConfig / LoginInterceptor + 5 个 `*Properties`；业务只许 import `bootstrap.properties.*`，import 装配类即违规 |
+
+`SmartChatApplication` 留在根包，`@MapperScan(basePackages = "com.smart.chat")` 与 `@ConfigurationPropertiesScan` 的扫描面没变，所以搬包不影响运行时装配。**新功能照 `docs/ddd/02-layering.md` 的归属判据落层，不要退回旧的平铺写法。**
 
 推送机制（重要）：`ImPushService.pushCoupleEvent(event, actor, toUser, detail)` 给单人推 WS 事件（type=couple），`pushCoupleEventBoth(...)` 推双方；每次情侣事件推送同时落库 `couple_notify`（F41 通知中心，`CoupleNotifyRecorder` 启动时经 `ImPushService.setNotifySink` 挂接，im 包不反向依赖 couple 包）；`isOnline(username)` 查在线。
 

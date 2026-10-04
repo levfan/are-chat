@@ -65,6 +65,6 @@ MyBatis-Plus 的实体同时扮演了「表映射」和「业务对象」两件�
 1. `domain/**` 不得 import `org.springframework.web` / `org.apache.ibatis` / `com.baomidou` / `jakarta.servlet` / `com.smart.chat.*.api` / `*.infrastructure`；
 2. `infrastructure/**` 不得 import 同上下文的 `api`；
 3. 上下文之间：`<A>/domain` 之外，`<A>/**` 不得 import `<B>/application` 或 `<B>/infrastructure`（只能 import `<B>/domain` 的端口，或走 `sharedkernel`）；
-4. `bootstrap/**` 不得被任何上下文 import。
+4. 业务上下文只许 import `bootstrap.properties.*`（`@ConfigurationProperties` 值绑定，实测 5 处）；import `bootstrap.config.*` 就是装配层被业务反向依赖，违规。
 
 未改造上下文（messaging/identity/platform/filestorage）对第 1、3 条**逐条登记在 allowlist**，allowlist 只能缩短不能加长——防止债务在新代码里悄悄扩大。守卫本身要证明能变红（临时插一条违规 import，测试必须失败）。
