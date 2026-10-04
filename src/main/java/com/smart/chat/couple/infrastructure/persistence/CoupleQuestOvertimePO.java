@@ -14,7 +14,7 @@ import java.util.UUID;
  */
 @Data
 @TableName("couple_quest_overtime")
-public class CoupleQuestOvertime {
+public class CoupleQuestOvertimePO {
 
     public static final int HOUR_MIN = 13;
     public static final int HOUR_MAX = 23;
@@ -42,8 +42,8 @@ public class CoupleQuestOvertime {
     private Long created;
     private Long updatedAt;
 
-    public static CoupleQuestOvertime of(String spaceId, String day, String fromUser, int untilHour, String note) {
-        CoupleQuestOvertime row = new CoupleQuestOvertime();
+    public static CoupleQuestOvertimePO of(String spaceId, String day, String fromUser, int untilHour, String note) {
+        CoupleQuestOvertimePO row = new CoupleQuestOvertimePO();
         row.id = UUID.randomUUID().toString();
         row.spaceId = spaceId;
         row.day = day;

@@ -1,13 +1,13 @@
 package com.smart.chat.couple.application;
 
 import com.smart.chat.couple.infrastructure.content.CoupleSurpriseBank;
-import com.smart.chat.couple.infrastructure.persistence.CoupleMysteryBox;
+import com.smart.chat.couple.infrastructure.persistence.CoupleMysteryBoxPO;
 import com.smart.chat.couple.infrastructure.persistence.CoupleMysteryBoxMapper;
-import com.smart.chat.couple.infrastructure.persistence.CouplePointLedger;
+import com.smart.chat.couple.infrastructure.persistence.CouplePointLedgerPO;
 import com.smart.chat.couple.infrastructure.persistence.CouplePointLedgerMapper;
-import com.smart.chat.couple.infrastructure.persistence.CoupleScratch;
+import com.smart.chat.couple.infrastructure.persistence.CoupleScratchPO;
 import com.smart.chat.couple.infrastructure.persistence.CoupleScratchMapper;
-import com.smart.chat.couple.infrastructure.persistence.CoupleSpace;
+import com.smart.chat.couple.infrastructure.persistence.CoupleSpacePO;
 import com.smart.chat.couple.infrastructure.persistence.CoupleSpaceMapper;
 import com.smart.chat.sharedkernel.web.BusinessException;
 import com.smart.chat.messaging.domain.CoupleEventPublisher;
@@ -66,7 +66,7 @@ public class CoupleSurpriseService {
 
     /** 我的刮刮乐列表（自动补发本周的卡：双方各一张来自对方的券）。 */
     public List<ScratchVO> myScratches(String me) {
-        CoupleSpace space = requireSpace(me);
+        CoupleSpacePO space = requireSpace(me);
         ensureWeekCards(space, weekKey(LocalDate.now()));
         return scratchMapper.findByOwner(space.getId(), me).stream()
                 .map(c -> toScratchVO(c, me))
@@ -75,8 +75,8 @@ public class CoupleSurpriseService {
 
     /** 刮开我的券：只有收券人能刮，刮开后券面对双方可见。 */
     public ScratchVO scratch(String me, String id) {
-        CoupleSpace space = requireSpace(me);
-        CoupleScratch card = scratchMapper.selectById(id);
+        CoupleSpacePO space = requireSpace(me);
+        CoupleScratchPO card = scratchMapper.selectById(id);
         if (card == null || !card.getSpaceId().equals(space.getId())) {
             throw new BusinessException(404, "没有找到这张刮刮乐哦");
         }
@@ -96,8 +96,8 @@ public class CoupleSurpriseService {
 
     /** 核销：只有送券人能点「已兑现」，让承诺闭环。 */
     public ScratchVO redeemScratch(String me, String id) {
-        CoupleSpace space = requireSpace(me);
-        CoupleScratch card = scratchMapper.selectById(id);
+        CoupleSpacePO space = requireSpace(me);
+        CoupleScratchPO card = scratchMapper.selectById(id);
         if (card == null || !card.getSpaceId().equals(space.getId())) {
             throw new BusinessException(404, "没有找到这张刮刮乐哦");
         }
@@ -112,8 +112,8 @@ public class CoupleSurpriseService {
             scratchMapper.updateById(card);
             // 积分重接三个入口之三：券是送的人兑现的，分记在送券人头上；
             // 闸门就是这一层的 redeemedAt==null，重复点核销不会再补分
-            ledgerMapper.insert(CouplePointLedger.of(space.getId(), me,
-                    CouplePointLedger.TYPE_EARN, SCRATCH_REASON_PREFIX + card.getPrizeText(), SCRATCH_POINTS));
+            ledgerMapper.insert(CouplePointLedgerPO.of(space.getId(), me,
+                    CouplePointLedgerPO.TYPE_EARN, SCRATCH_REASON_PREFIX + card.getPrizeText(), SCRATCH_POINTS));
             push.pushCoupleEvent("scratch-redeemed", me, card.getOwner(),
                     "你抽中的「" + card.getPrizeText() + "」已兑现 🎫 承诺 +1，甜度 +1！");
         }
@@ -121,13 +121,13 @@ public class CoupleSurpriseService {
     }
 
     /** 本周没有卡就补发：A→B、B→A 各一张，券面按周稳定抽取。 */
-    private void ensureWeekCards(CoupleSpace space, String weekKey) {
-        List<CoupleScratch> existing = scratchMapper.findByWeek(space.getId(), weekKey);
+    private void ensureWeekCards(CoupleSpacePO space, String weekKey) {
+        List<CoupleScratchPO> existing = scratchMapper.findByWeek(space.getId(), weekKey);
         for (String owner : List.of(space.getUserA(), space.getUserB())) {
             if (existing.stream().noneMatch(c -> c.getOwner().equals(owner))) {
                 String from = space.partnerOf(owner);
                 String[] prize = CoupleSurpriseBank.pickScratchPrize(space.getId(), weekKey, owner);
-                scratchMapper.insert(CoupleScratch.of(space.getId(), weekKey, from, owner, prize[0], prize[1]));
+                scratchMapper.insert(CoupleScratchPO.of(space.getId(), weekKey, from, owner, prize[0], prize[1]));
             }
         }
     }
@@ -139,7 +139,7 @@ public class CoupleSurpriseService {
         return String.format("%d-W%02d", year, week);
     }
 
-    private ScratchVO toScratchVO(CoupleScratch card, String viewer) {
+    private ScratchVO toScratchVO(CoupleScratchPO card, String viewer) {
         // 没刮开时，只有送券人自己能看到券面（其实券面内容双方都能管中窥豹，这里对收券人隐藏以保留惊喜）
         String prizeText = card.isScratched() || card.getFromUser().equals(viewer) ? card.getPrizeText() : null;
         return new ScratchVO(card.getId(), card.getWeekKey(), card.getFromUser(), card.getPrizeKind(),
@@ -149,7 +149,7 @@ public class CoupleSurpriseService {
     // ========== 恋爱盲盒（F51） ==========
 
     public List<BoxVO> boxes(String me) {
-        CoupleSpace space = requireSpace(me);
+        CoupleSpacePO space = requireSpace(me);
         return boxMapper.findBySpace(space.getId()).stream()
                 .map(b -> toBoxVO(b, me))
                 .toList();
@@ -157,14 +157,14 @@ public class CoupleSurpriseService {
 
     /** 装一个盲盒：最早明天开箱，装好后对方立刻知道「有个盒子在等 TA」。 */
     public BoxVO createBox(String me, String kind, String content, String openDay) {
-        if (!CoupleMysteryBox.isValidKind(kind)) {
+        if (!CoupleMysteryBoxPO.isValidKind(kind)) {
             throw new BusinessException(400, "盲盒只能是悄悄话或小任务哦");
         }
         if (content == null || content.isBlank()) {
             throw new BusinessException(400, "盒子里总要放点什么吧～");
         }
-        if (content.length() > CoupleMysteryBox.CONTENT_MAX) {
-            throw new BusinessException(400, "盒子太小啦，最多装 " + CoupleMysteryBox.CONTENT_MAX + " 个字");
+        if (content.length() > CoupleMysteryBoxPO.CONTENT_MAX) {
+            throw new BusinessException(400, "盒子太小啦，最多装 " + CoupleMysteryBoxPO.CONTENT_MAX + " 个字");
         }
         LocalDate open;
         try {
@@ -175,9 +175,9 @@ public class CoupleSurpriseService {
         if (!open.isAfter(LocalDate.now())) {
             throw new BusinessException(400, "盲盒最早明天才能拆哦，期待感要留足 ✨");
         }
-        CoupleSpace space = requireSpace(me);
+        CoupleSpacePO space = requireSpace(me);
         String partner = space.partnerOf(me);
-        CoupleMysteryBox box = CoupleMysteryBox.of(space.getId(), me, kind, content.trim(), open);
+        CoupleMysteryBoxPO box = CoupleMysteryBoxPO.of(space.getId(), me, kind, content.trim(), open);
         boxMapper.insert(box);
         push.pushCoupleEvent("box-received", me, partner,
                 "🎁 TA 给你塞了一个神秘盲盒，" + open.getMonthValue() + " 月 " + open.getDayOfMonth()
@@ -187,8 +187,8 @@ public class CoupleSurpriseService {
 
     /** 开盲盒：只有 TA 能拆，且要到开箱日。 */
     public BoxVO openBox(String me, String id) {
-        CoupleSpace space = requireSpace(me);
-        CoupleMysteryBox box = boxMapper.selectById(id);
+        CoupleSpacePO space = requireSpace(me);
+        CoupleMysteryBoxPO box = boxMapper.selectById(id);
         if (box == null || !box.getSpaceId().equals(space.getId())) {
             throw new BusinessException(404, "没有找到这个盲盒哦");
         }
@@ -210,11 +210,11 @@ public class CoupleSurpriseService {
         return toBoxVO(box, me);
     }
 
-    private boolean canOpen(CoupleMysteryBox box, String today, String me) {
+    private boolean canOpen(CoupleMysteryBoxPO box, String today, String me) {
         return !box.getFromUser().equals(me) && !box.isOpened() && box.getOpenDay().compareTo(today) <= 0;
     }
 
-    private BoxVO toBoxVO(CoupleMysteryBox box, String viewer) {
+    private BoxVO toBoxVO(CoupleMysteryBoxPO box, String viewer) {
         String today = LocalDate.now().toString();
         String content = box.isOpened() || box.getFromUser().equals(viewer) || box.getOpenDay().compareTo(today) <= 0
                 ? box.getContent() : null;
@@ -232,7 +232,7 @@ public class CoupleSurpriseService {
 
     // ========== 内部工具 ==========
 
-    private CoupleSpace requireSpace(String me) {
+    private CoupleSpacePO requireSpace(String me) {
         return spaceMapper.findActiveByUser(me)
                 .orElseThrow(() -> new BusinessException(404, "还没有建立情侣空间，先邀请一位好友吧"));
     }

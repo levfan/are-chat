@@ -1,6 +1,6 @@
 package com.smart.chat.couple.infrastructure.scheduler;
 
-import com.smart.chat.couple.infrastructure.persistence.CoupleSpace;
+import com.smart.chat.couple.infrastructure.persistence.CoupleSpacePO;
 import com.smart.chat.couple.infrastructure.persistence.CoupleSpaceMapper;
 import com.smart.chat.messaging.domain.CoupleEventPublisher;
 import com.smart.chat.messaging.domain.PeerProfileReader;
@@ -32,7 +32,7 @@ public class CoupleSurpriseJob {
     public void birthdayCards() {
         String todayMonthDay = LocalDate.now().toString().substring(5);
         String eveMonthDay = LocalDate.now().plusDays(3).toString().substring(5);
-        for (CoupleSpace space : spaceMapper.findAllActive()) {
+        for (CoupleSpacePO space : spaceMapper.findAllActive()) {
             for (String user : List.of(space.getUserA(), space.getUserB())) {
                 PeerProfileReader.PeerProfile profile = profiles.read(user).orElse(null);
                 String birthday = profile == null ? null : profile.birthday();
@@ -62,7 +62,7 @@ public class CoupleSurpriseJob {
         }
     }
 
-    private long daysTogether(CoupleSpace space) {
+    private long daysTogether(CoupleSpacePO space) {
         if (space.getAnniversary() == null || space.getAnniversary().isBlank()) {
             long since = space.getCreated() == null ? System.currentTimeMillis() : space.getCreated();
             return Math.max(1, (System.currentTimeMillis() - since) / 86_400_000L + 1);

@@ -13,7 +13,7 @@ import java.util.UUID;
  */
 @Data
 @TableName("couple_echo_deed")
-public class CoupleEchoDeed {
+public class CoupleEchoDeedPO {
 
     public static final int CONTENT_MAX = 80;
 
@@ -30,8 +30,8 @@ public class CoupleEchoDeed {
     private Long created;
     private Long updatedAt;
 
-    public static CoupleEchoDeed of(String spaceId, String fromUser, String content, String day) {
-        CoupleEchoDeed row = new CoupleEchoDeed();
+    public static CoupleEchoDeedPO of(String spaceId, String fromUser, String content, String day) {
+        CoupleEchoDeedPO row = new CoupleEchoDeedPO();
         row.id = UUID.randomUUID().toString();
         row.spaceId = spaceId;
         row.fromUser = fromUser;

@@ -10,7 +10,7 @@ import java.util.UUID;
 /** 家务积分流水（F186）：做家务赚积分，兑换小奖励。 */
 @Data
 @TableName("couple_point_ledger")
-public class CouplePointLedger {
+public class CouplePointLedgerPO {
 
     public static final String TYPE_EARN = "EARN";
     public static final String TYPE_SPEND = "SPEND";
@@ -29,8 +29,8 @@ public class CouplePointLedger {
     private Integer points;
     private Long created;
 
-    public static CouplePointLedger of(String spaceId, String fromUser, String type, String item, int points) {
-        CouplePointLedger row = new CouplePointLedger();
+    public static CouplePointLedgerPO of(String spaceId, String fromUser, String type, String item, int points) {
+        CouplePointLedgerPO row = new CouplePointLedgerPO();
         row.id = UUID.randomUUID().toString();
         row.spaceId = spaceId;
         row.fromUser = fromUser;

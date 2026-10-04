@@ -12,7 +12,7 @@ import java.util.UUID;
 /** 求抱抱（F60）：一键告诉 TA「我需要安慰」，对方送出抱抱和一句话回应。 */
 @Data
 @TableName("couple_comfort")
-public class CoupleComfort {
+public class CoupleComfortPO {
 
     public static final String FEELING_SAD = "SAD";
     public static final String FEELING_WRONGED = "WRONGED";
@@ -35,8 +35,8 @@ public class CoupleComfort {
     private Long handledAt;
     private Long created;
 
-    public static CoupleComfort of(String spaceId, String fromUser, String feeling) {
-        CoupleComfort row = new CoupleComfort();
+    public static CoupleComfortPO of(String spaceId, String fromUser, String feeling) {
+        CoupleComfortPO row = new CoupleComfortPO();
         row.id = UUID.randomUUID().toString();
         row.spaceId = spaceId;
         row.fromUser = fromUser;

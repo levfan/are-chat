@@ -7,20 +7,20 @@ import org.apache.ibatis.annotations.Mapper;
 import java.util.List;
 
 @Mapper
-public interface CoupleComfortMapper extends BaseMapperCompat<CoupleComfort> {
+public interface CoupleComfortMapper extends BaseMapperCompat<CoupleComfortPO> {
 
     /** 某人某天的求抱抱（每人每天一条）。 */
-    default CoupleComfort find(String spaceId, String fromUser, String day) {
-        return selectOne(new LambdaQueryWrapper<CoupleComfort>()
-                .eq(CoupleComfort::getSpaceId, spaceId)
-                .eq(CoupleComfort::getFromUser, fromUser)
-                .eq(CoupleComfort::getDay, day));
+    default CoupleComfortPO find(String spaceId, String fromUser, String day) {
+        return selectOne(new LambdaQueryWrapper<CoupleComfortPO>()
+                .eq(CoupleComfortPO::getSpaceId, spaceId)
+                .eq(CoupleComfortPO::getFromUser, fromUser)
+                .eq(CoupleComfortPO::getDay, day));
     }
 
     /** 空间全部求抱抱记录（新→旧）。 */
-    default List<CoupleComfort> findBySpace(String spaceId) {
-        return selectList(new LambdaQueryWrapper<CoupleComfort>()
-                .eq(CoupleComfort::getSpaceId, spaceId)
-                .orderByDesc(CoupleComfort::getCreated));
+    default List<CoupleComfortPO> findBySpace(String spaceId) {
+        return selectList(new LambdaQueryWrapper<CoupleComfortPO>()
+                .eq(CoupleComfortPO::getSpaceId, spaceId)
+                .orderByDesc(CoupleComfortPO::getCreated));
     }
 }

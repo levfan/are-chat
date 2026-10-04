@@ -13,7 +13,7 @@ import java.util.UUID;
  */
 @Data
 @TableName("couple_scratch")
-public class CoupleScratch {
+public class CoupleScratchPO {
 
     @TableId(value = "id", type = IdType.INPUT)
     private String id;
@@ -32,9 +32,9 @@ public class CoupleScratch {
     private Long redeemedAt;
     private Long created;
 
-    public static CoupleScratch of(String spaceId, String weekKey, String fromUser, String owner,
+    public static CoupleScratchPO of(String spaceId, String weekKey, String fromUser, String owner,
                                    String prizeKind, String prizeText) {
-        CoupleScratch row = new CoupleScratch();
+        CoupleScratchPO row = new CoupleScratchPO();
         row.id = UUID.randomUUID().toString();
         row.spaceId = spaceId;
         row.weekKey = weekKey;

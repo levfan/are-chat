@@ -1,6 +1,6 @@
 package com.smart.chat.couple.infrastructure.content;
 
-import com.smart.chat.couple.infrastructure.persistence.CoupleComfort;
+import com.smart.chat.couple.infrastructure.persistence.CoupleComfortPO;
 import java.util.List;
 import java.util.concurrent.ThreadLocalRandom;
 
@@ -154,11 +154,11 @@ public final class CoupleTalkBank {
     /** 安慰话术卡：按感受随机取 count 条。 */
     public static List<String> comfortWords(String feeling, int count) {
         List<String> pool = switch (feeling) {
-            case CoupleComfort.FEELING_SAD -> COMFORT_SAD;
-            case CoupleComfort.FEELING_WRONGED -> COMFORT_WRONGED;
-            case CoupleComfort.FEELING_TIRED -> COMFORT_TIRED;
-            case CoupleComfort.FEELING_ANXIOUS -> COMFORT_ANXIOUS;
-            case CoupleComfort.FEELING_EMO -> COMFORT_EMO;
+            case CoupleComfortPO.FEELING_SAD -> COMFORT_SAD;
+            case CoupleComfortPO.FEELING_WRONGED -> COMFORT_WRONGED;
+            case CoupleComfortPO.FEELING_TIRED -> COMFORT_TIRED;
+            case CoupleComfortPO.FEELING_ANXIOUS -> COMFORT_ANXIOUS;
+            case CoupleComfortPO.FEELING_EMO -> COMFORT_EMO;
             default -> COMFORT_SAD;
         };
         return pool.stream().collect(java.util.stream.Collectors.collectingAndThen(

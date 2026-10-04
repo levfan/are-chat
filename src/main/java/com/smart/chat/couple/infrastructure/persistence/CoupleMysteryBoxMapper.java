@@ -7,12 +7,12 @@ import org.apache.ibatis.annotations.Mapper;
 import java.util.List;
 
 @Mapper
-public interface CoupleMysteryBoxMapper extends BaseMapperCompat<CoupleMysteryBox> {
+public interface CoupleMysteryBoxMapper extends BaseMapperCompat<CoupleMysteryBoxPO> {
 
     /** 空间的盲盒列表（新→旧）。 */
-    default List<CoupleMysteryBox> findBySpace(String spaceId) {
-        return selectList(new LambdaQueryWrapper<CoupleMysteryBox>()
-                .eq(CoupleMysteryBox::getSpaceId, spaceId)
-                .orderByDesc(CoupleMysteryBox::getCreated));
+    default List<CoupleMysteryBoxPO> findBySpace(String spaceId) {
+        return selectList(new LambdaQueryWrapper<CoupleMysteryBoxPO>()
+                .eq(CoupleMysteryBoxPO::getSpaceId, spaceId)
+                .orderByDesc(CoupleMysteryBoxPO::getCreated));
     }
 }

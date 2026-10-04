@@ -13,7 +13,7 @@ import java.util.UUID;
  */
 @Data
 @TableName("couple_catch_safeword")
-public class CoupleCatchSafeword {
+public class CoupleCatchSafewordPO {
 
     /** 安全词字数上限（列 varchar(80) 已按 4 倍宽度放宽） */
     public static final int WORD_MAX = 20;
@@ -32,8 +32,8 @@ public class CoupleCatchSafeword {
     private Long created;
     private Long updatedAt;
 
-    public static CoupleCatchSafeword of(String spaceId, String fromUser, String word, String note) {
-        CoupleCatchSafeword row = new CoupleCatchSafeword();
+    public static CoupleCatchSafewordPO of(String spaceId, String fromUser, String word, String note) {
+        CoupleCatchSafewordPO row = new CoupleCatchSafewordPO();
         row.id = UUID.randomUUID().toString();
         row.spaceId = spaceId;
         row.fromUser = fromUser;

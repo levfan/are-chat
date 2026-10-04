@@ -1,11 +1,11 @@
 package com.smart.chat.couple.application;
 
 import com.smart.chat.couple.infrastructure.content.CoupleCatchBank;
-import com.smart.chat.couple.infrastructure.persistence.CoupleCatchSafeword;
+import com.smart.chat.couple.infrastructure.persistence.CoupleCatchSafewordPO;
 import com.smart.chat.couple.infrastructure.persistence.CoupleCatchSafewordMapper;
-import com.smart.chat.couple.infrastructure.persistence.CoupleCatchSafewordUse;
+import com.smart.chat.couple.infrastructure.persistence.CoupleCatchSafewordUsePO;
 import com.smart.chat.couple.infrastructure.persistence.CoupleCatchSafewordUseMapper;
-import com.smart.chat.couple.infrastructure.persistence.CoupleSpace;
+import com.smart.chat.couple.infrastructure.persistence.CoupleSpacePO;
 import com.smart.chat.couple.infrastructure.persistence.CoupleSpaceMapper;
 import com.smart.chat.sharedkernel.web.BusinessException;
 import com.smart.chat.messaging.domain.CoupleEventPublisher;
@@ -68,16 +68,16 @@ public class CoupleCatchService {
 
     /** 约定/改写自己的安全词（每人一格，word ≤20、note ≤60）。 */
     public CatchVO setSafeword(String me, String word, String note) {
-        CoupleSpace space = requireSpace(me);
+        CoupleSpacePO space = requireSpace(me);
         LocalDate now = LocalDate.now();
         String w = trim(word, "暂停词总得有个词");
-        if (w.length() > CoupleCatchSafeword.WORD_MAX) {
-            throw new BusinessException(400, "安全词最多 " + CoupleCatchSafeword.WORD_MAX + " 字");
+        if (w.length() > CoupleCatchSafewordPO.WORD_MAX) {
+            throw new BusinessException(400, "安全词最多 " + CoupleCatchSafewordPO.WORD_MAX + " 字");
         }
-        String n = limit(note, CoupleCatchSafeword.NOTE_MAX, "用了之后希望怎样");
-        CoupleCatchSafeword row = safewordMapper.find(space.getId(), me);
+        String n = limit(note, CoupleCatchSafewordPO.NOTE_MAX, "用了之后希望怎样");
+        CoupleCatchSafewordPO row = safewordMapper.find(space.getId(), me);
         if (row == null) {
-            safewordMapper.insert(CoupleCatchSafeword.of(space.getId(), me, w, n));
+            safewordMapper.insert(CoupleCatchSafewordPO.of(space.getId(), me, w, n));
         } else {
             row.setWord(w);
             row.setNote(n);
@@ -90,9 +90,9 @@ public class CoupleCatchService {
 
     /** 喊了一次暂停（一天一人只记一次，复盘可后补）。 */
     public CatchVO useSafeword(String me) {
-        CoupleSpace space = requireSpace(me);
+        CoupleSpacePO space = requireSpace(me);
         LocalDate now = LocalDate.now();
-        CoupleCatchSafeword mine = safewordMapper.find(space.getId(), me);
+        CoupleCatchSafewordPO mine = safewordMapper.find(space.getId(), me);
         if (mine == null) {
             throw new BusinessException(400, "先约一个安全词，才喊得出口 🛑");
         }
@@ -100,7 +100,7 @@ public class CoupleCatchService {
         if (useMapper.find(space.getId(), day, me) != null) {
             throw new BusinessException(400, "今天已经记过一次暂停了，别把安全词用成口头禅");
         }
-        useMapper.insert(CoupleCatchSafewordUse.of(space.getId(), day, me));
+        useMapper.insert(CoupleCatchSafewordUsePO.of(space.getId(), day, me));
         push.pushCoupleEvent("catch-safeword-use", me, space.partnerOf(me),
                 CoupleCatchBank.safewordUseLine(nz(mine.getWord()), me));
         return build(space, me, now);
@@ -108,15 +108,15 @@ public class CoupleCatchService {
 
     /** 事后补一句复盘（只有喊停本人能补自己那天的记录）。 */
     public CatchVO reflectUse(String me, String id, String reflect) {
-        CoupleSpace space = requireSpace(me);
+        CoupleSpacePO space = requireSpace(me);
         LocalDate now = LocalDate.now();
-        CoupleCatchSafewordUse use = requireUse(space, id);
+        CoupleCatchSafewordUsePO use = requireUse(space, id);
         if (!me.equals(use.getUserName())) {
             throw new BusinessException(400, "那次是 TA 喊的停，复盘要 TA 自己写 📝");
         }
         String r = trim(reflect, "复盘写一句：当时卡在哪、后来怎么接着聊的");
-        if (r.length() > CoupleCatchSafewordUse.REFLECT_MAX) {
-            throw new BusinessException(400, "复盘最多 " + CoupleCatchSafewordUse.REFLECT_MAX + " 字");
+        if (r.length() > CoupleCatchSafewordUsePO.REFLECT_MAX) {
+            throw new BusinessException(400, "复盘最多 " + CoupleCatchSafewordUsePO.REFLECT_MAX + " 字");
         }
         use.setReflect(r);
         use.setUpdatedAt(System.currentTimeMillis());
@@ -128,14 +128,14 @@ public class CoupleCatchService {
 
     // ========== 聚合 ==========
 
-    private CatchVO build(CoupleSpace space, String me, LocalDate now) {
+    private CatchVO build(CoupleSpacePO space, String me, LocalDate now) {
         String day = now.toString();
         String week = now.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY)).toString();
 
-        List<CoupleCatchSafeword> words = safewordMapper.findBySpace(space.getId());
-        CoupleCatchSafeword myRow = words.stream().filter(w -> me.equals(w.getFromUser())).findFirst().orElse(null);
-        CoupleCatchSafeword partnerRow = words.stream().filter(w -> !me.equals(w.getFromUser())).findFirst().orElse(null);
-        List<CoupleCatchSafewordUse> useRows = useMapper.findBySpace(space.getId());
+        List<CoupleCatchSafewordPO> words = safewordMapper.findBySpace(space.getId());
+        CoupleCatchSafewordPO myRow = words.stream().filter(w -> me.equals(w.getFromUser())).findFirst().orElse(null);
+        CoupleCatchSafewordPO partnerRow = words.stream().filter(w -> !me.equals(w.getFromUser())).findFirst().orElse(null);
+        List<CoupleCatchSafewordUsePO> useRows = useMapper.findBySpace(space.getId());
         String myWordText = myRow == null ? "" : nz(myRow.getWord());
         String partnerWordText = partnerRow == null ? "" : nz(partnerRow.getWord());
 
@@ -158,14 +158,14 @@ public class CoupleCatchService {
         return new CatchVO(day, week, myWord, partnerWord, uses, monthUses, usedTodayMine, usedTodayPartner);
     }
 
-    private int countBy(List<CoupleCatchSafewordUse> rows, String user) {
+    private int countBy(List<CoupleCatchSafewordUsePO> rows, String user) {
         return (int) rows.stream().filter(u -> user != null && user.equals(u.getUserName())).count();
     }
 
     // ========== 取行与校验 ==========
 
-    private CoupleCatchSafewordUse requireUse(CoupleSpace space, String id) {
-        CoupleCatchSafewordUse row = id == null || id.isBlank() ? null : useMapper.selectById(id);
+    private CoupleCatchSafewordUsePO requireUse(CoupleSpacePO space, String id) {
+        CoupleCatchSafewordUsePO row = id == null || id.isBlank() ? null : useMapper.selectById(id);
         if (row == null || !space.getId().equals(row.getSpaceId())) {
             throw new BusinessException(404, "找不到那次暂停记录 🛑");
         }
@@ -192,7 +192,7 @@ public class CoupleCatchService {
         return s == null ? "" : s;
     }
 
-    private CoupleSpace requireSpace(String me) {
+    private CoupleSpacePO requireSpace(String me) {
         return spaceMapper.findActiveByUser(me)
                 .orElseThrow(() -> new BusinessException(404, "还没有建立情侣空间，先邀请一位好友吧"));
     }

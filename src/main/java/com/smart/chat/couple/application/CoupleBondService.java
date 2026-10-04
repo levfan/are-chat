@@ -1,11 +1,11 @@
 package com.smart.chat.couple.application;
 
-import com.smart.chat.couple.infrastructure.persistence.CoupleAction;
+import com.smart.chat.couple.infrastructure.persistence.CoupleActionPO;
 import com.smart.chat.couple.infrastructure.persistence.CoupleActionMapper;
 import com.smart.chat.couple.infrastructure.persistence.CoupleMoodMapper;
-import com.smart.chat.couple.infrastructure.persistence.CoupleMoodReaction;
+import com.smart.chat.couple.infrastructure.persistence.CoupleMoodReactionPO;
 import com.smart.chat.couple.infrastructure.persistence.CoupleMoodReactionMapper;
-import com.smart.chat.couple.infrastructure.persistence.CoupleSpace;
+import com.smart.chat.couple.infrastructure.persistence.CoupleSpacePO;
 import com.smart.chat.couple.infrastructure.persistence.CoupleSpaceMapper;
 import com.smart.chat.sharedkernel.web.BusinessException;
 import com.smart.chat.messaging.domain.CoupleEventPublisher;
@@ -63,21 +63,21 @@ public class CoupleBondService {
 
     /** 发送一个贴贴动作：对方实时收到推送；命中里程碑时双方一起庆祝。 */
     public BondStatsVO sendAction(String me, String kind) {
-        if (!CoupleAction.isValidKind(kind)) {
+        if (!CoupleActionPO.isValidKind(kind)) {
             throw new BusinessException(400, "不认识这个动作哦，换一个试试～");
         }
-        CoupleSpace space = requireSpace(me);
+        CoupleSpacePO space = requireSpace(me);
         String partner = space.partnerOf(me);
-        actionMapper.insert(CoupleAction.of(space.getId(), me, kind));
+        actionMapper.insert(CoupleActionPO.of(space.getId(), me, kind));
         push.pushCoupleEvent("bond-action", me, partner, actionPushDetail(kind));
         // 贴贴里程碑：抱抱/亲亲/想念累计到整数关口，双方一起庆祝
-        if (CoupleAction.KIND_HUG.equals(kind) || CoupleAction.KIND_KISS.equals(kind)
-                || CoupleAction.KIND_MISS.equals(kind)) {
+        if (CoupleActionPO.KIND_HUG.equals(kind) || CoupleActionPO.KIND_KISS.equals(kind)
+                || CoupleActionPO.KIND_MISS.equals(kind)) {
             long total = actionMapper.countByKind(space.getId(), kind);
             for (long milestone : MILESTONES) {
                 if (total == milestone) {
-                    String detail = "第 " + milestone + " 次「" + CoupleAction.labelOf(kind) + "」达成 🎉"
-                            + CoupleAction.emojiOf(kind) + " 你们好甜！";
+                    String detail = "第 " + milestone + " 次「" + CoupleActionPO.labelOf(kind) + "」达成 🎉"
+                            + CoupleActionPO.emojiOf(kind) + " 你们好甜！";
                     push.pushCoupleEventBoth("bond-milestone", me, me, partner, detail);
                     break;
                 }
@@ -88,7 +88,7 @@ public class CoupleBondService {
 
     /** 最近动作流（新→旧，默认 50 条上限）。 */
     public List<ActionVO> recentActions(String me, Integer limit) {
-        CoupleSpace space = requireSpace(me);
+        CoupleSpacePO space = requireSpace(me);
         int size = limit == null || limit <= 0 ? 50 : Math.min(limit, 200);
         return actionMapper.findBySpace(space.getId()).stream()
                 .limit(size)
@@ -98,13 +98,13 @@ public class CoupleBondService {
 
     /** 贴贴统计：各类动作累计/双方占比/最近时间 + 今日双方动作数。 */
     public BondStatsVO stats(String me) {
-        CoupleSpace space = requireSpace(me);
+        CoupleSpacePO space = requireSpace(me);
         String partner = space.partnerOf(me);
         List<KindStat> kinds = new ArrayList<>();
-        for (String kind : List.of(CoupleAction.KIND_MISS, CoupleAction.KIND_HUG, CoupleAction.KIND_KISS,
-                CoupleAction.KIND_POKE, CoupleAction.KIND_PAT, CoupleAction.KIND_NUZZLE,
-                CoupleAction.KIND_TICKLE)) {
-            kinds.add(new KindStat(kind, CoupleAction.emojiOf(kind), CoupleAction.labelOf(kind),
+        for (String kind : List.of(CoupleActionPO.KIND_MISS, CoupleActionPO.KIND_HUG, CoupleActionPO.KIND_KISS,
+                CoupleActionPO.KIND_POKE, CoupleActionPO.KIND_PAT, CoupleActionPO.KIND_NUZZLE,
+                CoupleActionPO.KIND_TICKLE)) {
+            kinds.add(new KindStat(kind, CoupleActionPO.emojiOf(kind), CoupleActionPO.labelOf(kind),
                     actionMapper.countByKind(space.getId(), kind),
                     actionMapper.countByKindAndUser(space.getId(), kind, me),
                     actionMapper.countByKindAndUser(space.getId(), kind, partner),
@@ -113,7 +113,7 @@ public class CoupleBondService {
         String today = LocalDate.now().toString();
         long todayMine = 0;
         long todayPartner = 0;
-        for (CoupleAction action : actionMapper.findBySpace(space.getId())) {
+        for (CoupleActionPO action : actionMapper.findBySpace(space.getId())) {
             String day = java.time.Instant.ofEpochMilli(action.getCreated())
                     .atZone(java.time.ZoneId.systemDefault()).toLocalDate().toString();
             if (!today.equals(day)) {
@@ -132,10 +132,10 @@ public class CoupleBondService {
 
     /** 回应 TA 某天的心情（默认今天）：每人每天一条，重复提交视为修改。 */
     public MoodReactionVO reactMood(String me, String day, String reaction) {
-        if (!CoupleMoodReaction.isValidReaction(reaction)) {
+        if (!CoupleMoodReactionPO.isValidReaction(reaction)) {
             throw new BusinessException(400, "回应只能是抱抱/亲亲/加油/摸摸头哦");
         }
-        CoupleSpace space = requireSpace(me);
+        CoupleSpacePO space = requireSpace(me);
         String partner = space.partnerOf(me);
         String moodDay = day == null || day.isBlank() ? LocalDate.now().toString() : normalizeDay(day);
         if (moodDay.compareTo(LocalDate.now().toString()) > 0) {
@@ -144,26 +144,26 @@ public class CoupleBondService {
         if (moodMapper.find(space.getId(), partner, moodDay).isEmpty()) {
             throw new BusinessException(400, "TA 那天还没记录心情，先提醒 TA 记一笔吧 💗");
         }
-        CoupleMoodReaction existing = moodReactionMapper.find(space.getId(), moodDay, me);
+        CoupleMoodReactionPO existing = moodReactionMapper.find(space.getId(), moodDay, me);
         if (existing != null) {
             existing.setReaction(reaction);
             existing.setUpdatedAt(System.currentTimeMillis());
             moodReactionMapper.updateById(existing);
         } else {
-            moodReactionMapper.insert(CoupleMoodReaction.of(space.getId(), moodDay, me, reaction));
+            moodReactionMapper.insert(CoupleMoodReactionPO.of(space.getId(), moodDay, me, reaction));
         }
         push.pushCoupleEvent("mood-reacted", me, partner,
-                "TA 回应了你 " + moodDay + " 的心情：" + CoupleMoodReaction.labelOf(reaction)
-                        + " " + CoupleMoodReaction.emojiOf(reaction));
+                "TA 回应了你 " + moodDay + " 的心情：" + CoupleMoodReactionPO.labelOf(reaction)
+                        + " " + CoupleMoodReactionPO.emojiOf(reaction));
         return moodReactions(me, moodDay);
     }
 
     /** 某天（默认今天）双方给彼此心情的回应。 */
     public MoodReactionVO moodReactions(String me, String day) {
-        CoupleSpace space = requireSpace(me);
+        CoupleSpacePO space = requireSpace(me);
         String moodDay = day == null || day.isBlank() ? LocalDate.now().toString() : normalizeDay(day);
-        CoupleMoodReaction mine = moodReactionMapper.find(space.getId(), moodDay, me);
-        CoupleMoodReaction theirs = moodReactionMapper.find(space.getId(), moodDay, space.partnerOf(me));
+        CoupleMoodReactionPO mine = moodReactionMapper.find(space.getId(), moodDay, me);
+        CoupleMoodReactionPO theirs = moodReactionMapper.find(space.getId(), moodDay, space.partnerOf(me));
         return new MoodReactionVO(moodDay,
                 mine == null ? null : mine.getReaction(),
                 theirs == null ? null : theirs.getReaction());
@@ -173,7 +173,7 @@ public class CoupleBondService {
 
     /** 给 TA 设置专属爱称（传空串/null 清除），空间内 TA 的名字会变成它。 */
     public String setPetName(String me, String name) {
-        CoupleSpace space = requireSpace(me);
+        CoupleSpacePO space = requireSpace(me);
         String partner = space.partnerOf(me);
         String nick = name == null ? null : name.trim();
         if (nick != null && nick.isEmpty()) {
@@ -191,7 +191,7 @@ public class CoupleBondService {
 
     // ========== 内部工具 ==========
 
-    private CoupleSpace requireSpace(String me) {
+    private CoupleSpacePO requireSpace(String me) {
         return spaceMapper.findActiveByUser(me)
                 .orElseThrow(() -> new BusinessException(404, "还没有建立情侣空间，先邀请一位好友吧"));
     }
@@ -206,13 +206,13 @@ public class CoupleBondService {
 
     private String actionPushDetail(String kind) {
         return switch (kind) {
-            case CoupleAction.KIND_POKE -> "TA 戳了戳你 👉 快回戳！";
-            case CoupleAction.KIND_HUG -> "TA 给了你一个大大的拥抱 🤗 快抱回去！";
-            case CoupleAction.KIND_KISS -> "TA 亲了你一口 💋 嘻嘻";
-            case CoupleAction.KIND_PAT -> "TA 捏了捏你的脸 🫳 好软";
-            case CoupleAction.KIND_NUZZLE -> "TA 蹭了蹭你 😚 好黏人";
-            case CoupleAction.KIND_TICKLE -> "TA 挠你痒痒 🤭 哈哈哈别跑！";
-            case CoupleAction.KIND_MISS -> "TA 说 TA 在想你 💌 现在立刻马上";
+            case CoupleActionPO.KIND_POKE -> "TA 戳了戳你 👉 快回戳！";
+            case CoupleActionPO.KIND_HUG -> "TA 给了你一个大大的拥抱 🤗 快抱回去！";
+            case CoupleActionPO.KIND_KISS -> "TA 亲了你一口 💋 嘻嘻";
+            case CoupleActionPO.KIND_PAT -> "TA 捏了捏你的脸 🫳 好软";
+            case CoupleActionPO.KIND_NUZZLE -> "TA 蹭了蹭你 😚 好黏人";
+            case CoupleActionPO.KIND_TICKLE -> "TA 挠你痒痒 🤭 哈哈哈别跑！";
+            case CoupleActionPO.KIND_MISS -> "TA 说 TA 在想你 💌 现在立刻马上";
             default -> "TA 贴了贴你 💕";
         };
     }

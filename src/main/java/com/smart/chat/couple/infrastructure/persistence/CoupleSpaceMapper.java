@@ -8,19 +8,19 @@ import java.util.List;
 import java.util.Optional;
 
 @Mapper
-public interface CoupleSpaceMapper extends BaseMapperCompat<CoupleSpace> {
+public interface CoupleSpaceMapper extends BaseMapperCompat<CoupleSpacePO> {
 
     /** 我当前生效（未解除）的情侣空间。 */
-    default Optional<CoupleSpace> findActiveByUser(String username) {
-        return Optional.ofNullable(selectOne(new LambdaQueryWrapper<CoupleSpace>()
-                .eq(CoupleSpace::getStatus, CoupleSpace.STATUS_ACTIVE)
-                .and(w -> w.eq(CoupleSpace::getUserA, username).or().eq(CoupleSpace::getUserB, username))
+    default Optional<CoupleSpacePO> findActiveByUser(String username) {
+        return Optional.ofNullable(selectOne(new LambdaQueryWrapper<CoupleSpacePO>()
+                .eq(CoupleSpacePO::getStatus, CoupleSpacePO.STATUS_ACTIVE)
+                .and(w -> w.eq(CoupleSpacePO::getUserA, username).or().eq(CoupleSpacePO::getUserB, username))
                 .last("LIMIT 1")));
     }
 
     /** 全部生效中的情侣空间（逾期提醒任务过滤用）。 */
-    default List<CoupleSpace> findAllActive() {
-        return selectList(new LambdaQueryWrapper<CoupleSpace>()
-                .eq(CoupleSpace::getStatus, CoupleSpace.STATUS_ACTIVE));
+    default List<CoupleSpacePO> findAllActive() {
+        return selectList(new LambdaQueryWrapper<CoupleSpacePO>()
+                .eq(CoupleSpacePO::getStatus, CoupleSpacePO.STATUS_ACTIVE));
     }
 }

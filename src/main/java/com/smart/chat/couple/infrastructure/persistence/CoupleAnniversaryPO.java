@@ -13,7 +13,7 @@ import java.util.UUID;
  */
 @Data
 @TableName("couple_anniversary")
-public class CoupleAnniversary {
+public class CoupleAnniversaryPO {
 
     public static final int TITLE_MAX = 60;
     /** F127 大日子类型：NORMAL 普通 / LOVE 恋爱 / FAMILY 家人 / FRIEND 朋友 / WORK 工作 */
@@ -42,8 +42,8 @@ public class CoupleAnniversary {
     private String createdBy;
     private Long created;
 
-    public static CoupleAnniversary of(String spaceId, String title, String date, boolean yearly, String createdBy) {
-        CoupleAnniversary row = new CoupleAnniversary();
+    public static CoupleAnniversaryPO of(String spaceId, String title, String date, boolean yearly, String createdBy) {
+        CoupleAnniversaryPO row = new CoupleAnniversaryPO();
         row.id = UUID.randomUUID().toString();
         row.spaceId = spaceId;
         row.title = title;

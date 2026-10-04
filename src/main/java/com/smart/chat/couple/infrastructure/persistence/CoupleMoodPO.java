@@ -14,7 +14,7 @@ import java.util.UUID;
  */
 @Data
 @TableName("couple_mood")
-public class CoupleMood {
+public class CoupleMoodPO {
 
     /** 心情键 → 展示文案/表情由前端维护，后端只做白名单校验与曲线分值计算。 */
     public static final String MOOD_LOVE = "LOVE";
@@ -70,8 +70,8 @@ public class CoupleMood {
     private Long created;
     private Long updatedAt;
 
-    public static CoupleMood of(String spaceId, String username, String day, String mood, String note) {
-        CoupleMood row = new CoupleMood();
+    public static CoupleMoodPO of(String spaceId, String username, String day, String mood, String note) {
+        CoupleMoodPO row = new CoupleMoodPO();
         row.id = UUID.randomUUID().toString();
         row.spaceId = spaceId;
         row.username = username;

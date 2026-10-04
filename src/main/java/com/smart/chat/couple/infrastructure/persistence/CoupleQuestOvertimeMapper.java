@@ -8,28 +8,28 @@ import java.util.List;
 
 /** F372 加班预报数据访问（uk(space_id,day,from_user) 每人每天一行）。 */
 @Mapper
-public interface CoupleQuestOvertimeMapper extends BaseMapperCompat<CoupleQuestOvertime> {
+public interface CoupleQuestOvertimeMapper extends BaseMapperCompat<CoupleQuestOvertimePO> {
 
     /** 空间全部预报（新的在前，总览用）。 */
-    default List<CoupleQuestOvertime> findBySpace(String spaceId) {
-        return selectList(new LambdaQueryWrapper<CoupleQuestOvertime>()
-                .eq(CoupleQuestOvertime::getSpaceId, spaceId)
-                .orderByDesc(CoupleQuestOvertime::getDay));
+    default List<CoupleQuestOvertimePO> findBySpace(String spaceId) {
+        return selectList(new LambdaQueryWrapper<CoupleQuestOvertimePO>()
+                .eq(CoupleQuestOvertimePO::getSpaceId, spaceId)
+                .orderByDesc(CoupleQuestOvertimePO::getDay));
     }
 
     /** 按 uk 定位某人那天的预报（写前查重与留灯回填用）。 */
-    default CoupleQuestOvertime find(String spaceId, String day, String fromUser) {
-        return selectOne(new LambdaQueryWrapper<CoupleQuestOvertime>()
-                .eq(CoupleQuestOvertime::getSpaceId, spaceId)
-                .eq(CoupleQuestOvertime::getDay, day)
-                .eq(CoupleQuestOvertime::getFromUser, fromUser));
+    default CoupleQuestOvertimePO find(String spaceId, String day, String fromUser) {
+        return selectOne(new LambdaQueryWrapper<CoupleQuestOvertimePO>()
+                .eq(CoupleQuestOvertimePO::getSpaceId, spaceId)
+                .eq(CoupleQuestOvertimePO::getDay, day)
+                .eq(CoupleQuestOvertimePO::getFromUser, fromUser));
     }
 
     /** 某天两人的全部预报（读对方今天有没有预报）。 */
-    default List<CoupleQuestOvertime> findByDay(String spaceId, String day) {
-        return selectList(new LambdaQueryWrapper<CoupleQuestOvertime>()
-                .eq(CoupleQuestOvertime::getSpaceId, spaceId)
-                .eq(CoupleQuestOvertime::getDay, day)
-                .orderByAsc(CoupleQuestOvertime::getDay));
+    default List<CoupleQuestOvertimePO> findByDay(String spaceId, String day) {
+        return selectList(new LambdaQueryWrapper<CoupleQuestOvertimePO>()
+                .eq(CoupleQuestOvertimePO::getSpaceId, spaceId)
+                .eq(CoupleQuestOvertimePO::getDay, day)
+                .orderByAsc(CoupleQuestOvertimePO::getDay));
     }
 }

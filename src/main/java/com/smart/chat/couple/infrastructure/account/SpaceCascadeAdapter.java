@@ -1,7 +1,7 @@
 package com.smart.chat.couple.infrastructure.account;
 
 import com.smart.chat.couple.infrastructure.persistence.CoupleInviteMapper;
-import com.smart.chat.couple.infrastructure.persistence.CoupleSpace;
+import com.smart.chat.couple.infrastructure.persistence.CoupleSpacePO;
 import com.smart.chat.couple.infrastructure.persistence.CoupleSpaceMapper;
 import com.smart.chat.identity.domain.AccountCascade;
 import com.smart.chat.messaging.domain.CoupleEventPublisher;
@@ -29,7 +29,7 @@ public class SpaceCascadeAdapter implements AccountCascade {
     @Override
     public void onDeactivated(String username) {
         spaceMapper.findActiveByUser(username).ifPresent(space -> {
-            space.setStatus(CoupleSpace.STATUS_DISSOLVED);
+            space.setStatus(CoupleSpacePO.STATUS_DISSOLVED);
             space.setDissolvedAt(System.currentTimeMillis());
             spaceMapper.updateById(space);
             push.pushCoupleEvent("dissolved", username, space.partnerOf(username),

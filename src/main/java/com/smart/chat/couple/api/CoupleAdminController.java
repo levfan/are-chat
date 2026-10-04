@@ -2,7 +2,7 @@ package com.smart.chat.couple.api;
 
 import com.smart.chat.couple.infrastructure.persistence.CoupleActionMapper;
 import com.smart.chat.couple.infrastructure.persistence.CoupleEchoDeedMapper;
-import com.smart.chat.couple.infrastructure.persistence.CoupleSpace;
+import com.smart.chat.couple.infrastructure.persistence.CoupleSpacePO;
 import com.smart.chat.couple.infrastructure.persistence.CoupleSpaceMapper;
 import com.smart.chat.identity.domain.AccountDirectory;
 import com.smart.chat.sharedkernel.web.ApiResponse;
@@ -54,13 +54,13 @@ public class CoupleAdminController {
         } catch (BusinessException e) {
             throw new BusinessException(403, "仅管理员可查看运营看板");
         }
-        List<CoupleSpace> all = spaceMapper.selectList(null);
-        long active = all.stream().filter(s -> CoupleSpace.STATUS_ACTIVE.equals(s.getStatus())).count();
+        List<CoupleSpacePO> all = spaceMapper.selectList(null);
+        long active = all.stream().filter(s -> CoupleSpacePO.STATUS_ACTIVE.equals(s.getStatus())).count();
         long dissolved = all.size() - active;
         LocalDate now = LocalDate.now();
         long avgDays = active == 0 ? 0
                 : (long) all.stream()
-                        .filter(s -> CoupleSpace.STATUS_ACTIVE.equals(s.getStatus()))
+                        .filter(s -> CoupleSpacePO.STATUS_ACTIVE.equals(s.getStatus()))
                         .mapToLong(s -> {
                             LocalDate start;
                             try {

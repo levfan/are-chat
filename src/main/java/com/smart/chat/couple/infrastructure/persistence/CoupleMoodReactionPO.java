@@ -13,7 +13,7 @@ import java.util.UUID;
  */
 @Data
 @TableName("couple_mood_reaction")
-public class CoupleMoodReaction {
+public class CoupleMoodReactionPO {
 
     public static final String REACTION_HUG = "HUG";
     public static final String REACTION_KISS = "KISS";
@@ -31,8 +31,8 @@ public class CoupleMoodReaction {
     private Long created;
     private Long updatedAt;
 
-    public static CoupleMoodReaction of(String spaceId, String moodDay, String fromUser, String reaction) {
-        CoupleMoodReaction row = new CoupleMoodReaction();
+    public static CoupleMoodReactionPO of(String spaceId, String moodDay, String fromUser, String reaction) {
+        CoupleMoodReactionPO row = new CoupleMoodReactionPO();
         row.id = UUID.randomUUID().toString();
         row.spaceId = spaceId;
         row.moodDay = moodDay;

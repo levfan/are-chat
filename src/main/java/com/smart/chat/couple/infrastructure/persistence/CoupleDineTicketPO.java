@@ -10,7 +10,7 @@ import java.util.UUID;
 /** F210 今晚饭票：每人每天提名一道菜，两票撞同一菜=命中。 */
 @Data
 @TableName("couple_dine_ticket")
-public class CoupleDineTicket {
+public class CoupleDineTicketPO {
 
     @TableId(value = "id", type = IdType.INPUT)
     private String id;
@@ -21,8 +21,8 @@ public class CoupleDineTicket {
     private String reason;
     private Long created;
 
-    public static CoupleDineTicket of(String spaceId, String day, String fromUser, String dish, String reason) {
-        CoupleDineTicket row = new CoupleDineTicket();
+    public static CoupleDineTicketPO of(String spaceId, String day, String fromUser, String dish, String reason) {
+        CoupleDineTicketPO row = new CoupleDineTicketPO();
         row.id = UUID.randomUUID().toString();
         row.spaceId = spaceId;
         row.day = day;

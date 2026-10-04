@@ -11,7 +11,7 @@ import java.util.UUID;
 /** 恋爱盲盒（F51）：把一句话/小任务装进盒子，对方到指定日子才能拆——制造一天的期待。 */
 @Data
 @TableName("couple_mystery_box")
-public class CoupleMysteryBox {
+public class CoupleMysteryBoxPO {
 
     public static final String KIND_WHISPER = "whisper";
     public static final String KIND_TASK = "task";
@@ -30,9 +30,9 @@ public class CoupleMysteryBox {
     private Long openedAt;
     private Long created;
 
-    public static CoupleMysteryBox of(String spaceId, String fromUser, String kind, String content,
+    public static CoupleMysteryBoxPO of(String spaceId, String fromUser, String kind, String content,
                                       LocalDate openDay) {
-        CoupleMysteryBox row = new CoupleMysteryBox();
+        CoupleMysteryBoxPO row = new CoupleMysteryBoxPO();
         row.id = UUID.randomUUID().toString();
         row.spaceId = spaceId;
         row.fromUser = fromUser;

@@ -1,6 +1,6 @@
 package com.smart.chat.couple.infrastructure.notify;
 
-import com.smart.chat.couple.infrastructure.persistence.CoupleNotify;
+import com.smart.chat.couple.infrastructure.persistence.CoupleNotifyPO;
 import com.smart.chat.couple.infrastructure.persistence.CoupleNotifyMapper;
 import com.smart.chat.messaging.domain.NotifySinkRegistry;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
@@ -31,7 +31,7 @@ public class CoupleNotifyRecorder {
     /** 事件落库：只存档，不影响推送链路（失败静默，通知缺失可容忍）。 */
     public void record(String event, String actor, String toUser, String detail) {
         try {
-            notifyMapper.insert(CoupleNotify.of(toUser, event, actor, detail));
+            notifyMapper.insert(CoupleNotifyPO.of(toUser, event, actor, detail));
         } catch (Exception ignored) {
             // 通知存档失败不影响业务
         }

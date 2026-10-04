@@ -1,8 +1,8 @@
 package com.smart.chat.couple.infrastructure.scheduler;
 
-import com.smart.chat.couple.infrastructure.persistence.CoupleAnniversary;
+import com.smart.chat.couple.infrastructure.persistence.CoupleAnniversaryPO;
 import com.smart.chat.couple.infrastructure.persistence.CoupleAnniversaryMapper;
-import com.smart.chat.couple.infrastructure.persistence.CoupleSpace;
+import com.smart.chat.couple.infrastructure.persistence.CoupleSpacePO;
 import com.smart.chat.couple.infrastructure.persistence.CoupleSpaceMapper;
 import com.smart.chat.messaging.domain.CoupleEventPublisher;
 import org.slf4j.Logger;
@@ -37,16 +37,16 @@ public class CoupleReminderJob {
     @Scheduled(cron = "0 30 9 * * ?", zone = "Asia/Shanghai")
     public void remindAnniversaryCountdown() {
         String today = LocalDate.now().toString();
-        List<CoupleSpace> spaces = spaceMapper.findAllActive();
+        List<CoupleSpacePO> spaces = spaceMapper.findAllActive();
         int reminded = 0;
-        for (CoupleSpace space : spaces) {
+        for (CoupleSpacePO space : spaces) {
             LocalDate now = LocalDate.now();
             // 在一起纪念日（couple_space.anniversary，可空）
             if (space.getAnniversary() != null) {
                 reminded += remindCountdown(space, "我们在一起", space.getAnniversary(), true, now);
             }
             // 共同日历纪念日
-            for (CoupleAnniversary row : anniversaryMapper.findBySpace(space.getId())) {
+            for (CoupleAnniversaryPO row : anniversaryMapper.findBySpace(space.getId())) {
                 reminded += remindCountdown(space, row.getTitle(), row.getEventDate(), row.yearlyFlag(), now);
             }
         }
@@ -57,7 +57,7 @@ public class CoupleReminderJob {
     }
 
     /** 计算某个纪念日距离今天的倒数天数，命中 7/1/0 时给双方推送，返回是否推送。 */
-    private int remindCountdown(CoupleSpace space, String title, String dateText, boolean yearly, LocalDate today) {
+    private int remindCountdown(CoupleSpacePO space, String title, String dateText, boolean yearly, LocalDate today) {
         LocalDate occurrence = nextOccurrence(dateText, yearly, today);
         if (occurrence == null) {
             return 0;

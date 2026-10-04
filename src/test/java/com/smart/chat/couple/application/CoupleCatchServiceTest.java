@@ -1,10 +1,10 @@
 package com.smart.chat.couple.application;
 
-import com.smart.chat.couple.infrastructure.persistence.CoupleCatchSafeword;
+import com.smart.chat.couple.infrastructure.persistence.CoupleCatchSafewordPO;
 import com.smart.chat.couple.infrastructure.persistence.CoupleCatchSafewordMapper;
-import com.smart.chat.couple.infrastructure.persistence.CoupleCatchSafewordUse;
+import com.smart.chat.couple.infrastructure.persistence.CoupleCatchSafewordUsePO;
 import com.smart.chat.couple.infrastructure.persistence.CoupleCatchSafewordUseMapper;
-import com.smart.chat.couple.infrastructure.persistence.CoupleSpace;
+import com.smart.chat.couple.infrastructure.persistence.CoupleSpacePO;
 import com.smart.chat.couple.infrastructure.persistence.CoupleSpaceMapper;
 import com.smart.chat.sharedkernel.web.BusinessException;
 import com.smart.chat.messaging.infrastructure.transport.ImPushService;
@@ -51,16 +51,16 @@ class CoupleCatchServiceTest {
 
     private static final String DAY = LocalDate.now().toString();
 
-    private final List<CoupleCatchSafeword> words = new ArrayList<>();
-    private final List<CoupleCatchSafewordUse> uses = new ArrayList<>();
+    private final List<CoupleCatchSafewordPO> words = new ArrayList<>();
+    private final List<CoupleCatchSafewordUsePO> uses = new ArrayList<>();
 
     @BeforeEach
     void setUp() {
-        CoupleSpace space = new CoupleSpace();
+        CoupleSpacePO space = new CoupleSpacePO();
         space.setId("s1");
         space.setUserA("alice");
         space.setUserB("bob");
-        space.setStatus(CoupleSpace.STATUS_ACTIVE);
+        space.setStatus(CoupleSpacePO.STATUS_ACTIVE);
         space.setAnniversary(DAY);
         lenient().when(spaceMapper.findActiveByUser("alice")).thenReturn(Optional.of(space));
         lenient().when(spaceMapper.findActiveByUser("bob")).thenReturn(Optional.of(space));
@@ -68,21 +68,21 @@ class CoupleCatchServiceTest {
         lenient().when(safewordMapper.findBySpace("s1")).thenAnswer(inv -> List.copyOf(words));
         lenient().when(safewordMapper.find(eq("s1"), any())).thenAnswer(inv -> words.stream()
                 .filter(w -> w.getFromUser().equals(inv.getArgument(1))).findFirst().orElse(null));
-        lenient().when(safewordMapper.insert(any(CoupleCatchSafeword.class))).thenAnswer(inv -> {
+        lenient().when(safewordMapper.insert(any(CoupleCatchSafewordPO.class))).thenAnswer(inv -> {
             words.add(inv.getArgument(0));
             return 1;
         });
-        lenient().when(safewordMapper.updateById(any(CoupleCatchSafeword.class))).thenReturn(1);
+        lenient().when(safewordMapper.updateById(any(CoupleCatchSafewordPO.class))).thenReturn(1);
 
         lenient().when(useMapper.findBySpace("s1")).thenAnswer(inv -> List.copyOf(uses));
         lenient().when(useMapper.find(eq("s1"), any(), any())).thenAnswer(inv -> uses.stream()
                 .filter(u -> u.getDay().equals(inv.getArgument(1)) && u.getUserName().equals(inv.getArgument(2)))
                 .findFirst().orElse(null));
-        lenient().when(useMapper.insert(any(CoupleCatchSafewordUse.class))).thenAnswer(inv -> {
+        lenient().when(useMapper.insert(any(CoupleCatchSafewordUsePO.class))).thenAnswer(inv -> {
             uses.add(inv.getArgument(0));
             return 1;
         });
-        lenient().when(useMapper.updateById(any(CoupleCatchSafewordUse.class))).thenReturn(1);
+        lenient().when(useMapper.updateById(any(CoupleCatchSafewordUsePO.class))).thenReturn(1);
         lenient().when(useMapper.selectById(any())).thenAnswer(inv -> uses.stream()
                 .filter(u -> u.getId().equals(inv.getArgument(0, String.class))).findFirst().orElse(null));
     }
@@ -101,7 +101,7 @@ class CoupleCatchServiceTest {
     void safewordSetPushesPartnerAndWritesRow() {
         service.setSafeword("alice", "暂停", null);
 
-        ArgumentCaptor<CoupleCatchSafeword> captor = ArgumentCaptor.forClass(CoupleCatchSafeword.class);
+        ArgumentCaptor<CoupleCatchSafewordPO> captor = ArgumentCaptor.forClass(CoupleCatchSafewordPO.class);
         verify(safewordMapper).insert(captor.capture());
         assertThat(captor.getValue().getSpaceId()).isEqualTo("s1");
         assertThat(captor.getValue().getFromUser()).isEqualTo("alice");
@@ -155,7 +155,7 @@ class CoupleCatchServiceTest {
         service.reflectUse("alice", useId, "下次先说我去倒杯水");
 
         // 只看返回值回显的话，坏代码（改了内存对象却没 update）也能过
-        verify(useMapper).updateById(any(CoupleCatchSafewordUse.class));
+        verify(useMapper).updateById(any(CoupleCatchSafewordUsePO.class));
         assertThat(uses.get(0).getReflect()).isEqualTo("下次先说我去倒杯水");
     }
 
@@ -164,6 +164,6 @@ class CoupleCatchServiceTest {
         assertThatThrownBy(() -> service.reflectUse("alice", "nope", "x")).isInstanceOf(BusinessException.class);
         when(spaceMapper.findActiveByUser("carol")).thenReturn(Optional.empty());
         assertThatThrownBy(() -> service.board("carol")).isInstanceOf(BusinessException.class);
-        verify(useMapper, never()).insert(any(CoupleCatchSafewordUse.class));
+        verify(useMapper, never()).insert(any(CoupleCatchSafewordUsePO.class));
     }
 }

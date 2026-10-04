@@ -13,7 +13,7 @@ import java.util.UUID;
  */
 @Data
 @TableName("couple_action")
-public class CoupleAction {
+public class CoupleActionPO {
 
     public static final String KIND_POKE = "POKE";
     public static final String KIND_HUG = "HUG";
@@ -31,8 +31,8 @@ public class CoupleAction {
     private String kind;
     private Long created;
 
-    public static CoupleAction of(String spaceId, String username, String kind) {
-        CoupleAction action = new CoupleAction();
+    public static CoupleActionPO of(String spaceId, String username, String kind) {
+        CoupleActionPO action = new CoupleActionPO();
         action.id = UUID.randomUUID().toString();
         action.spaceId = spaceId;
         action.username = username;

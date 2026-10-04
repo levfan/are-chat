@@ -1,8 +1,8 @@
 package com.smart.chat.couple.application;
 
-import com.smart.chat.couple.infrastructure.persistence.CoupleDineTicket;
+import com.smart.chat.couple.infrastructure.persistence.CoupleDineTicketPO;
 import com.smart.chat.couple.infrastructure.persistence.CoupleDineTicketMapper;
-import com.smart.chat.couple.infrastructure.persistence.CoupleSpace;
+import com.smart.chat.couple.infrastructure.persistence.CoupleSpacePO;
 import com.smart.chat.couple.infrastructure.persistence.CoupleSpaceMapper;
 import com.smart.chat.sharedkernel.web.BusinessException;
 import com.smart.chat.messaging.infrastructure.transport.ImPushService;
@@ -46,12 +46,12 @@ class CoupleDiningServiceTest {
 
     private static final String DAY = LocalDate.now().toString();
 
-    private CoupleSpace space() {
-        CoupleSpace space = new CoupleSpace();
+    private CoupleSpacePO space() {
+        CoupleSpacePO space = new CoupleSpacePO();
         space.setId("s1");
         space.setUserA("alice");
         space.setUserB("bob");
-        space.setStatus(CoupleSpace.STATUS_ACTIVE);
+        space.setStatus(CoupleSpacePO.STATUS_ACTIVE);
         return space;
     }
 
@@ -59,8 +59,8 @@ class CoupleDiningServiceTest {
         lenient().when(spaceMapper.findActiveByUser(me)).thenReturn(Optional.of(space()));
     }
 
-    private CoupleDineTicket ticket(String user, String dish) {
-        return CoupleDineTicket.of("s1", DAY, user, dish, "");
+    private CoupleDineTicketPO ticket(String user, String dish) {
+        return CoupleDineTicketPO.of("s1", DAY, user, dish, "");
     }
 
     // ========== F210 饭票 ==========
@@ -73,7 +73,7 @@ class CoupleDiningServiceTest {
 
         service.throwTicket("alice", " 番茄牛腩 ", "想你了的味道");
 
-        ArgumentCaptor<CoupleDineTicket> cap = ArgumentCaptor.forClass(CoupleDineTicket.class);
+        ArgumentCaptor<CoupleDineTicketPO> cap = ArgumentCaptor.forClass(CoupleDineTicketPO.class);
         verify(ticketMapper).insert(cap.capture());
         assertThat(cap.getValue().getDish()).isEqualTo("番茄牛腩");
         assertThat(cap.getValue().getFromUser()).isEqualTo("alice");
@@ -89,7 +89,7 @@ class CoupleDiningServiceTest {
 
         CoupleDiningService.TodayVO vo = service.throwTicket("alice", "火锅", "撞上了！");
 
-        verify(ticketMapper).insert(any(CoupleDineTicket.class));
+        verify(ticketMapper).insert(any(CoupleDineTicketPO.class));
         verify(push).pushCoupleEventBoth(eq("dine-hit"), any(), any(), any(), any());
         assertThat(vo.hit()).isTrue();
         assertThat(vo.verdict()).isEqualTo("火锅");
@@ -98,14 +98,14 @@ class CoupleDiningServiceTest {
     @Test
     void secondTicketOfSameDayOverwritesViaUpdate() {
         stubSpace("alice");
-        CoupleDineTicket existing = ticket("alice", "旧菜");
+        CoupleDineTicketPO existing = ticket("alice", "旧菜");
         when(ticketMapper.find("s1", DAY, "alice")).thenReturn(existing);
         when(ticketMapper.find("s1", DAY, "bob")).thenReturn(null);
 
         service.throwTicket("alice", "新菜", "");
 
-        verify(ticketMapper, never()).insert(any(CoupleDineTicket.class));
-        verify(ticketMapper).updateById(any(CoupleDineTicket.class));
+        verify(ticketMapper, never()).insert(any(CoupleDineTicketPO.class));
+        verify(ticketMapper).updateById(any(CoupleDineTicketPO.class));
         assertThat(existing.getDish()).isEqualTo("新菜");
     }
 

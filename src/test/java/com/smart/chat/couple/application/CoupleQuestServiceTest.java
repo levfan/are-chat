@@ -1,8 +1,8 @@
 package com.smart.chat.couple.application;
 
-import com.smart.chat.couple.infrastructure.persistence.CoupleQuestOvertime;
+import com.smart.chat.couple.infrastructure.persistence.CoupleQuestOvertimePO;
 import com.smart.chat.couple.infrastructure.persistence.CoupleQuestOvertimeMapper;
-import com.smart.chat.couple.infrastructure.persistence.CoupleSpace;
+import com.smart.chat.couple.infrastructure.persistence.CoupleSpacePO;
 import com.smart.chat.couple.infrastructure.persistence.CoupleSpaceMapper;
 import com.smart.chat.sharedkernel.web.BusinessException;
 import com.smart.chat.messaging.infrastructure.transport.ImPushService;
@@ -49,15 +49,15 @@ class CoupleQuestServiceTest {
 
     private static final String DAY = LocalDate.now().toString();
 
-    private final List<CoupleQuestOvertime> overtimes = new ArrayList<>();
+    private final List<CoupleQuestOvertimePO> overtimes = new ArrayList<>();
 
     @BeforeEach
     void setUp() {
-        CoupleSpace space = new CoupleSpace();
+        CoupleSpacePO space = new CoupleSpacePO();
         space.setId("s1");
         space.setUserA("alice");
         space.setUserB("bob");
-        space.setStatus(CoupleSpace.STATUS_ACTIVE);
+        space.setStatus(CoupleSpacePO.STATUS_ACTIVE);
         lenient().when(spaceMapper.findActiveByUser("alice")).thenReturn(Optional.of(space));
         lenient().when(spaceMapper.findActiveByUser("bob")).thenReturn(Optional.of(space));
 
@@ -66,13 +66,13 @@ class CoupleQuestServiceTest {
                 .findFirst().orElse(null));
         lenient().when(overtimeMapper.findByDay(eq("s1"), any())).thenAnswer(inv -> overtimes.stream()
                 .filter(o -> o.getDay().equals(inv.getArgument(1))).toList());
-        lenient().when(overtimeMapper.insert(any(CoupleQuestOvertime.class))).thenAnswer(inv -> {
+        lenient().when(overtimeMapper.insert(any(CoupleQuestOvertimePO.class))).thenAnswer(inv -> {
             overtimes.add(inv.getArgument(0));
             return 1;
         });
         lenient().when(overtimeMapper.selectById(any())).thenAnswer(inv -> overtimes.stream()
                 .filter(o -> o.getId().equals(inv.getArgument(0))).findFirst().orElse(null));
-        lenient().when(overtimeMapper.updateById(any(CoupleQuestOvertime.class))).thenAnswer(inv -> 1);
+        lenient().when(overtimeMapper.updateById(any(CoupleQuestOvertimePO.class))).thenAnswer(inv -> 1);
     }
 
     @Test
@@ -84,8 +84,8 @@ class CoupleQuestServiceTest {
         service.overtime("alice", 2, null);
         assertThat(overtimes).hasSize(1);
         assertThat(overtimes.get(0).getUntilHour()).isEqualTo(13);
-        verify(overtimeMapper, times(1)).insert(any(CoupleQuestOvertime.class));
-        verify(overtimeMapper).updateById(any(CoupleQuestOvertime.class));
+        verify(overtimeMapper, times(1)).insert(any(CoupleQuestOvertimePO.class));
+        verify(overtimeMapper).updateById(any(CoupleQuestOvertimePO.class));
         verify(push, times(2)).pushCoupleEvent(eq("quest-overtime"), eq("alice"), eq("bob"), any());
 
         assertThatThrownBy(() -> service.overtime("alice", 20, "说".repeat(41)))
@@ -98,7 +98,7 @@ class CoupleQuestServiceTest {
                 .isInstanceOf(BusinessException.class);
 
         service.overtime("alice", 22, "加班");
-        CoupleQuestOvertime row = overtimes.get(0);
+        CoupleQuestOvertimePO row = overtimes.get(0);
         // 自己给自己留灯不算数
         assertThatThrownBy(() -> service.leaveLamp("alice", row.getId(), "我自己留"))
                 .isInstanceOf(BusinessException.class).hasMessageContaining("自己留不算");
@@ -119,6 +119,6 @@ class CoupleQuestServiceTest {
         when(spaceMapper.findActiveByUser("carol")).thenReturn(Optional.empty());
         assertThatThrownBy(() -> service.board("carol"))
                 .isInstanceOf(BusinessException.class).hasMessageContaining("情侣空间");
-        verify(overtimeMapper, never()).insert(any(CoupleQuestOvertime.class));
+        verify(overtimeMapper, never()).insert(any(CoupleQuestOvertimePO.class));
     }
 }

@@ -7,36 +7,36 @@ import org.apache.ibatis.annotations.Mapper;
 import java.util.List;
 
 @Mapper
-public interface CoupleActionMapper extends BaseMapperCompat<CoupleAction> {
+public interface CoupleActionMapper extends BaseMapperCompat<CoupleActionPO> {
 
     /** 某空间全部动作流水（新→旧）。 */
-    default List<CoupleAction> findBySpace(String spaceId) {
-        return selectList(new LambdaQueryWrapper<CoupleAction>()
-                .eq(CoupleAction::getSpaceId, spaceId)
-                .orderByDesc(CoupleAction::getCreated));
+    default List<CoupleActionPO> findBySpace(String spaceId) {
+        return selectList(new LambdaQueryWrapper<CoupleActionPO>()
+                .eq(CoupleActionPO::getSpaceId, spaceId)
+                .orderByDesc(CoupleActionPO::getCreated));
     }
 
     /** 某空间某类动作的累计条数。 */
     default long countByKind(String spaceId, String kind) {
-        return selectCount(new LambdaQueryWrapper<CoupleAction>()
-                .eq(CoupleAction::getSpaceId, spaceId)
-                .eq(CoupleAction::getKind, kind));
+        return selectCount(new LambdaQueryWrapper<CoupleActionPO>()
+                .eq(CoupleActionPO::getSpaceId, spaceId)
+                .eq(CoupleActionPO::getKind, kind));
     }
 
     /** 某空间某类动作中某人发送的条数。 */
     default long countByKindAndUser(String spaceId, String kind, String username) {
-        return selectCount(new LambdaQueryWrapper<CoupleAction>()
-                .eq(CoupleAction::getSpaceId, spaceId)
-                .eq(CoupleAction::getKind, kind)
-                .eq(CoupleAction::getUsername, username));
+        return selectCount(new LambdaQueryWrapper<CoupleActionPO>()
+                .eq(CoupleActionPO::getSpaceId, spaceId)
+                .eq(CoupleActionPO::getKind, kind)
+                .eq(CoupleActionPO::getUsername, username));
     }
 
     /** 某空间某类动作最近一条时间（无记录返回 null）。 */
     default Long lastCreatedAt(String spaceId, String kind) {
-        CoupleAction last = selectOne(new LambdaQueryWrapper<CoupleAction>()
-                .eq(CoupleAction::getSpaceId, spaceId)
-                .eq(CoupleAction::getKind, kind)
-                .orderByDesc(CoupleAction::getCreated)
+        CoupleActionPO last = selectOne(new LambdaQueryWrapper<CoupleActionPO>()
+                .eq(CoupleActionPO::getSpaceId, spaceId)
+                .eq(CoupleActionPO::getKind, kind)
+                .orderByDesc(CoupleActionPO::getCreated)
                 .last("LIMIT 1"));
         return last == null ? null : last.getCreated();
     }

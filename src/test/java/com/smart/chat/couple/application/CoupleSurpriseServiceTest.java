@@ -1,12 +1,12 @@
 package com.smart.chat.couple.application;
 
-import com.smart.chat.couple.infrastructure.persistence.CoupleMysteryBox;
+import com.smart.chat.couple.infrastructure.persistence.CoupleMysteryBoxPO;
 import com.smart.chat.couple.infrastructure.persistence.CoupleMysteryBoxMapper;
-import com.smart.chat.couple.infrastructure.persistence.CouplePointLedger;
+import com.smart.chat.couple.infrastructure.persistence.CouplePointLedgerPO;
 import com.smart.chat.couple.infrastructure.persistence.CouplePointLedgerMapper;
-import com.smart.chat.couple.infrastructure.persistence.CoupleScratch;
+import com.smart.chat.couple.infrastructure.persistence.CoupleScratchPO;
 import com.smart.chat.couple.infrastructure.persistence.CoupleScratchMapper;
-import com.smart.chat.couple.infrastructure.persistence.CoupleSpace;
+import com.smart.chat.couple.infrastructure.persistence.CoupleSpacePO;
 import com.smart.chat.couple.infrastructure.persistence.CoupleSpaceMapper;
 import com.smart.chat.sharedkernel.web.BusinessException;
 import com.smart.chat.messaging.infrastructure.transport.ImPushService;
@@ -55,12 +55,12 @@ class CoupleSurpriseServiceTest {
     @InjectMocks
     private CoupleSurpriseService service;
 
-    private CoupleSpace space() {
-        CoupleSpace space = new CoupleSpace();
+    private CoupleSpacePO space() {
+        CoupleSpacePO space = new CoupleSpacePO();
         space.setId("s1");
         space.setUserA("alice");
         space.setUserB("bob");
-        space.setStatus(CoupleSpace.STATUS_ACTIVE);
+        space.setStatus(CoupleSpacePO.STATUS_ACTIVE);
         return space;
     }
 
@@ -76,11 +76,11 @@ class CoupleSurpriseServiceTest {
 
         service.myScratches("alice");
 
-        ArgumentCaptor<CoupleScratch> captor = ArgumentCaptor.forClass(CoupleScratch.class);
+        ArgumentCaptor<CoupleScratchPO> captor = ArgumentCaptor.forClass(CoupleScratchPO.class);
         verify(scratchMapper, org.mockito.Mockito.times(2)).insert(captor.capture());
-        List<CoupleScratch> cards = captor.getAllValues();
+        List<CoupleScratchPO> cards = captor.getAllValues();
         // 双方各一张：一张 alice 收（bob 送），一张 bob 收（alice 送）
-        assertThat(cards).extracting(CoupleScratch::getOwner).containsExactlyInAnyOrder("alice", "bob");
+        assertThat(cards).extracting(CoupleScratchPO::getOwner).containsExactlyInAnyOrder("alice", "bob");
         assertThat(cards).allSatisfy(c -> {
             assertThat(c.getWeekKey()).matches("\\d{4}-W\\d{2}");
             assertThat(c.getPrizeText()).isNotBlank();
@@ -90,7 +90,7 @@ class CoupleSurpriseServiceTest {
     @Test
     void scratchRejectsNonOwnerAndKeepsPrizeHiddenUntilScratched() {
         stubSpace("alice");
-        CoupleScratch card = CoupleScratch.of("s1", "2026-W40", "alice", "bob", "hug", "一个抱抱");
+        CoupleScratchPO card = CoupleScratchPO.of("s1", "2026-W40", "alice", "bob", "hug", "一个抱抱");
         when(scratchMapper.selectById("sc1")).thenReturn(card);
 
         // alice 是送券人，不能替 bob 刮
@@ -109,13 +109,13 @@ class CoupleSurpriseServiceTest {
     @Test
     void redeemPaysTheGiverOnce() {
         stubSpace("alice");
-        CoupleScratch card = CoupleScratch.of("s1", "2026-W40", "alice", "bob", "hug", "一个抱抱");
+        CoupleScratchPO card = CoupleScratchPO.of("s1", "2026-W40", "alice", "bob", "hug", "一个抱抱");
         card.setScratched(true);
         card.setScratchedAt(System.currentTimeMillis());
-        java.util.List<CouplePointLedger> ledger = new java.util.ArrayList<>();
+        java.util.List<CouplePointLedgerPO> ledger = new java.util.ArrayList<>();
         when(scratchMapper.selectById(any())).thenReturn(card);
-        when(scratchMapper.updateById(any(CoupleScratch.class))).thenReturn(1);
-        when(ledgerMapper.insert(any(CouplePointLedger.class))).thenAnswer(inv -> {
+        when(scratchMapper.updateById(any(CoupleScratchPO.class))).thenReturn(1);
+        when(ledgerMapper.insert(any(CouplePointLedgerPO.class))).thenAnswer(inv -> {
             ledger.add(inv.getArgument(0));
             return 1;
         });
@@ -125,7 +125,7 @@ class CoupleSurpriseServiceTest {
         // 券是送的人兑现的，分记在送券人 alice 头上，且必须真插进台账
         assertThat(ledger).hasSize(1);
         assertThat(ledger.get(0).getFromUser()).isEqualTo("alice");
-        assertThat(ledger.get(0).getType()).isEqualTo(CouplePointLedger.TYPE_EARN);
+        assertThat(ledger.get(0).getType()).isEqualTo(CouplePointLedgerPO.TYPE_EARN);
         assertThat(ledger.get(0).getPoints()).isEqualTo(CoupleSurpriseService.SCRATCH_POINTS);
         assertThat(ledger.get(0).getItem()).startsWith(CoupleSurpriseService.SCRATCH_REASON_PREFIX);
 
@@ -138,7 +138,7 @@ class CoupleSurpriseServiceTest {
     void boxCannotBeOpenedBeforeOpenDayOrBySealer() {
         stubSpace("bob");
         String tomorrow = LocalDate.now().plusDays(1).toString();
-        CoupleMysteryBox box = CoupleMysteryBox.of("s1", "alice", CoupleMysteryBox.KIND_WHISPER, "喜欢你", LocalDate.now().plusDays(1));
+        CoupleMysteryBoxPO box = CoupleMysteryBoxPO.of("s1", "alice", CoupleMysteryBoxPO.KIND_WHISPER, "喜欢你", LocalDate.now().plusDays(1));
         when(boxMapper.selectById("b1")).thenReturn(box);
 
         // 未到开箱日
@@ -148,7 +148,7 @@ class CoupleSurpriseServiceTest {
 
         // 到了开箱日也不能自己拆
         stubSpace("alice");
-        CoupleMysteryBox ready = CoupleMysteryBox.of("s1", "alice", CoupleMysteryBox.KIND_WHISPER, "喜欢你", LocalDate.now());
+        CoupleMysteryBoxPO ready = CoupleMysteryBoxPO.of("s1", "alice", CoupleMysteryBoxPO.KIND_WHISPER, "喜欢你", LocalDate.now());
         when(boxMapper.selectById("b1")).thenReturn(ready);
         assertThatThrownBy(() -> service.openBox("alice", "b1"))
                 .isInstanceOf(BusinessException.class)

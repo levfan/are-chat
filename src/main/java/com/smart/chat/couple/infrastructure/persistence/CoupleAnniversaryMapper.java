@@ -7,17 +7,17 @@ import org.apache.ibatis.annotations.Mapper;
 import java.util.List;
 
 @Mapper
-public interface CoupleAnniversaryMapper extends BaseMapperCompat<CoupleAnniversary> {
+public interface CoupleAnniversaryMapper extends BaseMapperCompat<CoupleAnniversaryPO> {
 
-    default List<CoupleAnniversary> findBySpace(String spaceId) {
-        return selectList(new LambdaQueryWrapper<CoupleAnniversary>()
-                .eq(CoupleAnniversary::getSpaceId, spaceId)
-                .orderByAsc(CoupleAnniversary::getEventDate)
-                .orderByAsc(CoupleAnniversary::getCreated));
+    default List<CoupleAnniversaryPO> findBySpace(String spaceId) {
+        return selectList(new LambdaQueryWrapper<CoupleAnniversaryPO>()
+                .eq(CoupleAnniversaryPO::getSpaceId, spaceId)
+                .orderByAsc(CoupleAnniversaryPO::getEventDate)
+                .orderByAsc(CoupleAnniversaryPO::getCreated));
     }
 
     /** 84 注销清理。 */
     default void deleteBySpace(String spaceId) {
-        delete(new LambdaQueryWrapper<CoupleAnniversary>().eq(CoupleAnniversary::getSpaceId, spaceId));
+        delete(new LambdaQueryWrapper<CoupleAnniversaryPO>().eq(CoupleAnniversaryPO::getSpaceId, spaceId));
     }
 }

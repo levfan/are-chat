@@ -8,20 +8,20 @@ import java.util.List;
 
 /** F270 家务轮盘数据访问。 */
 @Mapper
-public interface CoupleSpinTaskMapper extends BaseMapperCompat<CoupleSpinTask> {
+public interface CoupleSpinTaskMapper extends BaseMapperCompat<CoupleSpinTaskPO> {
 
     /** 某周全部任务。 */
-    default List<CoupleSpinTask> findByWeek(String spaceId, String week) {
-        return selectList(new LambdaQueryWrapper<CoupleSpinTask>()
-                .eq(CoupleSpinTask::getSpaceId, spaceId)
-                .eq(CoupleSpinTask::getWeek, week));
+    default List<CoupleSpinTaskPO> findByWeek(String spaceId, String week) {
+        return selectList(new LambdaQueryWrapper<CoupleSpinTaskPO>()
+                .eq(CoupleSpinTaskPO::getSpaceId, spaceId)
+                .eq(CoupleSpinTaskPO::getWeek, week));
     }
 
     /** 某周某事一条。 */
-    default CoupleSpinTask find(String spaceId, String week, String item) {
-        return selectOne(new LambdaQueryWrapper<CoupleSpinTask>()
-                .eq(CoupleSpinTask::getSpaceId, spaceId)
-                .eq(CoupleSpinTask::getWeek, week)
-                .eq(CoupleSpinTask::getItem, item));
+    default CoupleSpinTaskPO find(String spaceId, String week, String item) {
+        return selectOne(new LambdaQueryWrapper<CoupleSpinTaskPO>()
+                .eq(CoupleSpinTaskPO::getSpaceId, spaceId)
+                .eq(CoupleSpinTaskPO::getWeek, week)
+                .eq(CoupleSpinTaskPO::getItem, item));
     }
 }

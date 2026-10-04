@@ -13,7 +13,7 @@ import java.util.UUID;
  */
 @Data
 @TableName("couple_catch_safeword_use")
-public class CoupleCatchSafewordUse {
+public class CoupleCatchSafewordUsePO {
 
     /** 事后复盘字数上限（列 varchar(240) 已按 4 倍宽度放宽） */
     public static final int REFLECT_MAX = 60;
@@ -30,8 +30,8 @@ public class CoupleCatchSafewordUse {
     private Long created;
     private Long updatedAt;
 
-    public static CoupleCatchSafewordUse of(String spaceId, String day, String userName) {
-        CoupleCatchSafewordUse row = new CoupleCatchSafewordUse();
+    public static CoupleCatchSafewordUsePO of(String spaceId, String day, String userName) {
+        CoupleCatchSafewordUsePO row = new CoupleCatchSafewordUsePO();
         row.id = UUID.randomUUID().toString();
         row.spaceId = spaceId;
         row.day = day;

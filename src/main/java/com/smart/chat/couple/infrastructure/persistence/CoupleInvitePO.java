@@ -13,7 +13,7 @@ import java.util.UUID;
  */
 @Data
 @TableName("couple_invite")
-public class CoupleInvite {
+public class CoupleInvitePO {
 
     public static final String STATUS_PENDING = "PENDING";
     public static final String STATUS_ACCEPTED = "ACCEPTED";
@@ -29,8 +29,8 @@ public class CoupleInvite {
     private Long created;
     private Long updatedAt;
 
-    public static CoupleInvite of(String from, String to, String message) {
-        CoupleInvite invite = new CoupleInvite();
+    public static CoupleInvitePO of(String from, String to, String message) {
+        CoupleInvitePO invite = new CoupleInvitePO();
         invite.id = UUID.randomUUID().toString();
         invite.fromUser = from;
         invite.toUser = to;

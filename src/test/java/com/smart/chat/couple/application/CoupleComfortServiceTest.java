@@ -1,10 +1,10 @@
 package com.smart.chat.couple.application;
 
-import com.smart.chat.couple.infrastructure.persistence.CoupleComfort;
+import com.smart.chat.couple.infrastructure.persistence.CoupleComfortPO;
 import com.smart.chat.couple.infrastructure.persistence.CoupleComfortMapper;
-import com.smart.chat.couple.infrastructure.persistence.CoupleMood;
+import com.smart.chat.couple.infrastructure.persistence.CoupleMoodPO;
 import com.smart.chat.couple.infrastructure.persistence.CoupleMoodMapper;
-import com.smart.chat.couple.infrastructure.persistence.CoupleSpace;
+import com.smart.chat.couple.infrastructure.persistence.CoupleSpacePO;
 import com.smart.chat.couple.infrastructure.persistence.CoupleSpaceMapper;
 import com.smart.chat.sharedkernel.web.BusinessException;
 import com.smart.chat.messaging.infrastructure.transport.ImPushService;
@@ -51,12 +51,12 @@ class CoupleComfortServiceTest {
     @InjectMocks
     private CoupleComfortService comfortService;
 
-    private CoupleSpace space() {
-        CoupleSpace space = new CoupleSpace();
+    private CoupleSpacePO space() {
+        CoupleSpacePO space = new CoupleSpacePO();
         space.setId("s1");
         space.setUserA("alice");
         space.setUserB("bob");
-        space.setStatus(CoupleSpace.STATUS_ACTIVE);
+        space.setStatus(CoupleSpacePO.STATUS_ACTIVE);
         return space;
     }
 
@@ -72,7 +72,7 @@ class CoupleComfortServiceTest {
 
         comfortService.askForComfort("alice", "SAD");
 
-        ArgumentCaptor<CoupleComfort> captor = ArgumentCaptor.forClass(CoupleComfort.class);
+        ArgumentCaptor<CoupleComfortPO> captor = ArgumentCaptor.forClass(CoupleComfortPO.class);
         verify(comfortMapper).insert(captor.capture());
         assertThat(captor.getValue().getFeeling()).isEqualTo("SAD");
         assertThat(captor.getValue().getDay()).isEqualTo(LocalDate.now().toString());
@@ -101,7 +101,7 @@ class CoupleComfortServiceTest {
     @Test
     void handleComfortMarksHandledAndNotifiesAsker() {
         stubSpace("alice");
-        CoupleComfort pending = CoupleComfort.of("s1", "bob", "WRONGED");
+        CoupleComfortPO pending = CoupleComfortPO.of("s1", "bob", "WRONGED");
         when(comfortMapper.find("s1", "bob", LocalDate.now().toString())).thenReturn(pending);
 
         CoupleComfortService.ComfortVO handled = comfortService.handleComfort("alice", "你没错，先站你这边");
@@ -116,10 +116,10 @@ class CoupleComfortServiceTest {
         stubSpace("alice");
         String today = LocalDate.now().toString();
         String yesterday = LocalDate.now().minusDays(1).toString();
-        CoupleMood myToday = CoupleMood.of("s1", "alice", today, "HAPPY", null);
-        CoupleMood partnerToday = CoupleMood.of("s1", "bob", today, "HAPPY", null);
-        CoupleMood myYesterday = CoupleMood.of("s1", "alice", yesterday, "CALM", null);
-        CoupleMood partnerOther = CoupleMood.of("s1", "bob", yesterday, "SAD", null);
+        CoupleMoodPO myToday = CoupleMoodPO.of("s1", "alice", today, "HAPPY", null);
+        CoupleMoodPO partnerToday = CoupleMoodPO.of("s1", "bob", today, "HAPPY", null);
+        CoupleMoodPO myYesterday = CoupleMoodPO.of("s1", "alice", yesterday, "CALM", null);
+        CoupleMoodPO partnerOther = CoupleMoodPO.of("s1", "bob", yesterday, "SAD", null);
         when(moodMapper.findBySpace("s1")).thenReturn(List.of(myToday, partnerToday, myYesterday, partnerOther));
 
         CoupleComfortService.MoodSyncVO vo = comfortService.moodSync("alice");
@@ -133,14 +133,14 @@ class CoupleComfortServiceTest {
 
     @Test
     void nightCareSkipsHandledComfortButRemindsUntouchedSadness() {
-        CoupleSpace space = space();
+        CoupleSpacePO space = space();
         when(spaceMapper.findAllActive()).thenReturn(List.of(space));
         String today = LocalDate.now().toString();
-        CoupleMood aliceSad = CoupleMood.of("s1", "alice", today, "SAD", null);
-        CoupleMood bobFine = CoupleMood.of("s1", "bob", today, "HAPPY", null);
+        CoupleMoodPO aliceSad = CoupleMoodPO.of("s1", "alice", today, "SAD", null);
+        CoupleMoodPO bobFine = CoupleMoodPO.of("s1", "bob", today, "HAPPY", null);
         when(moodMapper.find("s1", "alice", today)).thenReturn(Optional.of(aliceSad));
         when(moodMapper.find("s1", "bob", today)).thenReturn(Optional.of(bobFine));
-        CoupleComfort handled = CoupleComfort.of("s1", "alice", "SAD");
+        CoupleComfortPO handled = CoupleComfortPO.of("s1", "alice", "SAD");
         handled.setHandled(true);
         when(comfortMapper.find("s1", "alice", today)).thenReturn(handled);
 
@@ -149,7 +149,7 @@ class CoupleComfortServiceTest {
         verify(push, never()).pushCoupleEvent(any(), any(), any(), any());
 
         // 未被接住时提醒对方
-        CoupleComfort untouched = CoupleComfort.of("s1", "alice", "SAD");
+        CoupleComfortPO untouched = CoupleComfortPO.of("s1", "alice", "SAD");
         when(comfortMapper.find("s1", "alice", today)).thenReturn(untouched);
         comfortService.remindNightCare();
         verify(push).pushCoupleEvent(eq("night-care"), eq("system"), eq("bob"), anyString());

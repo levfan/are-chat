@@ -1,10 +1,10 @@
 package com.smart.chat.couple.application;
 
-import com.smart.chat.couple.infrastructure.persistence.CoupleCeremonyCoupon;
+import com.smart.chat.couple.infrastructure.persistence.CoupleCeremonyCouponPO;
 import com.smart.chat.couple.infrastructure.persistence.CoupleCeremonyCouponMapper;
-import com.smart.chat.couple.infrastructure.persistence.CouplePointLedger;
+import com.smart.chat.couple.infrastructure.persistence.CouplePointLedgerPO;
 import com.smart.chat.couple.infrastructure.persistence.CouplePointLedgerMapper;
-import com.smart.chat.couple.infrastructure.persistence.CoupleSpace;
+import com.smart.chat.couple.infrastructure.persistence.CoupleSpacePO;
 import com.smart.chat.couple.infrastructure.persistence.CoupleSpaceMapper;
 import com.smart.chat.sharedkernel.web.BusinessException;
 import com.smart.chat.messaging.infrastructure.transport.ImPushService;
@@ -46,12 +46,12 @@ class CoupleCeremonyServiceTest {
     @InjectMocks
     private CoupleCeremonyService service;
 
-    private CoupleSpace space() {
-        CoupleSpace space = new CoupleSpace();
+    private CoupleSpacePO space() {
+        CoupleSpacePO space = new CoupleSpacePO();
         space.setId("s1");
         space.setUserA("alice");
         space.setUserB("bob");
-        space.setStatus(CoupleSpace.STATUS_ACTIVE);
+        space.setStatus(CoupleSpacePO.STATUS_ACTIVE);
         space.setCreated(System.currentTimeMillis());
         return space;
     }
@@ -61,18 +61,18 @@ class CoupleCeremonyServiceTest {
     }
 
     private final class Bag {
-        private final List<CoupleCeremonyCoupon> coupons = new ArrayList<>();
-        private final List<CouplePointLedger> ledger = new ArrayList<>();
+        private final List<CoupleCeremonyCouponPO> coupons = new ArrayList<>();
+        private final List<CouplePointLedgerPO> ledger = new ArrayList<>();
 
         void stub() {
             lenient().when(ledgerMapper.findBySpace("s1")).thenAnswer(inv -> List.copyOf(ledger));
             lenient().when(couponMapper.findBySpace("s1")).thenAnswer(inv -> List.copyOf(coupons));
-            lenient().when(couponMapper.insert(any(CoupleCeremonyCoupon.class))).thenAnswer(inv -> {
+            lenient().when(couponMapper.insert(any(CoupleCeremonyCouponPO.class))).thenAnswer(inv -> {
                 coupons.add(inv.getArgument(0));
                 return 1;
             });
-            lenient().when(couponMapper.updateById(any(CoupleCeremonyCoupon.class))).thenReturn(1);
-            lenient().when(ledgerMapper.insert(any(CouplePointLedger.class))).thenAnswer(inv -> {
+            lenient().when(couponMapper.updateById(any(CoupleCeremonyCouponPO.class))).thenReturn(1);
+            lenient().when(ledgerMapper.insert(any(CouplePointLedgerPO.class))).thenAnswer(inv -> {
                 ledger.add(inv.getArgument(0));
                 return 1;
             });
@@ -91,15 +91,15 @@ class CoupleCeremonyServiceTest {
         assertThatThrownBy(() -> service.issueCoupon("alice", "陪我去海边"))
                 .isInstanceOf(BusinessException.class).hasMessageContaining("只有 0 分");
         assertThat(bag.coupons).isEmpty();
-        verify(couponMapper, never()).insert(any(CoupleCeremonyCoupon.class));
+        verify(couponMapper, never()).insert(any(CoupleCeremonyCouponPO.class));
 
         // 好事簿攒来的 12 分够发一张 10 分的券，券必须真落到台账的 SPEND 行
-        bag.ledger.add(CouplePointLedger.of("s1", "alice", CouplePointLedger.TYPE_EARN, "好事簿：接我下班", 12));
+        bag.ledger.add(CouplePointLedgerPO.of("s1", "alice", CouplePointLedgerPO.TYPE_EARN, "好事簿：接我下班", 12));
         service.issueCoupon("alice", "陪我去海边");
         assertThat(bag.coupons).hasSize(1);
-        assertThat(bag.ledger).filteredOn(l -> CouplePointLedger.TYPE_SPEND.equals(l.getType())).hasSize(1);
-        CouplePointLedger spend = bag.ledger.stream()
-                .filter(l -> CouplePointLedger.TYPE_SPEND.equals(l.getType())).findFirst().orElseThrow();
+        assertThat(bag.ledger).filteredOn(l -> CouplePointLedgerPO.TYPE_SPEND.equals(l.getType())).hasSize(1);
+        CouplePointLedgerPO spend = bag.ledger.stream()
+                .filter(l -> CouplePointLedgerPO.TYPE_SPEND.equals(l.getType())).findFirst().orElseThrow();
         assertThat(spend.getFromUser()).isEqualTo("alice");
         assertThat(spend.getPoints()).isEqualTo(CoupleCeremonyService.COUPON_COST);
         assertThat(spend.getItem()).isEqualTo("发出愿望券：陪我去海边");
@@ -116,12 +116,12 @@ class CoupleCeremonyServiceTest {
         Bag bag = new Bag();
         bag.stub();
         // 发券现在要先有积分余额，这里给够一张券的钱再验标题
-        bag.ledger.add(CouplePointLedger.of("s1", "alice", CouplePointLedger.TYPE_EARN, "好事簿：接我下班", 50));
+        bag.ledger.add(CouplePointLedgerPO.of("s1", "alice", CouplePointLedgerPO.TYPE_EARN, "好事簿：接我下班", 50));
 
         assertThatThrownBy(() -> service.issueCoupon("alice", "  "))
                 .isInstanceOf(BusinessException.class).hasMessage("券面写点什么愿望吧");
         service.issueCoupon("alice", "一次说走就走的骑行");
-        verify(couponMapper).insert(any(CoupleCeremonyCoupon.class));
+        verify(couponMapper).insert(any(CoupleCeremonyCouponPO.class));
     }
 
     @Test
@@ -133,18 +133,18 @@ class CoupleCeremonyServiceTest {
         assertThatThrownBy(() -> service.useCoupon("alice", "nope"))
                 .isInstanceOf(BusinessException.class).hasMessage("这张愿望券不存在");
 
-        CoupleCeremonyCoupon used = CoupleCeremonyCoupon.of("s1", "已核销券", "bob", "");
+        CoupleCeremonyCouponPO used = CoupleCeremonyCouponPO.of("s1", "已核销券", "bob", "");
         used.setId("c1");
-        used.setStatus(CoupleCeremonyCoupon.STATUS_USED);
+        used.setStatus(CoupleCeremonyCouponPO.STATUS_USED);
         bag.coupons.add(used);
         assertThatThrownBy(() -> service.useCoupon("alice", "c1"))
                 .isInstanceOf(BusinessException.class).hasMessage("这张券已经核销过了");
 
-        CoupleCeremonyCoupon open = CoupleCeremonyCoupon.of("s1", "看一次海", "bob", "");
+        CoupleCeremonyCouponPO open = CoupleCeremonyCouponPO.of("s1", "看一次海", "bob", "");
         open.setId("c2");
         bag.coupons.add(open);
         service.useCoupon("alice", "c2");
-        assertThat(open.getStatus()).isEqualTo(CoupleCeremonyCoupon.STATUS_USED);
+        assertThat(open.getStatus()).isEqualTo(CoupleCeremonyCouponPO.STATUS_USED);
         assertThat(open.getUsedBy()).isEqualTo("alice");
         verify(couponMapper).updateById(open);
         verify(push).pushCoupleEvent(eq("ceremony-coupon-used"), eq("alice"), eq("bob"), any());
@@ -155,11 +155,11 @@ class CoupleCeremonyServiceTest {
         stubSpace("alice");
         Bag bag = new Bag();
         bag.stub();
-        bag.ledger.add(CouplePointLedger.of("s1", "alice", CouplePointLedger.TYPE_EARN, "好事簿：接我下班", 12));
-        bag.ledger.add(CouplePointLedger.of("s1", "alice", CouplePointLedger.TYPE_EARN, "家务轮盘干完：倒垃圾", 3));
-        bag.ledger.add(CouplePointLedger.of("s1", "alice", CouplePointLedger.TYPE_SPEND, "发出愿望券：看一次海", 10));
+        bag.ledger.add(CouplePointLedgerPO.of("s1", "alice", CouplePointLedgerPO.TYPE_EARN, "好事簿：接我下班", 12));
+        bag.ledger.add(CouplePointLedgerPO.of("s1", "alice", CouplePointLedgerPO.TYPE_EARN, "家务轮盘干完：倒垃圾", 3));
+        bag.ledger.add(CouplePointLedgerPO.of("s1", "alice", CouplePointLedgerPO.TYPE_SPEND, "发出愿望券：看一次海", 10));
         // 对方的流水不能算进我的余额
-        bag.ledger.add(CouplePointLedger.of("s1", "bob", CouplePointLedger.TYPE_EARN, "好事簿：帮我吹头", 2));
+        bag.ledger.add(CouplePointLedgerPO.of("s1", "bob", CouplePointLedgerPO.TYPE_EARN, "好事簿：帮我吹头", 2));
 
         CoupleCeremonyService.OverviewVO vo = service.overview("alice");
         assertThat(vo.myBalance()).isEqualTo(5);

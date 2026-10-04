@@ -1,10 +1,10 @@
 package com.smart.chat.couple.application;
 
-import com.smart.chat.couple.infrastructure.persistence.CouplePointLedger;
+import com.smart.chat.couple.infrastructure.persistence.CouplePointLedgerPO;
 import com.smart.chat.couple.infrastructure.persistence.CouplePointLedgerMapper;
-import com.smart.chat.couple.infrastructure.persistence.CoupleSpace;
+import com.smart.chat.couple.infrastructure.persistence.CoupleSpacePO;
 import com.smart.chat.couple.infrastructure.persistence.CoupleSpaceMapper;
-import com.smart.chat.couple.infrastructure.persistence.CoupleSpinTask;
+import com.smart.chat.couple.infrastructure.persistence.CoupleSpinTaskPO;
 import com.smart.chat.couple.infrastructure.persistence.CoupleSpinTaskMapper;
 import com.smart.chat.sharedkernel.web.BusinessException;
 import com.smart.chat.messaging.infrastructure.transport.ImPushService;
@@ -51,30 +51,30 @@ class CoupleFactoryServiceTest {
     @InjectMocks
     private CoupleFactoryService service;
 
-    private final List<CoupleSpinTask> tasks = new ArrayList<>();
-    private final List<CouplePointLedger> ledger = new ArrayList<>();
+    private final List<CoupleSpinTaskPO> tasks = new ArrayList<>();
+    private final List<CouplePointLedgerPO> ledger = new ArrayList<>();
     private final String week = LocalDate.now().with(DayOfWeek.MONDAY).toString();
 
     @BeforeEach
     void setUp() {
-        CoupleSpace space = new CoupleSpace();
+        CoupleSpacePO space = new CoupleSpacePO();
         space.setId("s1");
         space.setUserA("alice");
         space.setUserB("bob");
-        space.setStatus(CoupleSpace.STATUS_ACTIVE);
+        space.setStatus(CoupleSpacePO.STATUS_ACTIVE);
         lenient().when(spaceMapper.findActiveByUser("alice")).thenReturn(Optional.of(space));
         lenient().when(spaceMapper.findActiveByUser("bob")).thenReturn(Optional.of(space));
 
         lenient().when(spinMapper.findByWeek(eq("s1"), any())).thenAnswer(inv -> tasks.stream()
                 .filter(t -> t.getWeek().equals(inv.getArgument(1))).toList());
-        lenient().when(spinMapper.insert(any(CoupleSpinTask.class))).thenAnswer(inv -> {
+        lenient().when(spinMapper.insert(any(CoupleSpinTaskPO.class))).thenAnswer(inv -> {
             tasks.add(inv.getArgument(0));
             return 1;
         });
         lenient().when(spinMapper.selectById(any())).thenAnswer(inv -> tasks.stream()
                 .filter(t -> t.getId().equals(inv.getArgument(0))).findFirst().orElse(null));
-        lenient().when(spinMapper.updateById(any(CoupleSpinTask.class))).thenAnswer(inv -> 1);
-        lenient().when(ledgerMapper.insert(any(CouplePointLedger.class))).thenAnswer(inv -> {
+        lenient().when(spinMapper.updateById(any(CoupleSpinTaskPO.class))).thenAnswer(inv -> 1);
+        lenient().when(ledgerMapper.insert(any(CouplePointLedgerPO.class))).thenAnswer(inv -> {
             ledger.add(inv.getArgument(0));
             return 1;
         });
@@ -97,7 +97,7 @@ class CoupleFactoryServiceTest {
     @Test
     void ownConfirmationInvalidAndUnconfirmedDoneBlocked() {
         spinTwo();
-        CoupleSpinTask mine = tasks.stream()
+        CoupleSpinTaskPO mine = tasks.stream()
                 .filter(t -> t.getAssignedUser().equals("alice")).findFirst().orElseThrow();
         // 自己的活自己认不算双签
         assertThatThrownBy(() -> service.confirmSpin("alice", mine.getId()))
@@ -117,8 +117,8 @@ class CoupleFactoryServiceTest {
     @Test
     void doneEarnsPointsOnceAndClearRewardsBoth() {
         spinTwo();
-        CoupleSpinTask a = tasks.stream().filter(t -> t.getAssignedUser().equals("alice")).findFirst().orElseThrow();
-        CoupleSpinTask b = tasks.stream().filter(t -> t.getAssignedUser().equals("bob")).findFirst().orElseThrow();
+        CoupleSpinTaskPO a = tasks.stream().filter(t -> t.getAssignedUser().equals("alice")).findFirst().orElseThrow();
+        CoupleSpinTaskPO b = tasks.stream().filter(t -> t.getAssignedUser().equals("bob")).findFirst().orElseThrow();
         service.confirmSpin("bob", a.getId());
         service.confirmSpin("alice", b.getId());
 
@@ -126,7 +126,7 @@ class CoupleFactoryServiceTest {
         // 干完那一格：只给干活的人记一笔 +3
         assertThat(ledger).hasSize(1);
         assertThat(ledger.get(0).getFromUser()).isEqualTo("alice");
-        assertThat(ledger.get(0).getType()).isEqualTo(CouplePointLedger.TYPE_EARN);
+        assertThat(ledger.get(0).getType()).isEqualTo(CouplePointLedgerPO.TYPE_EARN);
         assertThat(ledger.get(0).getPoints()).isEqualTo(CoupleFactoryService.SPIN_DONE_POINTS);
         assertThat(ledger.get(0).getItem()).startsWith(CoupleFactoryService.SPIN_DONE_PREFIX);
         // 本周没全清，不该发清空奖
@@ -136,7 +136,7 @@ class CoupleFactoryServiceTest {
         // 第二格干完：bob 自己的 +3，加上双方各一笔清空 +2
         assertThat(ledger).hasSize(4);
         assertThat(ledger).filteredOn(l -> CoupleFactoryService.SPIN_CLEAR_REASON.equals(l.getItem()))
-                .extracting(CouplePointLedger::getFromUser).containsExactlyInAnyOrder("alice", "bob");
+                .extracting(CouplePointLedgerPO::getFromUser).containsExactlyInAnyOrder("alice", "bob");
         verify(push).pushCoupleEventBoth(eq("factory-spin-clear"), eq("bob"), eq("alice"), eq("bob"), any());
 
         // 重复打勾：早退，既不再改行也不再计分
@@ -155,7 +155,7 @@ class CoupleFactoryServiceTest {
         assertThatThrownBy(() -> service.spin("alice", "一".repeat(41) + ",拖地"))
                 .isInstanceOf(BusinessException.class).hasMessageContaining("每条最多 40 字");
         assertThat(tasks).isEmpty();
-        verify(spinMapper, never()).insert(any(CoupleSpinTask.class));
+        verify(spinMapper, never()).insert(any(CoupleSpinTaskPO.class));
     }
 
     @Test

@@ -13,7 +13,7 @@ import java.util.UUID;
  */
 @Data
 @TableName("couple_space")
-public class CoupleSpace {
+public class CoupleSpacePO {
 
     public static final String STATUS_ACTIVE = "ACTIVE";
     public static final String STATUS_DISSOLVED = "DISSOLVED";
@@ -49,8 +49,8 @@ public class CoupleSpace {
     private Long created;
     private Long dissolvedAt;
 
-    public static CoupleSpace of(String userA, String userB) {
-        CoupleSpace space = new CoupleSpace();
+    public static CoupleSpacePO of(String userA, String userB) {
+        CoupleSpacePO space = new CoupleSpacePO();
         space.id = UUID.randomUUID().toString();
         space.userA = userA;
         space.userB = userB;

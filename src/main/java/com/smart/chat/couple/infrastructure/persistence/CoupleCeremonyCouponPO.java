@@ -10,7 +10,7 @@ import java.util.UUID;
 /** F236 愿望券：手动发/核销（OPEN→USED），保险柜 payout 走 ref 标记。 */
 @Data
 @TableName("couple_ceremony_coupon")
-public class CoupleCeremonyCoupon {
+public class CoupleCeremonyCouponPO {
 
     public static final String STATUS_OPEN = "OPEN";
     public static final String STATUS_USED = "USED";
@@ -26,8 +26,8 @@ public class CoupleCeremonyCoupon {
     private Long usedAt;
     private Long created;
 
-    public static CoupleCeremonyCoupon of(String spaceId, String title, String issuer, String ref) {
-        CoupleCeremonyCoupon row = new CoupleCeremonyCoupon();
+    public static CoupleCeremonyCouponPO of(String spaceId, String title, String issuer, String ref) {
+        CoupleCeremonyCouponPO row = new CoupleCeremonyCouponPO();
         row.id = UUID.randomUUID().toString();
         row.spaceId = spaceId;
         row.title = title;

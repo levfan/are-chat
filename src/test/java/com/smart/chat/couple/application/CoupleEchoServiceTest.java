@@ -1,10 +1,10 @@
 package com.smart.chat.couple.application;
 
-import com.smart.chat.couple.infrastructure.persistence.CoupleEchoDeed;
+import com.smart.chat.couple.infrastructure.persistence.CoupleEchoDeedPO;
 import com.smart.chat.couple.infrastructure.persistence.CoupleEchoDeedMapper;
-import com.smart.chat.couple.infrastructure.persistence.CouplePointLedger;
+import com.smart.chat.couple.infrastructure.persistence.CouplePointLedgerPO;
 import com.smart.chat.couple.infrastructure.persistence.CouplePointLedgerMapper;
-import com.smart.chat.couple.infrastructure.persistence.CoupleSpace;
+import com.smart.chat.couple.infrastructure.persistence.CoupleSpacePO;
 import com.smart.chat.couple.infrastructure.persistence.CoupleSpaceMapper;
 import com.smart.chat.sharedkernel.web.BusinessException;
 import com.smart.chat.messaging.infrastructure.transport.ImPushService;
@@ -52,16 +52,16 @@ class CoupleEchoServiceTest {
 
     private static final String DAY = LocalDate.now().toString();
 
-    private final List<CoupleEchoDeed> deeds = new ArrayList<>();
-    private final List<CouplePointLedger> ledger = new ArrayList<>();
+    private final List<CoupleEchoDeedPO> deeds = new ArrayList<>();
+    private final List<CouplePointLedgerPO> ledger = new ArrayList<>();
 
     @BeforeEach
     void setUp() {
-        CoupleSpace space = new CoupleSpace();
+        CoupleSpacePO space = new CoupleSpacePO();
         space.setId("s1");
         space.setUserA("alice");
         space.setUserB("bob");
-        space.setStatus(CoupleSpace.STATUS_ACTIVE);
+        space.setStatus(CoupleSpacePO.STATUS_ACTIVE);
         lenient().when(spaceMapper.findActiveByUser("alice")).thenReturn(Optional.of(space));
         lenient().when(spaceMapper.findActiveByUser("bob")).thenReturn(Optional.of(space));
 
@@ -72,15 +72,15 @@ class CoupleEchoServiceTest {
                 .filter(d -> d.getFromUser().equals(inv.getArgument(1)) && d.getDay().equals(inv.getArgument(2))
                         && d.getContent().equals(inv.getArgument(3)))
                 .findFirst().orElse(null));
-        lenient().when(deedMapper.insert(any(CoupleEchoDeed.class))).thenAnswer(inv -> {
+        lenient().when(deedMapper.insert(any(CoupleEchoDeedPO.class))).thenAnswer(inv -> {
             deeds.add(inv.getArgument(0));
             return 1;
         });
         lenient().when(deedMapper.selectById(any())).thenAnswer(inv -> deeds.stream()
                 .filter(d -> d.getId().equals(inv.getArgument(0))).findFirst().orElse(null));
-        lenient().when(deedMapper.updateById(any(CoupleEchoDeed.class))).thenAnswer(inv -> 1);
+        lenient().when(deedMapper.updateById(any(CoupleEchoDeedPO.class))).thenAnswer(inv -> 1);
 
-        lenient().when(ledgerMapper.insert(any(CouplePointLedger.class))).thenAnswer(inv -> {
+        lenient().when(ledgerMapper.insert(any(CouplePointLedgerPO.class))).thenAnswer(inv -> {
             ledger.add(inv.getArgument(0));
             return 1;
         });
@@ -96,7 +96,7 @@ class CoupleEchoServiceTest {
         assertThat(ledger).hasSize(1);
         assertThat(ledger.get(0).getFromUser()).isEqualTo("bob");
         assertThat(ledger.get(0).getPoints()).isEqualTo(CoupleEchoService.DEED_POINTS);
-        assertThat(ledger.get(0).getType()).isEqualTo(CouplePointLedger.TYPE_EARN);
+        assertThat(ledger.get(0).getType()).isEqualTo(CouplePointLedgerPO.TYPE_EARN);
         assertThat(ledger.get(0).getItem()).isEqualTo("好事簿：下雨天绕路来接我");
     }
 
@@ -118,7 +118,7 @@ class CoupleEchoServiceTest {
     @Test
     void starOnlyByRecorderIdempotentAndGoesToSubject() {
         service.addDeed("alice", "记得我不吃香菜", null);
-        CoupleEchoDeed row = deeds.get(0);
+        CoupleEchoDeedPO row = deeds.get(0);
         // TA 的记录只能 TA 自己点
         assertThatThrownBy(() -> service.starDeed("bob", row.getId()))
                 .isInstanceOf(BusinessException.class).hasMessageContaining("只有记下这条的人");
@@ -156,6 +156,6 @@ class CoupleEchoServiceTest {
         when(spaceMapper.findActiveByUser("carol")).thenReturn(Optional.empty());
         assertThatThrownBy(() -> service.vault("carol"))
                 .isInstanceOf(BusinessException.class).hasMessageContaining("情侣空间");
-        verify(ledgerMapper, never()).insert(any(CouplePointLedger.class));
+        verify(ledgerMapper, never()).insert(any(CouplePointLedgerPO.class));
     }
 }

@@ -1,9 +1,9 @@
 package com.smart.chat.couple.application;
 
 import com.smart.chat.couple.infrastructure.content.CoupleRitualBank;
-import com.smart.chat.couple.infrastructure.persistence.CoupleDineTicket;
+import com.smart.chat.couple.infrastructure.persistence.CoupleDineTicketPO;
 import com.smart.chat.couple.infrastructure.persistence.CoupleDineTicketMapper;
-import com.smart.chat.couple.infrastructure.persistence.CoupleSpace;
+import com.smart.chat.couple.infrastructure.persistence.CoupleSpacePO;
 import com.smart.chat.couple.infrastructure.persistence.CoupleSpaceMapper;
 import com.smart.chat.sharedkernel.web.BusinessException;
 import com.smart.chat.messaging.domain.CoupleEventPublisher;
@@ -48,32 +48,32 @@ public class CoupleDiningService {
 
     /** 今日饭桌总览：双方饭票 + 撞菜判定 + 裁决菜。 */
     public TodayVO today(String me) {
-        CoupleSpace space = requireSpace(me);
+        CoupleSpacePO space = requireSpace(me);
         String day = LocalDate.now().toString();
-        CoupleDineTicket mineRow = ticketMapper.find(space.getId(), day, me);
-        CoupleDineTicket partnerRow = ticketMapper.find(space.getId(), day, space.partnerOf(me));
+        CoupleDineTicketPO mineRow = ticketMapper.find(space.getId(), day, me);
+        CoupleDineTicketPO partnerRow = ticketMapper.find(space.getId(), day, space.partnerOf(me));
         boolean hit = sameDish(mineRow, partnerRow);
         return new TodayVO(day, ticketVO(mineRow, me), ticketVO(partnerRow, me), hit, verdictOf(space, day));
     }
 
     /** 投今晚饭票：每人每天一票，改票=覆盖；两票撞同一菜自动推双方。 */
     public TodayVO throwTicket(String me, String dish, String reason) {
-        CoupleSpace space = requireSpace(me);
+        CoupleSpacePO space = requireSpace(me);
         String d = trimLimit(dish, DISH_MAX, "菜名 30 字以内哦");
         if (d == null) {
             throw new BusinessException(400, "先写下今晚想吃什么呀 🍚");
         }
         String r = orEmpty(trimLimit(reason, TEXT_MAX, "理由 80 字以内哦"));
         String day = LocalDate.now().toString();
-        CoupleDineTicket row = ticketMapper.find(space.getId(), day, me);
+        CoupleDineTicketPO row = ticketMapper.find(space.getId(), day, me);
         if (row == null) {
-            ticketMapper.insert(CoupleDineTicket.of(space.getId(), day, me, d, r));
+            ticketMapper.insert(CoupleDineTicketPO.of(space.getId(), day, me, d, r));
         } else {
             row.setDish(d);
             row.setReason(r);
             ticketMapper.updateById(row);
         }
-        CoupleDineTicket partner = ticketMapper.find(space.getId(), day, space.partnerOf(me));
+        CoupleDineTicketPO partner = ticketMapper.find(space.getId(), day, space.partnerOf(me));
         if (partner != null && sameDish(ticketMapper.find(space.getId(), day, me), partner)) {
             push.pushCoupleEventBoth("dine-hit", me, space.getUserA(), space.getUserB(),
                     "🎯 今晚饭票撞菜啦：你们都投了「" + d + "」，这就是缘分饭桌！");
@@ -85,9 +85,9 @@ public class CoupleDiningService {
     }
 
     /** 吃什么裁决：从双方当日饭票（去重）里按空间+日稳定 hash 定一道，两人刷新结果一致。 */
-    public String verdictOf(CoupleSpace space, String day) {
+    public String verdictOf(CoupleSpacePO space, String day) {
         List<String> pool = new ArrayList<>();
-        for (CoupleDineTicket t : ticketMapper.findByDay(space.getId(), day)) {
+        for (CoupleDineTicketPO t : ticketMapper.findByDay(space.getId(), day)) {
             if (t.getDish() != null && !t.getDish().isBlank() && !pool.contains(t.getDish())) {
                 pool.add(t.getDish());
             }
@@ -101,14 +101,14 @@ public class CoupleDiningService {
 
     // ========== 内部工具 ==========
 
-    private TicketVO ticketVO(CoupleDineTicket row, String me) {
+    private TicketVO ticketVO(CoupleDineTicketPO row, String me) {
         if (row == null) {
             return null;
         }
         return new TicketVO(row.getFromUser(), me.equals(row.getFromUser()), row.getDish(), row.getReason());
     }
 
-    static boolean sameDish(CoupleDineTicket a, CoupleDineTicket b) {
+    static boolean sameDish(CoupleDineTicketPO a, CoupleDineTicketPO b) {
         return a != null && b != null && a.getDish() != null && a.getDish().equalsIgnoreCase(b.getDish());
     }
 
@@ -130,7 +130,7 @@ public class CoupleDiningService {
         return t;
     }
 
-    private CoupleSpace requireSpace(String me) {
+    private CoupleSpacePO requireSpace(String me) {
         return spaceMapper.findActiveByUser(me)
                 .orElseThrow(() -> new BusinessException(404, "还没有建立情侣空间，先邀请一位好友吧"));
     }

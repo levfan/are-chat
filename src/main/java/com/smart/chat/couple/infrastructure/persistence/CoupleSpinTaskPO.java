@@ -10,7 +10,7 @@ import java.util.UUID;
 /** F270 家务轮盘：周锚分派的一条事项，双签生效、完成打勾。 */
 @Data
 @TableName("couple_spin_task")
-public class CoupleSpinTask {
+public class CoupleSpinTaskPO {
 
     @TableId(value = "id", type = IdType.INPUT)
     private String id;
@@ -23,8 +23,8 @@ public class CoupleSpinTask {
     private Long doneAt;
     private Long created;
 
-    public static CoupleSpinTask of(String spaceId, String week, String item, String assignedUser) {
-        CoupleSpinTask row = new CoupleSpinTask();
+    public static CoupleSpinTaskPO of(String spaceId, String week, String item, String assignedUser) {
+        CoupleSpinTaskPO row = new CoupleSpinTaskPO();
         row.id = UUID.randomUUID().toString();
         row.spaceId = spaceId;
         row.week = week;

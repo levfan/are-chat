@@ -7,18 +7,18 @@ import org.apache.ibatis.annotations.Mapper;
 import java.util.List;
 
 @Mapper
-public interface CoupleUserPinMapper extends BaseMapperCompat<CoupleUserPin> {
+public interface CoupleUserPinMapper extends BaseMapperCompat<CoupleUserPinPO> {
 
     /** 某人的收藏行。 */
-    default CoupleUserPin find(String spaceId, String fromUser) {
-        return selectOne(new LambdaQueryWrapper<CoupleUserPin>()
-                .eq(CoupleUserPin::getSpaceId, spaceId)
-                .eq(CoupleUserPin::getFromUser, fromUser));
+    default CoupleUserPinPO find(String spaceId, String fromUser) {
+        return selectOne(new LambdaQueryWrapper<CoupleUserPinPO>()
+                .eq(CoupleUserPinPO::getSpaceId, spaceId)
+                .eq(CoupleUserPinPO::getFromUser, fromUser));
     }
 
     /** 空间内全部收藏行。 */
-    default List<CoupleUserPin> findBySpace(String spaceId) {
-        return selectList(new LambdaQueryWrapper<CoupleUserPin>()
-                .eq(CoupleUserPin::getSpaceId, spaceId));
+    default List<CoupleUserPinPO> findBySpace(String spaceId) {
+        return selectList(new LambdaQueryWrapper<CoupleUserPinPO>()
+                .eq(CoupleUserPinPO::getSpaceId, spaceId));
     }
 }

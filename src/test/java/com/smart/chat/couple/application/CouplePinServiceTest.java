@@ -1,8 +1,8 @@
 package com.smart.chat.couple.application;
 
-import com.smart.chat.couple.infrastructure.persistence.CoupleSpace;
+import com.smart.chat.couple.infrastructure.persistence.CoupleSpacePO;
 import com.smart.chat.couple.infrastructure.persistence.CoupleSpaceMapper;
-import com.smart.chat.couple.infrastructure.persistence.CoupleUserPin;
+import com.smart.chat.couple.infrastructure.persistence.CoupleUserPinPO;
 import com.smart.chat.couple.infrastructure.persistence.CoupleUserPinMapper;
 import com.smart.chat.sharedkernel.web.BusinessException;
 import org.junit.jupiter.api.Test;
@@ -40,12 +40,12 @@ class CouplePinServiceTest {
     @InjectMocks
     private CouplePinService service;
 
-    private CoupleSpace space() {
-        CoupleSpace space = new CoupleSpace();
+    private CoupleSpacePO space() {
+        CoupleSpacePO space = new CoupleSpacePO();
         space.setId("s1");
         space.setUserA("alice");
         space.setUserB("bob");
-        space.setStatus(CoupleSpace.STATUS_ACTIVE);
+        space.setStatus(CoupleSpacePO.STATUS_ACTIVE);
         space.setCreated(System.currentTimeMillis());
         return space;
     }
@@ -76,18 +76,18 @@ class CouplePinServiceTest {
     void savePinsUpsertsInsertThenUpdate() {
         stubSpace("alice");
         lenient().when(pinMapper.find("s1", "bob")).thenReturn(null);
-        CoupleUserPin existing = CoupleUserPin.of("s1", "alice", "dining");
+        CoupleUserPinPO existing = CoupleUserPinPO.of("s1", "alice", "dining");
         when(pinMapper.find("s1", "alice")).thenReturn(null, existing);
 
         var first = service.savePins("alice", List.of("dining"));
         assertThat(first.mine()).containsExactly("dining");
-        ArgumentCaptor<CoupleUserPin> cap = ArgumentCaptor.forClass(CoupleUserPin.class);
+        ArgumentCaptor<CoupleUserPinPO> cap = ArgumentCaptor.forClass(CoupleUserPinPO.class);
         verify(pinMapper).insert(cap.capture());
         assertThat(cap.getValue().getPins()).isEqualTo("dining");
         assertThat(cap.getValue().getFromUser()).isEqualTo("alice");
 
         var second = service.savePins("alice", List.of("dining", "cozy"));
-        verify(pinMapper, times(1)).insert(any(CoupleUserPin.class));
+        verify(pinMapper, times(1)).insert(any(CoupleUserPinPO.class));
         verify(pinMapper).updateById(existing);
         assertThat(existing.getPins()).isEqualTo("dining,cozy");
         assertThat(second.mine()).containsExactly("dining", "cozy");
@@ -96,7 +96,7 @@ class CouplePinServiceTest {
     @Test
     void pinsReturnsBothSides() {
         stubSpace("alice");
-        when(pinMapper.find("s1", "alice")).thenReturn(CoupleUserPin.of("s1", "alice", "meeting,host"));
+        when(pinMapper.find("s1", "alice")).thenReturn(CoupleUserPinPO.of("s1", "alice", "meeting,host"));
         when(pinMapper.find("s1", "bob")).thenReturn(null);
 
         var vo = service.pins("alice");

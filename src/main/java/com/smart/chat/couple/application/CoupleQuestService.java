@@ -1,9 +1,9 @@
 package com.smart.chat.couple.application;
 
 import com.smart.chat.couple.infrastructure.content.CoupleQuestBank;
-import com.smart.chat.couple.infrastructure.persistence.CoupleQuestOvertime;
+import com.smart.chat.couple.infrastructure.persistence.CoupleQuestOvertimePO;
 import com.smart.chat.couple.infrastructure.persistence.CoupleQuestOvertimeMapper;
-import com.smart.chat.couple.infrastructure.persistence.CoupleSpace;
+import com.smart.chat.couple.infrastructure.persistence.CoupleSpacePO;
 import com.smart.chat.couple.infrastructure.persistence.CoupleSpaceMapper;
 import com.smart.chat.sharedkernel.web.BusinessException;
 import com.smart.chat.messaging.domain.CoupleEventPublisher;
@@ -56,18 +56,18 @@ public class CoupleQuestService {
 
     /** 预报今晚忙到几点（每人每天一行可改写，13-23 钳制，note ≤40）。 */
     public QuestVO overtime(String me, Integer untilHour, String note) {
-        CoupleSpace space = requireSpace(me);
+        CoupleSpacePO space = requireSpace(me);
         LocalDate now = LocalDate.now();
         String day = now.toString();
-        int h = untilHour == null ? CoupleQuestOvertime.HOUR_DEFAULT
-                : Math.max(CoupleQuestOvertime.HOUR_MIN, Math.min(CoupleQuestOvertime.HOUR_MAX, untilHour));
+        int h = untilHour == null ? CoupleQuestOvertimePO.HOUR_DEFAULT
+                : Math.max(CoupleQuestOvertimePO.HOUR_MIN, Math.min(CoupleQuestOvertimePO.HOUR_MAX, untilHour));
         String n = note == null ? "" : note.trim();
-        if (n.length() > CoupleQuestOvertime.NOTE_MAX) {
-            throw new BusinessException(400, "一句说明最多 " + CoupleQuestOvertime.NOTE_MAX + " 字");
+        if (n.length() > CoupleQuestOvertimePO.NOTE_MAX) {
+            throw new BusinessException(400, "一句说明最多 " + CoupleQuestOvertimePO.NOTE_MAX + " 字");
         }
-        CoupleQuestOvertime row = overtimeMapper.find(space.getId(), day, me);
+        CoupleQuestOvertimePO row = overtimeMapper.find(space.getId(), day, me);
         if (row == null) {
-            row = CoupleQuestOvertime.of(space.getId(), day, me, h, n);
+            row = CoupleQuestOvertimePO.of(space.getId(), day, me, h, n);
             overtimeMapper.insert(row);
         } else {
             row.setUntilHour(h);
@@ -81,15 +81,15 @@ public class CoupleQuestService {
 
     /** 给对方留一张「到家灯给你留着」卡（只有对方能留，且 TA 今晚确实预报了加班）。 */
     public QuestVO leaveLamp(String me, String id, String text) {
-        CoupleSpace space = requireSpace(me);
+        CoupleSpacePO space = requireSpace(me);
         LocalDate now = LocalDate.now();
-        CoupleQuestOvertime row = requireOvertime(space, id);
+        CoupleQuestOvertimePO row = requireOvertime(space, id);
         if (row.getFromUser().equals(me)) {
             throw new BusinessException(400, "灯是给加班的人留的，自己留不算 💡");
         }
         String t = trim(text, "灯下想留的那句话写一句");
-        if (t.length() > CoupleQuestOvertime.LAMP_MAX) {
-            throw new BusinessException(400, "灯卡最多 " + CoupleQuestOvertime.LAMP_MAX + " 字");
+        if (t.length() > CoupleQuestOvertimePO.LAMP_MAX) {
+            throw new BusinessException(400, "灯卡最多 " + CoupleQuestOvertimePO.LAMP_MAX + " 字");
         }
         row.leaveLamp(me, t);
         overtimeMapper.updateById(row);
@@ -99,13 +99,13 @@ public class CoupleQuestService {
 
     // ========== 聚合 ==========
 
-    private QuestVO build(CoupleSpace space, String me, LocalDate now) {
+    private QuestVO build(CoupleSpacePO space, String me, LocalDate now) {
         String day = now.toString();
         OvertimeVO myOvertime = null;
         OvertimeVO partnerOvertime = null;
-        for (CoupleQuestOvertime o : overtimeMapper.findByDay(space.getId(), day)) {
+        for (CoupleQuestOvertimePO o : overtimeMapper.findByDay(space.getId(), day)) {
             OvertimeVO vo = new OvertimeVO(o.getId(),
-                    o.getUntilHour() == null ? CoupleQuestOvertime.HOUR_DEFAULT : o.getUntilHour(),
+                    o.getUntilHour() == null ? CoupleQuestOvertimePO.HOUR_DEFAULT : o.getUntilHour(),
                     nz(o.getNote()), me.equals(o.getFromUser()), nz(o.getLamp()), nz(o.getLampBy()));
             if (me.equals(o.getFromUser())) {
                 myOvertime = vo;
@@ -120,8 +120,8 @@ public class CoupleQuestService {
 
     // ========== 取行与校验 ==========
 
-    private CoupleQuestOvertime requireOvertime(CoupleSpace space, String id) {
-        CoupleQuestOvertime row = id == null || id.isBlank() ? null : overtimeMapper.selectById(id);
+    private CoupleQuestOvertimePO requireOvertime(CoupleSpacePO space, String id) {
+        CoupleQuestOvertimePO row = id == null || id.isBlank() ? null : overtimeMapper.selectById(id);
         if (row == null || !space.getId().equals(row.getSpaceId())) {
             throw new BusinessException(404, "找不到今晚那条加班预报 💡");
         }
@@ -140,7 +140,7 @@ public class CoupleQuestService {
         return s == null ? "" : s;
     }
 
-    private CoupleSpace requireSpace(String me) {
+    private CoupleSpacePO requireSpace(String me) {
         return spaceMapper.findActiveByUser(me)
                 .orElseThrow(() -> new BusinessException(404, "还没有建立情侣空间，先邀请一位好友吧"));
     }

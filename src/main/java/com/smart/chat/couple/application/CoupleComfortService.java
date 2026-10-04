@@ -1,11 +1,11 @@
 package com.smart.chat.couple.application;
 
 import com.smart.chat.couple.infrastructure.content.CoupleTalkBank;
-import com.smart.chat.couple.infrastructure.persistence.CoupleComfort;
+import com.smart.chat.couple.infrastructure.persistence.CoupleComfortPO;
 import com.smart.chat.couple.infrastructure.persistence.CoupleComfortMapper;
-import com.smart.chat.couple.infrastructure.persistence.CoupleMood;
+import com.smart.chat.couple.infrastructure.persistence.CoupleMoodPO;
 import com.smart.chat.couple.infrastructure.persistence.CoupleMoodMapper;
-import com.smart.chat.couple.infrastructure.persistence.CoupleSpace;
+import com.smart.chat.couple.infrastructure.persistence.CoupleSpacePO;
 import com.smart.chat.couple.infrastructure.persistence.CoupleSpaceMapper;
 import com.smart.chat.sharedkernel.web.BusinessException;
 import com.smart.chat.messaging.domain.CoupleEventPublisher;
@@ -55,7 +55,7 @@ public class CoupleComfortService {
     // ========== F60 求抱抱 ==========
 
     public ComfortBoardVO comfortBoard(String me) {
-        CoupleSpace space = requireSpace(me);
+        CoupleSpacePO space = requireSpace(me);
         String partner = space.partnerOf(me);
         String today = LocalDate.now().toString();
         List<ComfortVO> history = comfortMapper.findBySpace(space.getId()).stream()
@@ -72,15 +72,15 @@ public class CoupleComfortService {
 
     /** 求抱抱：一键告诉 TA「我现在很难过/委屈/累…」（每人每天一条，重复提交视为更新感受）。 */
     public ComfortBoardVO askForComfort(String me, String feeling) {
-        if (!CoupleComfort.FEELINGS.contains(feeling)) {
+        if (!CoupleComfortPO.FEELINGS.contains(feeling)) {
             throw new BusinessException(400, "感受只能是 难过/委屈/累/焦虑/emo 哦");
         }
-        CoupleSpace space = requireSpace(me);
+        CoupleSpacePO space = requireSpace(me);
         String partner = space.partnerOf(me);
         String today = LocalDate.now().toString();
-        CoupleComfort existing = comfortMapper.find(space.getId(), me, today);
+        CoupleComfortPO existing = comfortMapper.find(space.getId(), me, today);
         if (existing == null) {
-            comfortMapper.insert(CoupleComfort.of(space.getId(), me, feeling));
+            comfortMapper.insert(CoupleComfortPO.of(space.getId(), me, feeling));
         } else {
             existing.setFeeling(feeling);
             existing.setHandled(false);
@@ -89,14 +89,14 @@ public class CoupleComfortService {
             comfortMapper.updateById(existing);
         }
         push.pushCoupleEvent("comfort-sent", me, partner,
-                "🫂 TA 说 TA 现在有点" + CoupleComfort.feelingLabel(feeling) + " "
-                        + CoupleComfort.feelingEmoji(feeling) + "，需要一个抱抱——去 TA 那里给 TA 一点温柔吧");
+                "🫂 TA 说 TA 现在有点" + CoupleComfortPO.feelingLabel(feeling) + " "
+                        + CoupleComfortPO.feelingEmoji(feeling) + "，需要一个抱抱——去 TA 那里给 TA 一点温柔吧");
         return comfortBoard(me);
     }
 
     /** TA 的安慰话术卡：按感受随机出 3 张，选一张送出去（也可以自己手写）。 */
     public List<String> comfortCards(String feeling) {
-        if (!CoupleComfort.FEELINGS.contains(feeling)) {
+        if (!CoupleComfortPO.FEELINGS.contains(feeling)) {
             throw new BusinessException(400, "不认识这种感受哦");
         }
         return CoupleTalkBank.comfortWords(feeling, 3);
@@ -104,13 +104,13 @@ public class CoupleComfortService {
 
     /** 回应 TA 的求抱抱：只有对方能回应，回应后求抱抱的人会收到抱抱与那句话。 */
     public ComfortVO handleComfort(String me, String note) {
-        if (note == null || note.isBlank() || note.length() > CoupleComfort.NOTE_MAX) {
-            throw new BusinessException(400, "写一句 " + CoupleComfort.NOTE_MAX + " 字以内的话，把抱抱送过去");
+        if (note == null || note.isBlank() || note.length() > CoupleComfortPO.NOTE_MAX) {
+            throw new BusinessException(400, "写一句 " + CoupleComfortPO.NOTE_MAX + " 字以内的话，把抱抱送过去");
         }
-        CoupleSpace space = requireSpace(me);
+        CoupleSpacePO space = requireSpace(me);
         String partner = space.partnerOf(me);
         String today = LocalDate.now().toString();
-        CoupleComfort pending = comfortMapper.find(space.getId(), partner, today);
+        CoupleComfortPO pending = comfortMapper.find(space.getId(), partner, today);
         if (pending == null) {
             throw new BusinessException(404, "TA 今天还没有发过求抱抱哦");
         }
@@ -138,7 +138,7 @@ public class CoupleComfortService {
 
     /** 双方心情的同频程度：一致天数占比 + 当前是否同步 + 连续同步天数。 */
     public MoodSyncVO moodSync(String me) {
-        CoupleSpace space = requireSpace(me);
+        CoupleSpacePO space = requireSpace(me);
         String partner = space.partnerOf(me);
         Map<String, String> mine = moodMap(space.getId(), me);
         Map<String, String> theirs = moodMap(space.getId(), partner);
@@ -177,7 +177,7 @@ public class CoupleComfortService {
 
     private Map<String, String> moodMap(String spaceId, String username) {
         Map<String, String> map = new HashMap<>();
-        for (CoupleMood mood : moodMapper.findBySpace(spaceId)) {
+        for (CoupleMoodPO mood : moodMapper.findBySpace(spaceId)) {
             if (mood.getUsername().equals(username)) {
                 map.put(mood.getMoodDay(), mood.getMood());
             }
@@ -191,13 +191,13 @@ public class CoupleComfortService {
     public void remindNightCare() {
         String today = LocalDate.now().toString();
         List<String> negatives = List.of("SAD", "ANGRY", "SICK", "TIRED");
-        for (CoupleSpace space : spaceMapper.findAllActive()) {
+        for (CoupleSpacePO space : spaceMapper.findAllActive()) {
             for (String user : List.of(space.getUserA(), space.getUserB())) {
-                CoupleMood mood = moodMapper.find(space.getId(), user, today).orElse(null);
+                CoupleMoodPO mood = moodMapper.find(space.getId(), user, today).orElse(null);
                 if (mood == null || !negatives.contains(mood.getMood())) {
                     continue;
                 }
-                CoupleComfort comfort = comfortMapper.find(space.getId(), user, today);
+                CoupleComfortPO comfort = comfortMapper.find(space.getId(), user, today);
                 if (comfort != null && comfort.isHandled()) {
                     continue; // 已经被接住，不打扰
                 }
@@ -209,13 +209,13 @@ public class CoupleComfortService {
 
     // ========== 内部工具 ==========
 
-    private ComfortVO toVO(CoupleComfort c) {
+    private ComfortVO toVO(CoupleComfortPO c) {
         return new ComfortVO(c.getId(), c.getFromUser(), c.getDay(), c.getFeeling(),
-                CoupleComfort.feelingLabel(c.getFeeling()), CoupleComfort.feelingEmoji(c.getFeeling()),
+                CoupleComfortPO.feelingLabel(c.getFeeling()), CoupleComfortPO.feelingEmoji(c.getFeeling()),
                 c.isHandled(), c.getHandledNote(), c.getHandledAt());
     }
 
-    private CoupleSpace requireSpace(String me) {
+    private CoupleSpacePO requireSpace(String me) {
         return spaceMapper.findActiveByUser(me)
                 .orElseThrow(() -> new BusinessException(404, "还没有建立情侣空间，先邀请一位好友吧"));
     }

@@ -1,8 +1,8 @@
 package com.smart.chat.couple.application;
 
-import com.smart.chat.couple.infrastructure.persistence.CoupleSpace;
+import com.smart.chat.couple.infrastructure.persistence.CoupleSpacePO;
 import com.smart.chat.couple.infrastructure.persistence.CoupleSpaceMapper;
-import com.smart.chat.couple.infrastructure.persistence.CoupleUserPin;
+import com.smart.chat.couple.infrastructure.persistence.CoupleUserPinPO;
 import com.smart.chat.couple.infrastructure.persistence.CoupleUserPinMapper;
 import com.smart.chat.sharedkernel.web.BusinessException;
 import org.springframework.stereotype.Service;
@@ -31,13 +31,13 @@ public class CouplePinService {
 
     /** 双方收藏。 */
     public PinVO pins(String me) {
-        CoupleSpace space = requireSpace(me);
+        CoupleSpacePO space = requireSpace(me);
         return vo(space, me);
     }
 
     /** 保存我的收藏（全量覆盖），返回双方最新收藏。 */
     public PinVO savePins(String me, List<String> pins) {
-        CoupleSpace space = requireSpace(me);
+        CoupleSpacePO space = requireSpace(me);
         LinkedHashSet<String> keys = new LinkedHashSet<>();
         if (pins != null) {
             for (String raw : pins) {
@@ -58,9 +58,9 @@ public class CouplePinService {
             throw new BusinessException(400, "最多收藏 " + MAX_PINS + " 个，先放下一个再钉新的");
         }
         String joined = String.join(",", keys);
-        CoupleUserPin row = pinMapper.find(space.getId(), me);
+        CoupleUserPinPO row = pinMapper.find(space.getId(), me);
         if (row == null) {
-            pinMapper.insert(CoupleUserPin.of(space.getId(), me, joined));
+            pinMapper.insert(CoupleUserPinPO.of(space.getId(), me, joined));
         } else {
             row.setPins(joined);
             row.setUpdatedAt(System.currentTimeMillis());
@@ -69,12 +69,12 @@ public class CouplePinService {
         return new PinVO(List.copyOf(keys), parse(pinMapper.find(space.getId(), space.partnerOf(me))));
     }
 
-    private PinVO vo(CoupleSpace space, String me) {
+    private PinVO vo(CoupleSpacePO space, String me) {
         return new PinVO(parse(pinMapper.find(space.getId(), me)),
                 parse(pinMapper.find(space.getId(), space.partnerOf(me))));
     }
 
-    static List<String> parse(CoupleUserPin row) {
+    static List<String> parse(CoupleUserPinPO row) {
         if (row == null || row.getPins() == null || row.getPins().isBlank()) {
             return List.of();
         }
@@ -82,7 +82,7 @@ public class CouplePinService {
                 .map(String::trim).filter(s -> !s.isEmpty()).toList();
     }
 
-    private CoupleSpace requireSpace(String me) {
+    private CoupleSpacePO requireSpace(String me) {
         return spaceMapper.findActiveByUser(me)
                 .orElseThrow(() -> new BusinessException(404, "还没有建立情侣空间，先邀请一位好友吧"));
     }
