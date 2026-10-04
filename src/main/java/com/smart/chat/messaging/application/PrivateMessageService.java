@@ -1,0 +1,521 @@
+package com.smart.chat.messaging.application;
+
+import com.smart.chat.messaging.infrastructure.persistence.ConversationPin;
+import com.smart.chat.messaging.infrastructure.persistence.ConversationPinMapper;
+import com.smart.chat.messaging.infrastructure.persistence.Friend;
+import com.smart.chat.messaging.infrastructure.persistence.FriendMapper;
+import com.smart.chat.messaging.infrastructure.persistence.MessageReaction;
+import com.smart.chat.messaging.infrastructure.persistence.MessageReactionMapper;
+import com.smart.chat.messaging.infrastructure.persistence.MessageStar;
+import com.smart.chat.messaging.infrastructure.persistence.MessageStarMapper;
+import com.smart.chat.messaging.infrastructure.persistence.PrivateMessage;
+import com.smart.chat.messaging.infrastructure.persistence.PrivateMessageMapper;
+import com.smart.chat.messaging.infrastructure.throttle.MessageRateLimiter;
+import com.smart.chat.messaging.infrastructure.transport.ImPushService;
+import com.smart.chat.identity.application.AppUserService;
+import com.smart.chat.sharedkernel.web.BusinessException;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.function.Function;
+import java.util.stream.Collectors;
+
+/**
+ * 点对点私聊：发送（落库 + 在线推送）、历史/搜索（装配回应/收藏/已读状态）、
+ * 表情回应、收藏、编辑、已读回执、撤回；拉黑双向拦截。
+ * 新增：82 文件消息、84 会话内置顶、85 清空聊天记录、86 敏感词过滤、87 发送限流、95 附件面板。
+ */
+@Service
+public class PrivateMessageService {
+
+    /** 回应支持的表情白名单（情侣风全集 36 个，与前端 REACTION_ALL 严格对齐） */
+    public static final Set<String> REACTION_EMOJIS = Set.of(
+            "❤️", "🥰", "😍", "😘", "🤗", "💕",
+            "😂", "🤣", "😆", "😉", "😊", "😌",
+            "😮", "😳", "😱", "🥺", "😢", "😭",
+            "😤", "😡", "🙁", "😴", "🤔", "😏",
+            "😎", "🥳", "👍", "👎", "🙌", "👏",
+            "✌️", "🙈", "🔥", "🎉", "🌹", "⛵");
+
+    /** 82 文件消息：content 为 JSON（name/size/url），url 必须是站内下载地址 */
+    public static final String TYPE_FILE = PrivateMessage.TYPE_FILE;
+
+    /** 会话消息视图：在消息之上装配回应列表 / 收藏 / 已读回执 / 编辑标记 / 心动时刻。 */
+    public record MessageVO(String id, String fromUser, String toUser, String content, String msgType,
+                            String status, String replyToId, boolean read, boolean edited, boolean starred,
+                            List<ReactionVO> reactions, Long created, Long heartAt) {
+    }
+
+    public record ReactionVO(String username, String emoji) {
+    }
+
+    /** 收藏夹条目：peer 为消息的另一方。 */
+    public record StarVO(String msgId, String peer, String content, String msgType, String status, Long created) {
+    }
+
+    /** 81 全局搜索命中：peer 为会话另一方，便于前端跳转 */
+    public record GlobalSearchHitVO(String id, String peer, String content, String fromUser, Long created) {
+    }
+
+    /** 95 附件条目 */
+    public record AttachmentVO(String id, String name, long size, String url, String fromUser, Long created) {
+    }
+
+    private final PrivateMessageMapper messageMapper;
+    private final FriendMapper friendMapper;
+    private final MessageReactionMapper reactionMapper;
+    private final MessageStarMapper starMapper;
+    private final ImPushService push;
+    /** 合法用户目录：手机号注册产生的账号 */
+    private final AppUserService userService;
+    /** 86 敏感词过滤 */
+    private final ModerationService moderation;
+    /** 87 发送限流（防刷屏） */
+    private final MessageRateLimiter rateLimiter;
+    /** 84 会话内置顶 */
+    private final ConversationPinMapper pinMapper;
+
+    public PrivateMessageService(PrivateMessageMapper messageMapper, FriendMapper friendMapper,
+                                 MessageReactionMapper reactionMapper, MessageStarMapper starMapper,
+                                 ImPushService push, AppUserService userService, ModerationService moderation,
+                                 MessageRateLimiter rateLimiter, ConversationPinMapper pinMapper) {
+        this.messageMapper = messageMapper;
+        this.friendMapper = friendMapper;
+        this.reactionMapper = reactionMapper;
+        this.starMapper = starMapper;
+        this.push = push;
+        this.userService = userService;
+        this.moderation = moderation;
+        this.rateLimiter = rateLimiter;
+        this.pinMapper = pinMapper;
+    }
+
+    public PrivateMessage send(String me, String peer, String content, String type, String replyToId) {
+        // 87 防刷屏：所有消息类型统一限流
+        rateLimiter.check(me);
+        String rawPeer = peer == null ? "" : peer.trim();
+        // 用户名统一小写；对方必须是手机号注册过的合法用户
+        String peerName = userService.normalizeUsername(rawPeer);
+        if (peerName.equals(me)) {
+            throw new BusinessException(400, "不能给自己发私信");
+        }
+        if (!userService.exists(peerName)) {
+            throw new BusinessException(400, "查无此人：对方还没有用手机号注册");
+        }
+        if (friendMapper.findByOwnerAndFriend(me, peerName).isEmpty()) {
+            throw new BusinessException(403, "还不是好友，先加个好友吧");
+        }
+        // 拉黑双向拦截
+        friendMapper.findByOwnerAndFriend(me, peerName)
+                .filter(f -> Integer.valueOf(1).equals(f.getBlocked()))
+                .ifPresent(f -> {
+                    throw new BusinessException(403, "已拉黑对方，解除后才能发消息");
+                });
+        friendMapper.findByOwnerAndFriend(peerName, me)
+                .filter(f -> Integer.valueOf(1).equals(f.getBlocked()))
+                .ifPresent(f -> {
+                    throw new BusinessException(403, "对方已将你拉黑");
+                });
+        boolean poke = PrivateMessage.TYPE_POKE.equals(type);
+        boolean image = PrivateMessage.TYPE_IMAGE.equals(type);
+        boolean card = PrivateMessage.TYPE_CARD.equals(type);
+        boolean location = PrivateMessage.TYPE_LOCATION.equals(type);
+        boolean file = PrivateMessage.TYPE_FILE.equals(type);
+        String msgType = poke ? PrivateMessage.TYPE_POKE
+                : image ? PrivateMessage.TYPE_IMAGE
+                : card ? PrivateMessage.TYPE_CARD
+                : location ? PrivateMessage.TYPE_LOCATION
+                : file ? PrivateMessage.TYPE_FILE
+                : PrivateMessage.TYPE_TEXT;
+        String raw = content == null ? "" : content.trim();
+        String text;
+        if (poke) {
+            // 67 拍一拍支持自定义后缀（最多 100 字），留空用默认文案
+            text = raw.isEmpty() ? PrivateMessage.POKE_TEXT : raw;
+            if (text.length() > PrivateMessage.POKE_SUFFIX_MAX) {
+                throw new BusinessException(400, "拍一拍后缀最长 100 字");
+            }
+        } else if (file) {
+            // 82 文件消息：content 为 {name,size,url} JSON
+            text = requireFilePayload(raw);
+        } else {
+            // 86 敏感词过滤先于长度/空校验（censor 模式替换后照发）
+            text = moderation.clean(me, raw);
+            if (text.isEmpty()) {
+                throw new BusinessException(400, "消息内容不能为空");
+            }
+            if (text.length() > 2000) {
+                throw new BusinessException(400, "消息最长 2000 字");
+            }
+        }
+        if (image && !text.startsWith(PrivateMessage.IMAGE_URL_PREFIX)) {
+            throw new BusinessException(400, "图片消息必须先上传到站内");
+        }
+        if ((card || location) && !text.startsWith("{")) {
+            throw new BusinessException(400, "卡片消息内容格式不正确");
+        }
+        PrivateMessage message = PrivateMessage.of(me, peerName, text, msgType);
+        if (!poke && replyToId != null && !replyToId.isBlank()) {
+            message.setReplyToId(requireReplyInConversation(me, peerName, replyToId.trim()).getId());
+        }
+        messageMapper.insert(message);
+        if (push.isOnline(peerName)) {
+            push.pushDm(message);
+        }
+        return message;
+    }
+
+    /** 82 文件消息校验：name/size/url 必填，url 必须指向站内文件下载地址 */
+    private String requireFilePayload(String raw) {
+        if (raw.isEmpty() || !raw.startsWith("{")) {
+            throw new BusinessException(400, "文件消息格式不正确");
+        }
+        com.alibaba.fastjson2.JSONObject payload;
+        try {
+            payload = com.alibaba.fastjson2.JSON.parseObject(raw);
+        } catch (Exception e) {
+            throw new BusinessException(400, "文件消息格式不正确");
+        }
+        String name = payload == null ? null : payload.getString("name");
+        String url = payload == null ? null : payload.getString("url");
+        if (name == null || name.isBlank() || url == null || !url.startsWith(PrivateMessage.IMAGE_URL_PREFIX)) {
+            throw new BusinessException(400, "文件消息必须携带站内文件的名称与下载地址");
+        }
+        return raw;
+    }
+
+    /** 引用回复：引用的消息必须存在，且属于同一会话。 */
+    private PrivateMessage requireReplyInConversation(String me, String peer, String replyToId) {
+        PrivateMessage target = messageMapper.selectById(replyToId);
+        if (target == null) {
+            throw new BusinessException(404, "引用的消息不存在");
+        }
+        boolean sameConversation = (me.equals(target.getFromUser()) && peer.equals(target.getToUser()))
+                || (peer.equals(target.getFromUser()) && me.equals(target.getToUser()));
+        if (!sameConversation) {
+            throw new BusinessException(400, "只能引用本会话内的消息");
+        }
+        return target;
+    }
+
+    /** 会话内关键字搜索（最近 50 条，正序返回）。 */
+    public List<MessageVO> search(String me, String peer, String keyword) {
+        String q = keyword == null ? "" : keyword.trim();
+        if (q.isEmpty()) {
+            throw new BusinessException(400, "搜索关键字不能为空");
+        }
+        List<PrivateMessage> rows = messageMapper.searchConversation(me, peer, q).stream()
+                .sorted(java.util.Comparator.comparing(PrivateMessage::getCreated))
+                .toList();
+        return toVOs(rows, me);
+    }
+
+    /** 倒序分页拉取后反转为正序（before 为游标：早于该时间戳）。 */
+    public List<MessageVO> history(String me, String peer, Long before, int limit) {
+        int safeLimit = Math.min(Math.max(limit, 1), 100);
+        List<PrivateMessage> page = messageMapper.findConversationPage(me, peer, before, safeLimit);
+        return toVOs(page.stream().sorted(java.util.Comparator.comparing(PrivateMessage::getCreated)).toList(), me);
+    }
+
+    /** 56 导出当前会话全部消息（含撤回/编辑标记与回应，正序）。 */
+    public List<MessageVO> export(String me, String peer) {
+        String peerName = peer == null ? "" : peer.trim();
+        if (peerName.isEmpty()) {
+            throw new BusinessException(400, "会话对象不能为空");
+        }
+        return toVOs(messageMapper.findConversationAll(me, peerName), me);
+    }
+
+    /** 一次性装配：回应列表、我的收藏、我发消息的已读状态、编辑标记。 */
+    private List<MessageVO> toVOs(List<PrivateMessage> rows, String me) {
+        if (rows.isEmpty()) {
+            return List.of();
+        }
+        List<String> ids = rows.stream().map(PrivateMessage::getId).toList();
+        Map<String, List<ReactionVO>> reactionMap = reactionMapper.findByMsgIds(ids).stream()
+                .collect(Collectors.groupingBy(MessageReaction::getMsgId,
+                        Collectors.mapping(r -> new ReactionVO(r.getUsername(), r.getEmoji()), Collectors.toList())));
+        Set<String> starredIds = starMapper.findByUsernameAndMsgIds(me, ids).stream()
+                .map(MessageStar::getMsgId)
+                .collect(Collectors.toSet());
+        List<MessageVO> result = new ArrayList<>(rows.size());
+        for (PrivateMessage m : rows) {
+            boolean read = m.getFromUser().equals(me) && Integer.valueOf(1).equals(m.getReadFlag());
+            result.add(new MessageVO(m.getId(), m.getFromUser(), m.getToUser(), m.getContent(), m.getMsgType(),
+                    m.getStatus(), m.getReplyToId(), read, Integer.valueOf(1).equals(m.getEdited()),
+                    starredIds.contains(m.getId()),
+                    reactionMap.getOrDefault(m.getId(), List.of()), m.getCreated(), m.getHeartAt()));
+        }
+        return result;
+    }
+
+    /**
+     * F36 心动时刻：标记/取消标记一条消息。只有消息双方能操作；
+     * 标记后实时推送给对方（message-hearted 事件），在情侣空间可回顾。
+     */
+    public MessageVO markHeart(String me, String messageId, boolean hearted) {
+        PrivateMessage message = messageMapper.selectById(messageId);
+        if (message == null) {
+            throw new BusinessException(404, "这条消息不存在");
+        }
+        if (!message.getFromUser().equals(me) && !message.getToUser().equals(me)) {
+            throw new BusinessException(403, "只能标记你们俩的聊天记录哦");
+        }
+        if (PrivateMessage.STATUS_RECALLED.equals(message.getStatus())) {
+            throw new BusinessException(409, "撤回的消息不能标记");
+        }
+        message.setHeartAt(hearted ? System.currentTimeMillis() : null);
+        messageMapper.updateById(message);
+        String peer = message.getFromUser().equals(me) ? message.getToUser() : message.getFromUser();
+        push.pushCoupleEvent(hearted ? "message-hearted" : "message-unhearted", me, peer,
+                hearted ? "TA 收藏了一条心动时刻 💗 快去情侣空间看看" : "TA 取消了一条心动时刻标记");
+        return new MessageVO(message.getId(), message.getFromUser(), message.getToUser(), message.getContent(),
+                message.getMsgType(), message.getStatus(), message.getReplyToId(),
+                message.getFromUser().equals(me) && Integer.valueOf(1).equals(message.getReadFlag()),
+                Integer.valueOf(1).equals(message.getEdited()), false, List.of(),
+                message.getCreated(), message.getHeartAt());
+    }
+
+    /** F36 心动时刻列表：与某人聊天中被标记的消息（新→旧，最多 100 条）。 */
+    public List<MessageVO> heartMoments(String me, String peer) {
+        String peerName = peer == null ? "" : peer.trim();
+        List<PrivateMessage> rows = messageMapper.findHeartMoments(me, peerName);
+        return toVOs(rows, me);
+    }
+
+    @Transactional
+    public void markRead(String me, String peer) {
+        Friend row = friendMapper.findByOwnerAndFriend(me, peer)
+                .orElseThrow(() -> new BusinessException(403, "还不是好友"));
+        row.setLastReadAt(System.currentTimeMillis());
+        friendMapper.updateById(row);
+        // 已读回执：把对方发来的消息标记已读
+        messageMapper.markIncomingRead(peer, me);
+        push.pushRead(me, peer);
+    }
+
+    public void recall(String me, String messageId) {
+        PrivateMessage message = messageMapper.selectById(messageId);
+        if (message == null) {
+            throw new BusinessException(404, "消息不存在");
+        }
+        if (!message.getFromUser().equals(me)) {
+            throw new BusinessException(403, "只能撤回自己发的消息");
+        }
+        if (PrivateMessage.STATUS_RECALLED.equals(message.getStatus())) {
+            throw new BusinessException(409, "这条消息已经撤回过了");
+        }
+        if (System.currentTimeMillis() - message.getCreated() > PrivateMessage.RECALL_WINDOW_MS) {
+            throw new BusinessException(400, "超过 2 分钟，撤不回来了～");
+        }
+        message.setStatus(PrivateMessage.STATUS_RECALLED);
+        messageMapper.updateById(message);
+        if (push.isOnline(message.getToUser())) {
+            push.pushRecall(message);
+        }
+    }
+
+    // ---------- 表情回应 ----------
+
+    /** toggle：已回应则取消，未回应则添加。会话双方都收推送。 */
+    @Transactional
+    public boolean toggleReaction(String me, String msgId, String emoji) {
+        PrivateMessage message = requireParticipantMessage(me, msgId);
+        if (emoji == null || !REACTION_EMOJIS.contains(emoji)) {
+            throw new BusinessException(400, "不支持的表情回应");
+        }
+        MessageReaction existing = reactionMapper.findUnique(msgId, me, emoji);
+        boolean added;
+        if (existing != null) {
+            reactionMapper.deleteById(existing.getId());
+            added = false;
+        } else {
+            reactionMapper.insert(MessageReaction.of(msgId, me, emoji));
+            added = true;
+        }
+        push.pushReaction(message, me, emoji, added);
+        return added;
+    }
+
+    // ---------- 收藏 ----------
+
+    public boolean toggleStar(String me, String msgId) {
+        requireParticipantMessage(me, msgId);
+        MessageStar existing = starMapper.findUnique(me, msgId);
+        if (existing != null) {
+            starMapper.deleteById(existing.getId());
+            return false;
+        }
+        starMapper.insert(MessageStar.of(me, msgId));
+        return true;
+    }
+
+    /** 收藏夹：按收藏时间倒序，peer 为消息另一方。 */
+    public List<StarVO> listStars(String me) {
+        List<MessageStar> stars = starMapper.findByUsername(me);
+        if (stars.isEmpty()) {
+            return List.of();
+        }
+        Map<String, PrivateMessage> messages = messageMapper
+                .selectBatchIds(stars.stream().map(MessageStar::getMsgId).distinct().toList()).stream()
+                .collect(Collectors.toMap(PrivateMessage::getId, Function.identity()));
+        return stars.stream()
+                .filter(s -> messages.containsKey(s.getMsgId()))
+                .map(s -> {
+                    PrivateMessage m = messages.get(s.getMsgId());
+                    String peer = m.getFromUser().equals(me) ? m.getToUser() : m.getFromUser();
+                    return new StarVO(m.getId(), peer, m.getContent(), m.getMsgType(), m.getStatus(), m.getCreated());
+                })
+                .toList();
+    }
+
+    // ---------- 编辑 ----------
+
+    /** 2 分钟内可编辑自己发出的文本消息。 */
+    public PrivateMessage edit(String me, String msgId, String content) {
+        PrivateMessage message = messageMapper.selectById(msgId);
+        if (message == null) {
+            throw new BusinessException(404, "消息不存在");
+        }
+        if (!message.getFromUser().equals(me)) {
+            throw new BusinessException(403, "只能编辑自己发的消息");
+        }
+        if (!PrivateMessage.TYPE_TEXT.equals(message.getMsgType())) {
+            throw new BusinessException(400, "只有文本消息可以编辑");
+        }
+        if (PrivateMessage.STATUS_RECALLED.equals(message.getStatus())) {
+            throw new BusinessException(409, "消息已撤回，不能编辑");
+        }
+        if (System.currentTimeMillis() - message.getCreated() > PrivateMessage.RECALL_WINDOW_MS) {
+            throw new BusinessException(400, "超过 2 分钟，不能编辑了");
+        }
+        String text = content == null ? "" : content.trim();
+        if (text.isEmpty()) {
+            throw new BusinessException(400, "消息内容不能为空");
+        }
+        if (text.length() > 2000) {
+            throw new BusinessException(400, "消息最长 2000 字");
+        }
+        message.setContent(text);
+        message.setEdited(1);
+        messageMapper.updateById(message);
+        push.pushEdit(message);
+        return message;
+    }
+
+    private PrivateMessage requireParticipantMessage(String me, String msgId) {
+        PrivateMessage message = messageMapper.selectById(msgId);
+        if (message == null) {
+            throw new BusinessException(404, "消息不存在");
+        }
+        if (!message.getFromUser().equals(me) && !message.getToUser().equals(me)) {
+            throw new BusinessException(403, "只能操作本会话内的消息");
+        }
+        return message;
+    }
+
+    // ---------- 81 全局消息搜索 ----------
+
+    /** 跨会话搜索我参与的全部文本消息（未撤回，最近 50 条，按时间倒序） */
+    public List<GlobalSearchHitVO> searchGlobal(String me, String keyword) {
+        String q = keyword == null ? "" : keyword.trim();
+        if (q.isEmpty()) {
+            throw new BusinessException(400, "搜索关键字不能为空");
+        }
+        return messageMapper.searchGlobal(me, q).stream()
+                .map(m -> new GlobalSearchHitVO(m.getId(),
+                        m.getFromUser().equals(me) ? m.getToUser() : m.getFromUser(),
+                        m.getContent(), m.getFromUser(), m.getCreated()))
+                .toList();
+    }
+
+    // ---------- 84 会话内置顶消息 ----------
+
+    /** 置顶：仅双方可见的会话级置顶，一个会话一条，后者覆盖前者。 */
+    public PinVO pin(String me, String peer, String msgId) {
+        String peerName = userService.normalizeUsername(peer);
+        requireConversation(me, peerName);
+        PrivateMessage message = requireParticipantMessage(me, msgId);
+        if (PrivateMessage.STATUS_RECALLED.equals(message.getStatus())) {
+            throw new BusinessException(400, "已撤回的消息不能置顶");
+        }
+        String userA = me.compareTo(peerName) <= 0 ? me : peerName;
+        String userB = me.compareTo(peerName) <= 0 ? peerName : me;
+        pinMapper.deleteForConversation(userA, userB);
+        ConversationPin pin = ConversationPin.of(userA, userB, message.getId(), me);
+        pinMapper.insert(pin);
+        push.pushPin(me, peerName, message.getId(), true);
+        return new PinVO(message.getId(), me);
+    }
+
+    public void unpin(String me, String peer) {
+        String peerName = userService.normalizeUsername(peer);
+        requireConversation(me, peerName);
+        String userA = me.compareTo(peerName) <= 0 ? me : peerName;
+        String userB = me.compareTo(peerName) <= 0 ? peerName : me;
+        pinMapper.deleteForConversation(userA, userB);
+        push.pushPin(me, peerName, null, false);
+    }
+
+    /** 当前会话置顶（无则返回 null，由 Optional 表达） */
+    public java.util.Optional<PinVO> currentPin(String me, String peer) {
+        String peerName = userService.normalizeUsername(peer);
+        String userA = me.compareTo(peerName) <= 0 ? me : peerName;
+        String userB = me.compareTo(peerName) <= 0 ? peerName : me;
+        return pinMapper.findForConversation(userA, userB).map(pin -> new PinVO(pin.getMsgId(), pin.getCreatedBy()));
+    }
+
+    public record PinVO(String msgId, String createdBy) {
+    }
+
+    private void requireConversation(String me, String peerName) {
+        if (friendMapper.findByOwnerAndFriend(me, peerName).isEmpty()) {
+            throw new BusinessException(403, "还不是好友，无法操作会话");
+        }
+    }
+
+    // ---------- 85 清空聊天记录 ----------
+
+    /** 清空双方会话全部消息（危险操作，前端二次确认后调用），返回删除条数 */
+    @Transactional
+    public long clearConversation(String me, String peer) {
+        String peerName = userService.normalizeUsername(peer);
+        requireConversation(me, peerName);
+        int deleted = messageMapper.deleteConversation(me, peerName);
+        unpin(me, peerName);
+        return deleted;
+    }
+
+    // ---------- 95 会话附件面板 ----------
+
+    /** 会话内图片/文件附件（最近 100 条，倒序） */
+    public List<AttachmentVO> attachments(String me, String peer, String type) {
+        String peerName = userService.normalizeUsername(peer);
+        requireConversation(me, peerName);
+        String msgType = "file".equals(type) ? PrivateMessage.TYPE_FILE : PrivateMessage.TYPE_IMAGE;
+        List<PrivateMessage> rows = messageMapper.findAttachments(me, peerName, msgType);
+        List<AttachmentVO> result = new ArrayList<>(rows.size());
+        for (PrivateMessage m : rows) {
+            if (msgType.equals(PrivateMessage.TYPE_IMAGE)) {
+                result.add(new AttachmentVO(m.getId(), "图片", 0, m.getContent(), m.getFromUser(), m.getCreated()));
+            } else {
+                com.alibaba.fastjson2.JSONObject payload;
+                try {
+                    payload = com.alibaba.fastjson2.JSON.parseObject(m.getContent());
+                } catch (Exception e) {
+                    continue;
+                }
+                if (payload == null) {
+                    continue;
+                }
+                result.add(new AttachmentVO(m.getId(), payload.getString("name"),
+                        payload.getLongValue("size"), payload.getString("url"), m.getFromUser(), m.getCreated()));
+            }
+        }
+        return result;
+    }
+}

@@ -1,0 +1,69 @@
+package com.smart.chat.identity.infrastructure.persistence;
+
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.smart.chat.sharedkernel.persistence.BaseMapperCompat;
+import org.apache.ibatis.annotations.Mapper;
+
+import java.util.List;
+import java.util.Optional;
+
+@Mapper
+public interface AppUserMapper extends BaseMapperCompat<AppUser> {
+
+    default Optional<AppUser> findByUsername(String username) {
+        if (username == null || username.isBlank()) {
+            return Optional.empty();
+        }
+        return Optional.ofNullable(selectOne(new LambdaQueryWrapper<AppUser>()
+                .eq(AppUser::getUsername, username)
+                .last("LIMIT 1")));
+    }
+
+    default Optional<AppUser> findByPhone(String phone) {
+        if (phone == null || phone.isBlank()) {
+            return Optional.empty();
+        }
+        return Optional.ofNullable(selectOne(new LambdaQueryWrapper<AppUser>()
+                .eq(AppUser::getPhone, phone)
+                .last("LIMIT 1")));
+    }
+
+    /** 用户名或手机号精确命中（登录用，account 已由上层规范化为小写/去空格） */
+    default Optional<AppUser> findByAccount(String account) {
+        return findByUsername(account).or(() -> findByPhone(account));
+    }
+
+    /** 联想候选：用户名或手机号包含关键字，按用户名排序 */
+    default List<AppUser> search(String keyword, int limit) {
+        LambdaQueryWrapper<AppUser> wrapper = new LambdaQueryWrapper<AppUser>()
+                .eq(AppUser::getStatus, AppUser.STATUS_ACTIVE);
+        if (keyword != null && !keyword.isBlank()) {
+            wrapper.and(w -> w.like(AppUser::getUsername, keyword).or().like(AppUser::getPhone, keyword));
+        }
+        wrapper.orderByAsc(AppUser::getUsername).last("LIMIT " + Math.max(1, Math.min(limit, 50)));
+        return selectList(wrapper);
+    }
+
+    default long countUsers() {
+        return selectCount(new LambdaQueryWrapper<>());
+    }
+
+    /** 79 用户管理：按用户名/手机号模糊搜索全部状态用户（管理员视角） */
+    default List<AppUser> searchAll(String keyword, int limit) {
+        LambdaQueryWrapper<AppUser> wrapper = new LambdaQueryWrapper<>();
+        if (keyword != null && !keyword.isBlank()) {
+            String kw = keyword.trim();
+            wrapper.and(w -> w.like(AppUser::getUsername, kw).or().like(AppUser::getPhone, kw));
+        }
+        wrapper.orderByAsc(AppUser::getUsername).last("LIMIT " + Math.max(1, Math.min(limit, 200)));
+        return selectList(wrapper);
+    }
+
+    default List<AppUser> findAdmins() {
+        return selectList(new LambdaQueryWrapper<AppUser>().eq(AppUser::getRole, AppUser.ROLE_ADMIN));
+    }
+
+    default long countAdmins() {
+        return selectCount(new LambdaQueryWrapper<AppUser>().eq(AppUser::getRole, AppUser.ROLE_ADMIN));
+    }
+}
