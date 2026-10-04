@@ -60,6 +60,27 @@ class RequestLogEndToEndTest {
                 .toList();
     }
 
+    /**
+     * 等日志行到位再断言。真 HTTP 往返下「响应字节回到客户端」与「Filter 写完完成行」
+     * 两件事没有先后保证：单跑这个类 6 次全绿，整套跑因负载升高会偶发少一行。
+     * 这里只是把它真正等到位，判据没有放松——仍然要求行数到位后逐条比对内容；
+     * 等不到就把最后一次快照交给 assertEquals，报错信息照原样列出实际日志行。
+     */
+    private List<String> awaitLinesFor(String path, int expectedLines) {
+        long deadline = System.currentTimeMillis() + 3000;
+        List<String> lines = linesFor(path);
+        while (lines.size() < expectedLines && System.currentTimeMillis() < deadline) {
+            try {
+                Thread.sleep(20);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                break;
+            }
+            lines = linesFor(path);
+        }
+        return lines;
+    }
+
     private HttpResponse<String> get(String path) throws Exception {
         return client.send(HttpRequest.newBuilder(URI.create("http://localhost:" + port + path)).GET().build(),
                 HttpResponse.BodyHandlers.ofString());
@@ -80,7 +101,7 @@ class RequestLogEndToEndTest {
         assertEquals(401, response.statusCode(), "未登录取当前用户应当 401");
         assertTrue(response.body().contains("\"code\":401"), "客户端要拿到完整 JSON，实际=" + response.body());
 
-        List<String> lines = linesFor("/api/auth/me");
+        List<String> lines = awaitLinesFor("/api/auth/me", 2);
         assertEquals(2, lines.size(), () -> "进入与完成各一行，实际=" + lines);
         String done = lines.get(1);
         assertTrue(lines.get(0).contains("GET /api/auth/me user=- query=- body=-"), lines.get(0));
@@ -99,7 +120,7 @@ class RequestLogEndToEndTest {
         assertEquals(401, response.statusCode());
         assertTrue(response.body().contains("雁过拔毛"), "拦截器写的 401 正文要完整回到客户端，实际=" + response.body());
 
-        List<String> lines = linesFor("/api/persons");
+        List<String> lines = awaitLinesFor("/api/persons", 2);
         assertEquals(2, lines.size(), () -> "被拦截器拒掉的请求也要留两行，实际=" + lines);
         assertTrue(lines.get(0).contains("--> POST /api/persons"), lines.get(0));
         assertTrue(lines.get(0).contains("{\"name\":\"探针\"}"), lines.get(0));
@@ -117,7 +138,7 @@ class RequestLogEndToEndTest {
         assertNotNull(response.headers().firstValue("Set-Cookie").orElse(null),
                 "会话 Cookie 仍要正常下发（包装层不能改动响应头）");
 
-        List<String> lines = linesFor("/api/auth/login");
+        List<String> lines = awaitLinesFor("/api/auth/login", 2);
         assertEquals(2, lines.size(), () -> "实际=" + lines);
         // 按用户拍定的口径：入参全量原样记录，不做脱敏
         assertTrue(lines.get(0).contains("body=" + body), lines.get(0));
@@ -128,7 +149,7 @@ class RequestLogEndToEndTest {
         appender.list.clear();
         HttpResponse<String> health = get("/api/health");
         assertEquals(200, health.statusCode());
-        List<String> healthLines = linesFor("/api/health");
+        List<String> healthLines = awaitLinesFor("/api/health", 2);
         assertEquals(2, healthLines.size(), () -> "实际=" + healthLines);
         assertTrue(healthLines.get(1).contains("成功"), healthLines.get(1));
     }
@@ -147,7 +168,7 @@ class RequestLogEndToEndTest {
                 HttpResponse.BodyHandlers.ofString());
 
         assertEquals(200, me.statusCode(), "带 Cookie 取当前用户应当成功，实际=" + me.statusCode() + " " + me.body());
-        List<String> lines = linesFor("/api/auth/me");
+        List<String> lines = awaitLinesFor("/api/auth/me", 2);
         assertEquals(2, lines.size(), () -> "实际=" + lines);
         assertTrue(lines.get(0).contains("user=admin"), lines.get(0));
         assertTrue(lines.get(1).contains("user=admin"), lines.get(1));
