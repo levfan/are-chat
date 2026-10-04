@@ -1,6 +1,8 @@
 package com.smart.chat.couple.application;
 
 import com.smart.chat.couple.infrastructure.content.CoupleTermBank;
+import com.smart.chat.couple.domain.intimacy.IntimacyCalculator;
+import com.smart.chat.couple.domain.intimacy.IntimacySource;
 import com.smart.chat.couple.infrastructure.persistence.CoupleActionPO;
 import com.smart.chat.couple.infrastructure.persistence.CoupleActionMapper;
 import com.smart.chat.couple.infrastructure.persistence.CoupleAnniversaryPO;
@@ -473,42 +475,15 @@ public class CoupleService {
         long pointEarned = ledgerMapper.findBySpace(space.getId()).stream()
                 .filter(l -> CouplePointLedgerPO.TYPE_EARN.equals(l.getType()))
                 .mapToLong(l -> l.getPoints() == null ? 0 : l.getPoints()).sum();
-        int score = (int) (moodDays + bondDays * 2 + deedCount * 2 + lampCount * 3 + reflectCount * 2 + pointEarned);
+
+        // 取数只负责「攒了多少」，加权与定级交回领域层（couple.domain.intimacy）
+        IntimacyCalculator.Intimacy result = IntimacyCalculator.evaluate(
+                new IntimacySource(moodDays, bondDays, deedCount, lampCount, reflectCount, pointEarned));
+        IntimacyCalculator.IntimacyLevel level = result.level();
         IntimacyBreakdown breakdown = new IntimacyBreakdown(moodDays, bondDays, deedCount, lampCount,
                 reflectCount, pointEarned);
-
-        // 等级阶梯：L1 怦然心动(0) → L2 心动初启(50) → L3 甜甜热恋(150) → L4 形影不离(300)
-        //          → L5 心有灵犀(500) → L6 相依相伴(800) → L7 相守一生(1300)
-        int level;
-        if (score >= 1300) {
-            level = 7;
-        } else if (score >= 800) {
-            level = 6;
-        } else if (score >= 500) {
-            level = 5;
-        } else if (score >= 300) {
-            level = 4;
-        } else if (score >= 150) {
-            level = 3;
-        } else if (score >= 50) {
-            level = 2;
-        } else {
-            level = 1;
-        }
-        int[] nextAt = {50, 150, 300, 500, 800, 1300, 0};
-        String[] titles = {"", "怦然心动", "心动初启", "甜甜热恋", "形影不离", "心有灵犀", "相依相伴", "相守一生"};
-        String[] icons = {"", "✨", "💫", "🍬", "🧡", "💞", "🌷", "💍"};
-        Integer next = level >= 7 ? null : nextAt[level - 1];
-        // 距下一级进度：以本级起点与下一级阈值插值（满级恒为 100）
-        int progress;
-        if (level >= 7) {
-            progress = 100;
-        } else {
-            int floor = level == 1 ? 0 : nextAt[level - 2];
-            int span = nextAt[level - 1] - floor;
-            progress = span <= 0 ? 100 : (int) Math.min(99, (score - floor) * 100L / span);
-        }
-        return new IntimacyVO(score, level, titles[level], icons[level], next, progress, breakdown);
+        return new IntimacyVO(result.score(), level.level(), level.title(), level.icon(),
+                level.nextLevelAt(), level.progress(), breakdown);
     }
 
     // ========== 7. 悄悄话信箱 ==========
