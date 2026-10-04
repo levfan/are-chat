@@ -12,9 +12,12 @@ import java.util.List;
 import java.util.concurrent.ThreadLocalRandom;
 
 /**
- * 惊喜与期待（F50-F58）：爱情刮刮乐、恋爱盲盒、心动闹钟、思念速递、藏宝图任务、告白重现。
- * 情绪价值设计：把「我想对 TA 好」变成一个个会准时发生的小惊喜——
- * 券能兑现、盒子有开箱日、闹钟会准时响、思念会在几分钟后的某个时刻突然抵达。
+ * 刮刮乐与盲盒（保留卡 `couple-surprise`，原 F50/F51）：
+ * 券由 TA 送我刮、只有送券人能点「已兑现」（兑现即 +5 分归送券人）；
+ * 盒子中装着一个约定日子的惊喜，到日才打得开。
+ *
+ * 系统裁剪：心动闹钟、思念速递、藏宝图任务、告白重现全部下线（含其定时任务），
+ * 保留卡内的定时推送只剩生日贺卡一条。
  */
 @Service
 public class CoupleSurpriseService {
@@ -26,25 +29,15 @@ public class CoupleSurpriseService {
     private final CoupleSpaceMapper spaceMapper;
     private final CoupleScratchMapper scratchMapper;
     private final CoupleMysteryBoxMapper boxMapper;
-    private final CoupleSweetAlarmMapper alarmMapper;
-    private final CoupleMissExpressMapper missMapper;
-    private final CoupleTreasureMapper treasureMapper;
-    private final CoupleConfessionMapper confessionMapper;
     private final CouplePointLedgerMapper ledgerMapper;
     private final ImPushService push;
 
     public CoupleSurpriseService(CoupleSpaceMapper spaceMapper, CoupleScratchMapper scratchMapper,
-                                 CoupleMysteryBoxMapper boxMapper, CoupleSweetAlarmMapper alarmMapper,
-                                 CoupleMissExpressMapper missMapper, CoupleTreasureMapper treasureMapper,
-                                 CoupleConfessionMapper confessionMapper, CouplePointLedgerMapper ledgerMapper,
+                                 CoupleMysteryBoxMapper boxMapper, CouplePointLedgerMapper ledgerMapper,
                                  ImPushService push) {
         this.spaceMapper = spaceMapper;
         this.scratchMapper = scratchMapper;
         this.boxMapper = boxMapper;
-        this.alarmMapper = alarmMapper;
-        this.missMapper = missMapper;
-        this.treasureMapper = treasureMapper;
-        this.confessionMapper = confessionMapper;
         this.ledgerMapper = ledgerMapper;
         this.push = push;
     }
@@ -58,24 +51,6 @@ public class CoupleSurpriseService {
 
     public record BoxVO(String id, String fromUser, String kind, String content, String openDay,
                         boolean opened, boolean canOpen, Long created) {
-    }
-
-    public record AlarmVO(String id, String message, Long fireAt, boolean fired, Long firedAt) {
-    }
-
-    /** 思念速递概览：我的记录 + 双方累计思念值 + 在途数量。 */
-    public record MissVO(String id, Long deliverAt, boolean delivered, Long deliveredAt) {
-    }
-
-    public record MissBoardVO(long myTotal, long partnerTotal, long inTransit, List<MissVO> recent) {
-    }
-
-    public record TreasureVO(String id, String fromUser, String taskText,
-                             /** 未揭晓时对埋宝人以外的 TA 隐藏 */
-                             String prizeText, String status, Long doneAt, Long created) {
-    }
-
-    public record ConfessionVO(String id, String content, String confessDay, String createdBy, Long created) {
     }
 
     // ========== 爱情刮刮乐（F50） ==========
@@ -240,210 +215,11 @@ public class CoupleSurpriseService {
 
     // ========== 心动闹钟（F52） ==========
 
-    public List<AlarmVO> alarms(String me) {
-        CoupleSpace space = requireSpace(me);
-        return alarmMapper.findByUser(space.getId(), me).stream()
-                .map(a -> new AlarmVO(a.getId(), a.getMessage(), a.getFireAt(), a.isFired(), a.getFiredAt()))
-                .toList();
-    }
-
-    /** 设一个心动闹钟：未来 24 小时内的某个时刻，替你说那句话。 */
-    public AlarmVO createAlarm(String me, String message, Long fireAt) {
-        if (message == null || message.isBlank()) {
-            throw new BusinessException(400, "闹钟想说的话不能为空哦");
-        }
-        if (message.length() > CoupleSweetAlarm.MESSAGE_MAX) {
-            throw new BusinessException(400, "一句话就好，最多 " + CoupleSweetAlarm.MESSAGE_MAX + " 个字");
-        }
-        long now = System.currentTimeMillis();
-        if (fireAt == null || fireAt <= now) {
-            throw new BusinessException(400, "闹钟时间要定在未来哦");
-        }
-        if (fireAt - now > CoupleSweetAlarm.HORIZON_MS) {
-            throw new BusinessException(400, "心动闹钟最多提前 24 小时设定，惊喜要新鲜的上");
-        }
-        CoupleSpace space = requireSpace(me);
-        CoupleSweetAlarm alarm = CoupleSweetAlarm.of(space.getId(), me, message.trim(), fireAt);
-        alarmMapper.insert(alarm);
-        return new AlarmVO(alarm.getId(), alarm.getMessage(), alarm.getFireAt(), false, null);
-    }
-
-    /** 取消还没响的闹钟。 */
-    public void cancelAlarm(String me, String id) {
-        CoupleSpace space = requireSpace(me);
-        CoupleSweetAlarm alarm = alarmMapper.selectById(id);
-        if (alarm == null || !alarm.getSpaceId().equals(space.getId())) {
-            throw new BusinessException(404, "没有找到这个闹钟哦");
-        }
-        if (!alarm.getFromUser().equals(me)) {
-            throw new BusinessException(403, "只能取消自己设的闹钟哦");
-        }
-        if (alarm.isFired()) {
-            throw new BusinessException(400, "已经响过的闹钟不能撤回啦");
-        }
-        alarmMapper.deleteById(id);
-    }
-
     // ========== 思念速递（F53） ==========
-
-    public MissBoardVO missBoard(String me) {
-        CoupleSpace space = requireSpace(me);
-        String partner = space.partnerOf(me);
-        List<CoupleMissExpress> mine = missMapper.findByUser(space.getId(), me);
-        long partnerTotal = missMapper.findByUser(space.getId(), partner).size();
-        long inTransit = mine.stream().filter(m -> !m.isDelivered()).count();
-        List<MissVO> recent = mine.stream()
-                .limit(20)
-                .map(m -> new MissVO(m.getId(), m.getDeliverAt(), m.isDelivered(), m.getDeliveredAt()))
-                .toList();
-        return new MissBoardVO(mine.size(), partnerTotal, inTransit, recent);
-    }
-
-    /** 寄出一份思念：5~30 分钟后的随机时刻送达，一次只能有一份在路上。 */
-    public MissBoardVO sendMiss(String me) {
-        CoupleSpace space = requireSpace(me);
-        boolean inTransit = missMapper.findByUser(space.getId(), me).stream()
-                .anyMatch(m -> !m.isDelivered());
-        if (inTransit) {
-            throw new BusinessException(400, "你有一份思念还在路上，先等它送达再寄下一份吧 📮");
-        }
-        long delay = ThreadLocalRandom.current().nextLong(
-                CoupleMissExpress.DELAY_MIN_MS, CoupleMissExpress.DELAY_MAX_MS);
-        CoupleMissExpress miss = CoupleMissExpress.of(space.getId(), me, System.currentTimeMillis() + delay);
-        missMapper.insert(miss);
-        return missBoard(me);
-    }
 
     // ========== 藏宝图任务（F58） ==========
 
-    public List<TreasureVO> treasures(String me) {
-        CoupleSpace space = requireSpace(me);
-        return treasureMapper.findBySpace(space.getId()).stream()
-                .map(t -> toTreasureVO(t, me))
-                .toList();
-    }
-
-    /** 埋一个宝藏：布置现实小任务 + 藏好奖品；每人同时只能埋一个。 */
-    public TreasureVO createTreasure(String me, String taskText, String prizeText) {
-        if (taskText == null || taskText.isBlank() || prizeText == null || prizeText.isBlank()) {
-            throw new BusinessException(400, "任务和宝藏都要写清楚哦");
-        }
-        if (taskText.length() > CoupleTreasure.TASK_MAX || prizeText.length() > CoupleTreasure.PRIZE_MAX) {
-            throw new BusinessException(400, "任务和宝藏各最多 " + CoupleTreasure.TASK_MAX + " 字");
-        }
-        CoupleSpace space = requireSpace(me);
-        if (treasureMapper.findPendingByUser(space.getId(), me) != null) {
-            throw new BusinessException(400, "你还有一个宝藏没被找到，先等 TA 完成吧 🗺️");
-        }
-        String partner = space.partnerOf(me);
-        CoupleTreasure treasure = CoupleTreasure.of(space.getId(), me, taskText.trim(), prizeText.trim());
-        treasureMapper.insert(treasure);
-        push.pushCoupleEvent("treasure-sent", me, partner,
-                "🗺️ TA 给你发了一张藏宝图！完成上面的小任务就能挖到宝藏");
-        return toTreasureVO(treasure, me);
-    }
-
-    /** 完成任务挖宝：只有 TA 能点，完成后宝藏揭晓。 */
-    public TreasureVO completeTreasure(String me, String id) {
-        CoupleSpace space = requireSpace(me);
-        CoupleTreasure treasure = treasureMapper.selectById(id);
-        if (treasure == null || !treasure.getSpaceId().equals(space.getId())) {
-            throw new BusinessException(404, "没有找到这张藏宝图哦");
-        }
-        if (treasure.getFromUser().equals(me)) {
-            throw new BusinessException(403, "自己埋的宝藏不能自己挖哦");
-        }
-        if (CoupleTreasure.STATUS_PENDING.equals(treasure.getStatus())) {
-            treasure.setStatus(CoupleTreasure.STATUS_DONE);
-            treasure.setDoneAt(System.currentTimeMillis());
-            treasureMapper.updateById(treasure);
-            push.pushCoupleEventBoth("treasure-done", me, space.getUserA(), space.getUserB(),
-                    "🏆 宝藏挖到啦！「" + treasure.getPrizeText() + "」已到手，快去兑现吧");
-        }
-        return toTreasureVO(treasure, me);
-    }
-
-    private TreasureVO toTreasureVO(CoupleTreasure treasure, String viewer) {
-        boolean revealed = CoupleTreasure.STATUS_DONE.equals(treasure.getStatus())
-                || treasure.getFromUser().equals(viewer);
-        return new TreasureVO(treasure.getId(), treasure.getFromUser(), treasure.getTaskText(),
-                revealed ? treasure.getPrizeText() : null, treasure.getStatus(), treasure.getDoneAt(),
-                treasure.getCreated());
-    }
-
     // ========== 告白重现（F57） ==========
-
-    public List<ConfessionVO> confessions(String me) {
-        CoupleSpace space = requireSpace(me);
-        return confessionMapper.findBySpace(space.getId()).stream()
-                .map(c -> new ConfessionVO(c.getId(), c.getContent(), c.getConfessDay(), c.getCreatedBy(), c.getCreated()))
-                .toList();
-    }
-
-    /** 存下当年的告白：每年这一天，小助手会替你重播一遍。 */
-    public ConfessionVO createConfession(String me, String content, String confessDay) {
-        if (content == null || content.isBlank()) {
-            throw new BusinessException(400, "把当年那句话写下来吧，一字一句都值得");
-        }
-        if (content.length() > CoupleConfession.CONTENT_MAX) {
-            throw new BusinessException(400, "告白最多 " + CoupleConfession.CONTENT_MAX + " 字，精髓要浓缩");
-        }
-        LocalDate day;
-        try {
-            day = LocalDate.parse(confessDay);
-        } catch (Exception e) {
-            throw new BusinessException(400, "告白日期不认识哦");
-        }
-        if (day.isAfter(LocalDate.now())) {
-            throw new BusinessException(400, "告白只能发生在过去，未来的告白先藏心里");
-        }
-        CoupleSpace space = requireSpace(me);
-        CoupleConfession confession = CoupleConfession.of(space.getId(), content.trim(), confessDay, me);
-        confessionMapper.insert(confession);
-        String monthDay = confessDay.substring(5);
-        push.pushCoupleEventBoth("confession-kept", me, space.getUserA(), space.getUserB(),
-                "💌 一段告白被永久收藏！每年 " + monthDay + " 它都会被重新读一遍");
-        return new ConfessionVO(confession.getId(), confession.getContent(), confession.getConfessDay(),
-                me, confession.getCreated());
-    }
-
-    public void deleteConfession(String me, String id) {
-        CoupleSpace space = requireSpace(me);
-        CoupleConfession confession = confessionMapper.selectById(id);
-        if (confession == null || !confession.getSpaceId().equals(space.getId())) {
-            throw new BusinessException(404, "没有找到这条告白哦");
-        }
-        if (!confession.getCreatedBy().equals(me)) {
-            throw new BusinessException(403, "只有录入的人才能删除哦");
-        }
-        confessionMapper.deleteById(id);
-    }
-
-    /** 定时任务：重播今天的告白（每年 MM-dd 匹配）。 */
-    public void replayTodaysConfessions() {
-        LocalDate today = LocalDate.now();
-        String monthDay = today.format(DateTimeFormatter.ofPattern("MM-dd"));
-        List<CoupleConfession> due = new ArrayList<>();
-        for (CoupleConfession confession : confessionMapper.findByMonthDay(monthDay)) {
-            // 告白当年本身不重播（还没到「重现」的时候）
-            if (!confession.replayed(today.getYear())
-                    && !confession.getConfessDay().equals(today.toString())) {
-                due.add(confession);
-            }
-        }
-        for (CoupleConfession confession : due) {
-            CoupleSpace space = spaceMapper.selectById(confession.getSpaceId());
-            if (space == null || !CoupleSpace.STATUS_ACTIVE.equals(space.getStatus())) {
-                continue;
-            }
-            long years = today.getYear() - LocalDate.parse(confession.getConfessDay()).getYear();
-            String detail = "⏳ 「告白重现」：" + years + " 年前的今天，TA 说过——「" + confession.getContent() + "」"
-                    + " 这句话现在听，还是很动人呢 💘";
-            push.pushCoupleEventBoth("confession-replay", "system", space.getUserA(), space.getUserB(), detail);
-            confession.markReplayed(today.getYear());
-            confessionMapper.updateById(confession);
-        }
-    }
 
     // ========== 内部工具 ==========
 

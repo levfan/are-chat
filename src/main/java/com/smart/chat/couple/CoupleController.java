@@ -16,7 +16,8 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.List;
 
 /**
- * 情侣空间：邀请建立 → 双向约定 → 每日小仪式 → 共享空间。
+ * 情侣空间地基：邀请建立 → 纪念日 → 空间个性化 → 心情日记 → 心动值。
+ * 约定/清单/条约/基金/城市/信箱/时光轴/每日一问 随功能裁剪全部下线。
  */
 @RestController
 @RequestMapping("/api/couple")
@@ -28,41 +29,11 @@ public class CoupleController {
     public record AnniversaryDateRequest(String date) {
     }
 
-    public record PromiseCreateRequest(String side, String content, Long dueAt) {
-    }
-
-    public record CheckinRequest(String kind) {
-    }
-
-    public record AnswerRequest(String answer) {
-    }
-
-    public record AnswerReactRequest(String emoji) {
-    }
-
-    public record ItemSaveRequest(String kind, String title, String note, String dueDate, Boolean done) {
-    }
-
     public record AnniversaryCreateRequest(String title, String date, Boolean yearly, String kind,
                                            String calendarType, String lunarMd) {
     }
 
     public record MoodSaveRequest(String mood, String note) {
-    }
-
-    public record LetterCreateRequest(String content, Long deliverAt) {
-    }
-
-    public record PactCreateRequest(String content) {
-    }
-
-    public record CitySetRequest(String city) {
-    }
-
-    public record FundCreateRequest(String title, Long targetAmount) {
-    }
-
-    public record FundDepositRequest(Long amount, String note) {
     }
 
     /** 空间个性化：宣言 / 主题 / 贴纸墙（传 null 表示该项不修改）。 */
@@ -77,7 +48,7 @@ public class CoupleController {
 
     // ---------- 建立流程 ----------
 
-    /** 总览：未建立时返回待处理邀请（指引建立）；建立后返回空间、双方仪式状态与逾期数。 */
+    /** 总览：未建立时返回待处理邀请（指引建立）；建立后返回空间与今天双方的心情。 */
     @GetMapping("/overview")
     public ApiResponse<CoupleService.OverviewVO> overview(HttpSession session) {
         return ApiResponse.ok(coupleService.overview(Sessions.requireUser(session)));
@@ -133,95 +104,7 @@ public class CoupleController {
         return ApiResponse.ok();
     }
 
-    // ---------- 1. 双向待办 / 约定 ----------
-
-    @GetMapping("/promises")
-    public ApiResponse<List<CoupleService.PromiseVO>> promises(HttpSession session) {
-        return ApiResponse.ok(coupleService.listPromises(Sessions.requireUser(session)));
-    }
-
-    @PostMapping("/promises")
-    public ApiResponse<CoupleService.PromiseVO> createPromise(@RequestBody PromiseCreateRequest req,
-                                                              HttpSession session) {
-        return ApiResponse.ok(coupleService.createPromise(Sessions.requireUser(session),
-                req.side(), req.content(), req.dueAt()));
-    }
-
-    @PostMapping("/promises/{id}/done")
-    public ApiResponse<CoupleService.PromiseVO> donePromise(@PathVariable String id, HttpSession session) {
-        return ApiResponse.ok(coupleService.donePromise(Sessions.requireUser(session), id));
-    }
-
-    @PostMapping("/promises/{id}/undone")
-    public ApiResponse<CoupleService.PromiseVO> undonePromise(@PathVariable String id, HttpSession session) {
-        return ApiResponse.ok(coupleService.undonePromise(Sessions.requireUser(session), id));
-    }
-
-    @DeleteMapping("/promises/{id}")
-    public ApiResponse<Void> deletePromise(@PathVariable String id, HttpSession session) {
-        coupleService.deletePromise(Sessions.requireUser(session), id);
-        return ApiResponse.ok();
-    }
-
-    // ---------- 2. 每日小仪式 ----------
-
-    @PostMapping("/checkins")
-    public ApiResponse<CoupleService.CheckinStateVO> checkin(@RequestBody CheckinRequest req, HttpSession session) {
-        return ApiResponse.ok(coupleService.checkin(Sessions.requireUser(session), req.kind()));
-    }
-
-    @GetMapping("/question")
-    public ApiResponse<CoupleService.QuestionVO> question(HttpSession session) {
-        return ApiResponse.ok(coupleService.todayQuestion(Sessions.requireUser(session)));
-    }
-
-    @PostMapping("/question")
-    public ApiResponse<CoupleService.QuestionVO> answer(@RequestBody AnswerRequest req, HttpSession session) {
-        return ApiResponse.ok(coupleService.answerQuestion(Sessions.requireUser(session), req.answer()));
-    }
-
-    // ---------- F48 一问互评 ----------
-
-    /** 对某天 TA 的回答点一个反应（每人每天一条，可改）。 */
-    @PostMapping("/answers/{day}/react")
-    public ApiResponse<List<CoupleService.AnswerReactionVO>> reactAnswer(@PathVariable String day,
-                                                                         @RequestBody AnswerReactRequest req,
-                                                                         HttpSession session) {
-        return ApiResponse.ok(coupleService.reactAnswer(Sessions.requireUser(session), day, req.emoji()));
-    }
-
-    /** 某天双方对彼此回答的反应列表。 */
-    @GetMapping("/answers/{day}/reactions")
-    public ApiResponse<List<CoupleService.AnswerReactionVO>> answerReactions(@PathVariable String day,
-                                                                             HttpSession session) {
-        return ApiResponse.ok(coupleService.listAnswerReactions(Sessions.requireUser(session), day));
-    }
-
-    // ---------- 3. 共享空间 ----------
-
-    @GetMapping("/items")
-    public ApiResponse<List<CoupleService.ItemVO>> items(HttpSession session) {
-        return ApiResponse.ok(coupleService.listItems(Sessions.requireUser(session)));
-    }
-
-    @PostMapping("/items")
-    public ApiResponse<CoupleService.ItemVO> createItem(@RequestBody ItemSaveRequest req, HttpSession session) {
-        return ApiResponse.ok(coupleService.createItem(Sessions.requireUser(session),
-                req.kind(), req.title(), req.note(), req.dueDate()));
-    }
-
-    @PutMapping("/items/{id}")
-    public ApiResponse<CoupleService.ItemVO> updateItem(@PathVariable String id, @RequestBody ItemSaveRequest req,
-                                                        HttpSession session) {
-        return ApiResponse.ok(coupleService.updateItem(Sessions.requireUser(session), id,
-                req.title(), req.note(), req.dueDate(), req.done()));
-    }
-
-    @DeleteMapping("/items/{id}")
-    public ApiResponse<Void> deleteItem(@PathVariable String id, HttpSession session) {
-        coupleService.deleteItem(Sessions.requireUser(session), id);
-        return ApiResponse.ok();
-    }
+    // ---------- 共同日历 ----------
 
     @GetMapping("/anniversaries")
     public ApiResponse<List<CoupleService.AnniversaryVO>> anniversaries(HttpSession session) {
@@ -241,7 +124,7 @@ public class CoupleController {
         return ApiResponse.ok();
     }
 
-    // ---------- 4. 心情日记 ----------
+    // ---------- 心情日记 ----------
 
     /** 记录/修改今天的心情（每人每天一条，重复提交视为修改）。 */
     @PostMapping("/moods")
@@ -256,125 +139,10 @@ public class CoupleController {
         return ApiResponse.ok(coupleService.listMoods(Sessions.requireUser(session), days));
     }
 
-    // ---------- 5. 恋爱时光轴 ----------
-
-    /** 最近 N 天（1-90，默认 30）的「我们的故事」聚合时间线。 */
-    @GetMapping("/timeline")
-    public ApiResponse<List<CoupleService.TimelineDay>> timeline(@RequestParam(defaultValue = "30") int days,
-                                                                 HttpSession session) {
-        return ApiResponse.ok(coupleService.timeline(Sessions.requireUser(session), days));
-    }
-
-    // ---------- 6. 心动值 & 恋爱等级 ----------
+    // ---------- 心动值 & 恋爱等级 ----------
 
     @GetMapping("/intimacy")
     public ApiResponse<CoupleService.IntimacyVO> intimacy(HttpSession session) {
         return ApiResponse.ok(coupleService.intimacy(Sessions.requireUser(session)));
-    }
-
-    // ---------- 7. 悄悄话信箱 ----------
-
-    /** 写一封悄悄话：deliverAt 空 = 立即可拆，非空 = 慢递（未来 7 天内）。 */
-    @PostMapping("/letters")
-    public ApiResponse<CoupleService.LetterVO> createLetter(@RequestBody LetterCreateRequest req,
-                                                            HttpSession session) {
-        return ApiResponse.ok(coupleService.saveLetter(Sessions.requireUser(session),
-                req.content(), req.deliverAt()));
-    }
-
-    /** 信箱列表（发件+收件，新→旧；未到期慢递对收件人隐藏内容）。 */
-    @GetMapping("/letters")
-    public ApiResponse<List<CoupleService.LetterVO>> letters(HttpSession session) {
-        return ApiResponse.ok(coupleService.listLetters(Sessions.requireUser(session)));
-    }
-
-    /** 拆信（只有收件人，且到了可拆时间）。 */
-    @PostMapping("/letters/{id}/open")
-    public ApiResponse<CoupleService.LetterVO> openLetter(@PathVariable String id, HttpSession session) {
-        return ApiResponse.ok(coupleService.openLetter(Sessions.requireUser(session), id));
-    }
-
-    /** 撤回（只有发件人，且未被拆开）。 */
-    @DeleteMapping("/letters/{id}")
-    public ApiResponse<Void> deleteLetter(@PathVariable String id, HttpSession session) {
-        coupleService.deleteLetter(Sessions.requireUser(session), id);
-        return ApiResponse.ok();
-    }
-
-    // ---------- 8. 今日一问历史回顾 ----------
-
-    /** 双方都回答过的一问存档（最近 N 天，1-90 默认 30，新→旧）。 */
-    @GetMapping("/questions/history")
-    public ApiResponse<List<CoupleService.QuestionHistoryVO>> questionHistory(
-            @RequestParam(defaultValue = "30") int days, HttpSession session) {
-        return ApiResponse.ok(coupleService.questionHistory(Sessions.requireUser(session), days));
-    }
-
-    // ---------- 9. 恋爱条约 ----------
-
-    /** 提出一条条约（待对方盖章）。 */
-    @PostMapping("/pacts")
-    public ApiResponse<CoupleService.PactVO> createPact(@RequestBody PactCreateRequest req, HttpSession session) {
-        return ApiResponse.ok(coupleService.createPact(Sessions.requireUser(session), req.content()));
-    }
-
-    @GetMapping("/pacts")
-    public ApiResponse<List<CoupleService.PactVO>> pacts(HttpSession session) {
-        return ApiResponse.ok(coupleService.listPacts(Sessions.requireUser(session)));
-    }
-
-    /** 盖章生效（只有对方能盖）。 */
-    @PostMapping("/pacts/{id}/accept")
-    public ApiResponse<CoupleService.PactVO> acceptPact(@PathVariable String id, HttpSession session) {
-        return ApiResponse.ok(coupleService.acceptPact(Sessions.requireUser(session), id));
-    }
-
-    @DeleteMapping("/pacts/{id}")
-    public ApiResponse<Void> deletePact(@PathVariable String id, HttpSession session) {
-        coupleService.deletePact(Sessions.requireUser(session), id);
-        return ApiResponse.ok();
-    }
-
-    // ---------- 10. 异地恋助手 ----------
-
-    /** 设置/清空我的城市（清空传 null 或空串）。 */
-    @PutMapping("/cities")
-    public ApiResponse<CoupleService.CityCardVO> setCity(@RequestBody CitySetRequest req, HttpSession session) {
-        return ApiResponse.ok(coupleService.setCity(Sessions.requireUser(session), req.city()));
-    }
-
-    /** 异地恋卡片：双方城市 +（都在城市库时）时差与距离。 */
-    @GetMapping("/cities")
-    public ApiResponse<CoupleService.CityCardVO> cities(HttpSession session) {
-        return ApiResponse.ok(coupleService.cityCard(Sessions.requireUser(session)));
-    }
-
-    // ---------- 11. 心愿基金 ----------
-
-    /** 建一个共同存钱目标（targetAmount 单位：分）。 */
-    @PostMapping("/funds")
-    public ApiResponse<CoupleService.FundVO> createFund(@RequestBody FundCreateRequest req, HttpSession session) {
-        return ApiResponse.ok(coupleService.createFund(Sessions.requireUser(session),
-                req.title(), req.targetAmount()));
-    }
-
-    @GetMapping("/funds")
-    public ApiResponse<List<CoupleService.FundVO>> funds(HttpSession session) {
-        return ApiResponse.ok(coupleService.listFunds(Sessions.requireUser(session)));
-    }
-
-    /** 存一笔钱（amount 单位：分；攒够自动达成并推送庆祝）。 */
-    @PostMapping("/funds/{id}/deposits")
-    public ApiResponse<CoupleService.FundVO> depositFund(@PathVariable String id,
-                                                         @RequestBody FundDepositRequest req,
-                                                         HttpSession session) {
-        return ApiResponse.ok(coupleService.depositFund(Sessions.requireUser(session),
-                id, req.amount(), req.note()));
-    }
-
-    @DeleteMapping("/funds/{id}")
-    public ApiResponse<Void> deleteFund(@PathVariable String id, HttpSession session) {
-        coupleService.deleteFund(Sessions.requireUser(session), id);
-        return ApiResponse.ok();
     }
 }

@@ -46,25 +46,8 @@ public class CoupleService {
                           String slogan, String theme, String stickers) {
     }
 
-    public record CheckinHalf(boolean morning, boolean night) {
-    }
-
-    public record CheckinStateVO(CheckinHalf me, CheckinHalf partner, int streak) {
-    }
-
     public record OverviewVO(SpaceVO space, List<InviteVO> incoming, List<InviteVO> outgoing,
-                             CheckinStateVO checkins, long overdueCount, long letterUnread) {
-    }
-
-    public record PromiseVO(String id, String promiser, String creditor, String content, Long dueAt,
-                            String status, Long doneAt, boolean overdue, Long created) {
-    }
-
-    public record QuestionVO(String day, String topic, String question, String myAnswer, String partnerAnswer) {
-    }
-
-    public record ItemVO(String id, String kind, String title, String note, String dueDate, boolean done,
-                         String doneBy, Long doneAt, String createdBy, Long created) {
+                             MoodVO todayMine, MoodVO todayPartner) {
     }
 
     public record AnniversaryVO(String id, String title, String date, boolean yearly, String kind,
@@ -83,16 +66,13 @@ public class CoupleService {
     public record MoodDayVO(String day, MoodVO mine, MoodVO partner) {
     }
 
-    /** 时光轴事件：type=space/ritual/question/promise/item/anniversary。 */
-    public record TimelineEvent(String type, String title, String detail, String byUser, Long at) {
-    }
-
-    public record TimelineDay(String day, List<TimelineEvent> events) {
-    }
-
-    /** 心动值明细：互道早安/晚安天数、一问完成天数、心情记录数、积分台账累计赚分。 */
-    public record IntimacyBreakdown(long morningDays, long nightDays, long questionDays,
-                                    long moodDays, long pointEarned) {
+    /**
+     * 心动值明细：心情条数、贴贴双向往来天数、好事簿条数、留灯次数、安全词复盘次数、
+     * 积分台账累计赚分。六项全部来自保留的 10 张卡——早晚安打卡与每日一问下线后，
+     * 原来的两个乘数项会永远停在 0，header 数字就再也不动了。
+     */
+    public record IntimacyBreakdown(long moodDays, long bondDays, long deedCount, long lampCount,
+                                    long reflectCount, long pointEarned) {
     }
 
     public record IntimacyVO(int score, int level, String title, String icon, Integer nextLevelAt,
@@ -100,83 +80,40 @@ public class CoupleService {
                              int levelProgress, IntimacyBreakdown breakdown) {
     }
 
-    /**
-     * 悄悄话信件：locked=true 表示未到点的慢递——收件人视角 content 置空（前端显示 🔒），
-     * 发件人始终可见自己写的内容。
-     */
-    public record LetterVO(String id, String sender, String content, Long deliverAt, String status,
-                           Long openedAt, boolean locked, Long created) {
-    }
-
-    /** 今日一问历史：按天拼好的双方回答。 */
-    public record QuestionHistoryVO(String day, String topic, String question, String myAnswer, String partnerAnswer) {
-    }
-
-    /** 恋爱条约：pending=true 表示等我盖章（对方提出的）。 */
-    public record PactVO(String id, String content, String proposedBy, String acceptedBy,
-                         Long acceptedAt, boolean pending, boolean mine, Long created) {
-    }
-
-    /** 异地恋助手卡片：任一方城市缺失或不在城市库时，hoursDiff/distanceKm 为 null（城市文本照常展示）。 */
-    public record CityCardVO(String myCity, String partnerCity, Integer hoursDiff, Long distanceKm,
-                             String partnerZoneId) {
-    }
-
-    /** 心愿基金存入流水。 */
-    public record FundDepositVO(String id, String username, Long amount, String note, Long created) {
-    }
-
-    /** 心愿基金：amount 单位为分；progress 0-100（超过 100 按 100 封顶展示）。 */
-    public record FundVO(String id, String title, Long targetAmount, Long savedAmount, String status,
-                         boolean reached, int progress, String createdBy,
-                         List<FundDepositVO> deposits, Long created) {
-    }
-
     // ========== 依赖 ==========
 
     private final CoupleSpaceMapper spaceMapper;
     private final CoupleInviteMapper inviteMapper;
-    private final CouplePromiseMapper promiseMapper;
-    private final CoupleCheckinMapper checkinMapper;
-    private final CoupleAnswerMapper answerMapper;
-    private final CoupleAnswerReactionMapper answerReactionMapper;
-    private final CoupleItemMapper itemMapper;
     private final CoupleAnniversaryMapper anniversaryMapper;
     private final CoupleMoodMapper moodMapper;
-    private final CoupleLetterMapper letterMapper;
-    private final CouplePactMapper pactMapper;
-    private final CoupleFundMapper fundMapper;
-    private final CoupleFundDepositMapper fundDepositMapper;
+    private final CoupleActionMapper actionMapper;
+    private final CoupleEchoDeedMapper deedMapper;
+    private final CoupleQuestOvertimeMapper overtimeMapper;
+    private final CoupleCatchSafewordUseMapper safewordUseMapper;
     private final CouplePointLedgerMapper ledgerMapper;
     private final FriendMapper friendMapper;
     private final UserProfileMapper profileMapper;
     private final AppUserService userService;
     private final ImPushService push;
 
+    @SuppressWarnings("java:S107")
     public CoupleService(CoupleSpaceMapper spaceMapper, CoupleInviteMapper inviteMapper,
-                         CouplePromiseMapper promiseMapper, CoupleCheckinMapper checkinMapper,
-                         CoupleAnswerMapper answerMapper, CoupleAnswerReactionMapper answerReactionMapper,
-                         CoupleItemMapper itemMapper,
                          CoupleAnniversaryMapper anniversaryMapper, CoupleMoodMapper moodMapper,
-                         CoupleLetterMapper letterMapper, CouplePactMapper pactMapper,
-                         CoupleFundMapper fundMapper, CoupleFundDepositMapper fundDepositMapper,
+                         CoupleActionMapper actionMapper, CoupleEchoDeedMapper deedMapper,
+                         CoupleQuestOvertimeMapper overtimeMapper,
+                         CoupleCatchSafewordUseMapper safewordUseMapper,
                          CouplePointLedgerMapper ledgerMapper,
                          FriendMapper friendMapper, UserProfileMapper profileMapper,
                          AppUserService userService, ImPushService push) {
         this.spaceMapper = spaceMapper;
         this.inviteMapper = inviteMapper;
-        this.promiseMapper = promiseMapper;
-        this.checkinMapper = checkinMapper;
-        this.answerMapper = answerMapper;
-        this.answerReactionMapper = answerReactionMapper;
-        this.itemMapper = itemMapper;
         this.anniversaryMapper = anniversaryMapper;
         this.moodMapper = moodMapper;
-        this.letterMapper = letterMapper;
-        this.pactMapper = pactMapper;
+        this.actionMapper = actionMapper;
+        this.deedMapper = deedMapper;
+        this.overtimeMapper = overtimeMapper;
+        this.safewordUseMapper = safewordUseMapper;
         this.ledgerMapper = ledgerMapper;
-        this.fundMapper = fundMapper;
-        this.fundDepositMapper = fundDepositMapper;
         this.friendMapper = friendMapper;
         this.profileMapper = profileMapper;
         this.userService = userService;
@@ -292,16 +229,13 @@ public class CoupleService {
         List<InviteVO> outgoing = inviteMapper.findPendingFrom(me).stream().map(InviteVO::of).toList();
         CoupleSpace space = spaceMapper.findActiveByUser(me).orElse(null);
         if (space == null) {
-            return new OverviewVO(null, incoming, outgoing, null, 0, 0);
+            return new OverviewVO(null, incoming, outgoing, null, null);
         }
-        long now = System.currentTimeMillis();
-        // 我还没兑现的逾期承诺数（给「还有 N 件事你没做到哦~」提醒条用）
-        long overdue = promiseMapper.findBySpace(space.getId()).stream()
-                .filter(p -> p.getPromiser().equals(me) && p.isOverdue(now))
-                .count();
-        // 我可以拆但还没拆的悄悄话数（信箱 tab 红点）
-        long letterUnread = letterMapper.countOpenable(space.getId(), me, now);
-        return new OverviewVO(toSpaceVO(space, me), incoming, outgoing, checkinState(space, me), overdue, letterUnread);
+        // 首页只带今天双方的心情：它是「TA 今天怎么样」唯一的即时信号
+        String day = today();
+        MoodVO mine = moodMapper.find(space.getId(), me, day).map(MoodVO::of).orElse(null);
+        MoodVO partner = moodMapper.find(space.getId(), space.partnerOf(me), day).map(MoodVO::of).orElse(null);
+        return new OverviewVO(toSpaceVO(space, me), incoming, outgoing, mine, partner);
     }
 
     public SpaceVO setAnniversary(String me, String date) {
@@ -374,241 +308,11 @@ public class CoupleService {
 
     // ========== 1. 双向待办 / 约定（承诺卡） ==========
 
-    public List<PromiseVO> listPromises(String me) {
-        CoupleSpace space = requireSpace(me);
-        long now = System.currentTimeMillis();
-        return promiseMapper.findBySpace(space.getId()).stream()
-                .map(p -> toPromiseVO(p, now))
-                .toList();
-    }
-
-    /**
-     * 新建承诺卡：side=me 表示「我答应 TA」，side=partner 表示「TA 答应我」。
-     * 口头承诺在这里变成可追踪的甜蜜记录。
-     */
-    public PromiseVO createPromise(String me, String side, String content, Long dueAt) {
-        CoupleSpace space = requireSpace(me);
-        String partner = space.partnerOf(me);
-        String text = content == null ? "" : content.trim();
-        if (text.isEmpty() || text.length() > CouplePromise.CONTENT_MAX) {
-            throw new BusinessException(400, "先写下承诺内容（1-200 字）");
-        }
-        if (dueAt != null && dueAt <= System.currentTimeMillis()) {
-            throw new BusinessException(400, "截止时间要晚于现在哦");
-        }
-        boolean promiserIsPartner = "partner".equalsIgnoreCase(side);
-        String promiser = promiserIsPartner ? partner : me;
-        String creditor = promiserIsPartner ? me : partner;
-        CouplePromise promise = CouplePromise.of(space.getId(), promiser, creditor, text, dueAt);
-        promiseMapper.insert(promise);
-        String detail = promiser.equals(me)
-                ? "对方记下了你的承诺：" + text + "，兑现后记得打卡 ✅"
-                : "你答应对方的事被记下来啦：" + text + " 😉";
-        push.pushCoupleEvent("promise-created", me, partner, detail);
-        return toPromiseVO(promise, System.currentTimeMillis());
-    }
-
-    /** 承诺人打卡兑现 → 对方收到推送「TA 兑现了对你的承诺 🎉」。 */
-    public PromiseVO donePromise(String me, String promiseId) {
-        CoupleSpace space = requireSpace(me);
-        CouplePromise promise = requirePromise(promiseId, space);
-        if (!promise.getPromiser().equals(me)) {
-            throw new BusinessException(403, "只有承诺人能打卡兑现哦");
-        }
-        if (CouplePromise.STATUS_DONE.equals(promise.getStatus())) {
-            throw new BusinessException(409, "这条约定已经兑现过了");
-        }
-        promise.setStatus(CouplePromise.STATUS_DONE);
-        promise.setDoneAt(System.currentTimeMillis());
-        promise.setLastRemindDay(null);
-        promiseMapper.updateById(promise);
-        push.pushCoupleEvent("promise-done", me, promise.getCreditor(),
-                "TA 兑现了对你的承诺 🎉：" + promise.getContent());
-        return toPromiseVO(promise, System.currentTimeMillis());
-    }
-
-    /** 打错卡了：撤销兑现，约定重新生效。 */
-    public PromiseVO undonePromise(String me, String promiseId) {
-        CoupleSpace space = requireSpace(me);
-        CouplePromise promise = requirePromise(promiseId, space);
-        if (!promise.getPromiser().equals(me)) {
-            throw new BusinessException(403, "只有承诺人能操作哦");
-        }
-        if (!CouplePromise.STATUS_DONE.equals(promise.getStatus())) {
-            throw new BusinessException(409, "这条约定还没兑现");
-        }
-        promise.setStatus(CouplePromise.STATUS_PENDING);
-        promise.setDoneAt(null);
-        promiseMapper.updateById(promise);
-        push.pushCoupleEvent("promise-undone", me, promise.getCreditor(),
-                "TA 取消了一条兑现打卡，约定重新生效啦：" + promise.getContent());
-        return toPromiseVO(promise, System.currentTimeMillis());
-    }
-
-    public void deletePromise(String me, String promiseId) {
-        CoupleSpace space = requireSpace(me);
-        CouplePromise promise = requirePromise(promiseId, space);
-        promiseMapper.deleteById(promise.getId());
-        push.pushCoupleEvent("promise-deleted", me, space.partnerOf(me),
-                "有一条约定被删除了：" + promise.getContent());
-    }
-
     // ========== 2. 每日小仪式 ==========
-
-    /** 早安/晚安打卡：双方都打卡后解锁当日专属背景/贴纸。 */
-    public CheckinStateVO checkin(String me, String kind) {
-        if (!CoupleCheckin.KIND_MORNING.equals(kind) && !CoupleCheckin.KIND_NIGHT.equals(kind)) {
-            throw new BusinessException(400, "打卡类型只支持 MORNING / NIGHT");
-        }
-        CoupleSpace space = requireSpace(me);
-        String partner = space.partnerOf(me);
-        String day = today();
-        boolean partnerDone = checkinMapper.find(space.getId(), partner, kind, day).isPresent();
-        if (checkinMapper.find(space.getId(), me, kind, day).isEmpty()) {
-            try {
-                checkinMapper.insert(CoupleCheckin.of(space.getId(), me, kind, day));
-            } catch (Exception e) {
-                // 唯一键兜底：同日重复打卡视为幂等
-            }
-        }
-        String eventDetail = CoupleCheckin.KIND_MORNING.equals(kind) ? "TA 跟你说早安啦 ☀️" : "TA 跟你说晚安啦 🌙";
-        push.pushCoupleEvent("checkin", me, partner, eventDetail);
-        if (partnerDone) {
-            // 这一次打卡凑齐了双方 → 解锁当日专属
-            String unlockDetail = CoupleCheckin.KIND_MORNING.equals(kind)
-                    ? "早安仪式达成！今日专属背景已解锁 🎉"
-                    : "晚安仪式达成！今日专属贴纸已解锁 🎉";
-            push.pushCoupleEventBoth("ritual-unlocked", me, me, partner, unlockDetail);
-        }
-        return checkinState(space, me);
-    }
-
-    public QuestionVO todayQuestion(String me) {
-        CoupleSpace space = requireSpace(me);
-        String day = today();
-        CoupleQuestions.BankQuestion picked = CoupleQuestions.pick(day);
-        String my = answerMapper.find(space.getId(), day, me).map(CoupleAnswer::getAnswer).orElse(null);
-        String partnerAnswer = answerMapper.find(space.getId(), day, space.partnerOf(me))
-                .map(CoupleAnswer::getAnswer).orElse(null);
-        return new QuestionVO(day, picked.topic(), picked.text(), my, partnerAnswer);
-    }
-
-    /** 回答今日一问：双方回答后拼在一起看；重复提交视为修改。 */
-    public QuestionVO answerQuestion(String me, String answer) {
-        CoupleSpace space = requireSpace(me);
-        String text = answer == null ? "" : answer.trim();
-        if (text.isEmpty() || text.length() > CoupleAnswer.ANSWER_MAX) {
-            throw new BusinessException(400, "写下你的回答（1-300 字）");
-        }
-        String day = today();
-        CoupleAnswer existing = answerMapper.find(space.getId(), day, me).orElse(null);
-        if (existing != null) {
-            existing.setAnswer(text);
-            answerMapper.updateById(existing);
-        } else {
-            answerMapper.insert(CoupleAnswer.of(space.getId(), day, me, text));
-        }
-        push.pushCoupleEvent("question-answered", me, space.partnerOf(me), "TA 已经回答了今日一问，快去看看吧 💬");
-        return todayQuestion(me);
-    }
 
     // ========== F48 一问互评 ==========
 
-    /** 互评条目：谁给的什么反应。 */
-    public record AnswerReactionVO(String fromUser, String emoji, Long created) {
-    }
-
-    /** 对某天 TA 的一问回答点一个反应（每人每天一条，可改）。 */
-    public List<AnswerReactionVO> reactAnswer(String me, String day, String emoji) {
-        CoupleSpace space = requireSpace(me);
-        String cleanDay = day == null ? "" : day.trim();
-        try {
-            LocalDate.parse(cleanDay);
-        } catch (Exception e) {
-            throw new BusinessException(400, "日期格式应为 yyyy-MM-dd");
-        }
-        String cleanEmoji = emoji == null ? "" : emoji.trim();
-        if (cleanEmoji.isEmpty() || cleanEmoji.length() > CoupleAnswerReaction.EMOJI_MAX) {
-            throw new BusinessException(400, "选一个表情送给 TA 的回答吧");
-        }
-        // 只有对方回答过才能互评
-        if (answerMapper.find(space.getId(), cleanDay, space.partnerOf(me)).isEmpty()) {
-            throw new BusinessException(409, "TA 还没有回答这一问，先等等吧");
-        }
-        CoupleAnswerReaction existing = answerReactionMapper.find(space.getId(), cleanDay, me).orElse(null);
-        if (existing != null) {
-            existing.setEmoji(cleanEmoji);
-            answerReactionMapper.updateById(existing);
-        } else {
-            answerReactionMapper.insert(CoupleAnswerReaction.of(space.getId(), cleanDay, me, cleanEmoji));
-        }
-        push.pushCoupleEvent("answer-reacted", me, space.partnerOf(me),
-                "TA 看了你的回答，回了你一个 " + cleanEmoji);
-        return listAnswerReactions(me, cleanDay);
-    }
-
-    /** 某天双方对彼此回答的反应列表。 */
-    public List<AnswerReactionVO> listAnswerReactions(String me, String day) {
-        CoupleSpace space = requireSpace(me);
-        String cleanDay = day == null ? "" : day.trim();
-        return answerReactionMapper.findByDay(space.getId(), cleanDay).stream()
-                .map(r -> new AnswerReactionVO(r.getFromUser(), r.getEmoji(), r.getCreated()))
-                .toList();
-    }
-
     // ========== 3. 共享空间 ==========
-
-    public List<ItemVO> listItems(String me) {
-        CoupleSpace space = requireSpace(me);
-        return itemMapper.findBySpace(space.getId()).stream().map(CoupleService::toItemVO).toList();
-    }
-
-    public ItemVO createItem(String me, String kind, String title, String note, String dueDate) {
-        CoupleSpace space = requireSpace(me);
-        validateKind(kind);
-        CoupleItem item = CoupleItem.of(space.getId(), kind,
-                requireText(title, "事项标题不能为空（最多 100 字）", CoupleItem.TITLE_MAX), me);
-        item.setNote(requireOptional(note, "补充说明最多 300 字", CoupleItem.NOTE_MAX));
-        item.setDueDate(normalizeDateOrNull(dueDate, "计划日期格式应为 yyyy-MM-dd"));
-        itemMapper.insert(item);
-        push.pushCoupleEvent("items-changed", me, space.partnerOf(me), "共享清单有更新 ✨：" + item.getTitle());
-        return toItemVO(item);
-    }
-
-    public ItemVO updateItem(String me, String itemId, String title, String note, String dueDate, Boolean done) {
-        CoupleSpace space = requireSpace(me);
-        CoupleItem item = requireItem(itemId, space);
-        if (title != null) {
-            item.setTitle(requireText(title, "事项标题不能为空（最多 100 字）", CoupleItem.TITLE_MAX));
-        }
-        if (note != null) {
-            item.setNote(requireOptional(note, "补充说明最多 300 字", CoupleItem.NOTE_MAX));
-        }
-        if (dueDate != null) {
-            item.setDueDate(normalizeDateOrNull(dueDate, "计划日期格式应为 yyyy-MM-dd"));
-        }
-        if (done != null) {
-            if (done) {
-                item.setDone(1);
-                item.setDoneBy(me);
-                item.setDoneAt(System.currentTimeMillis());
-            } else {
-                item.setDone(0);
-                item.setDoneBy(null);
-                item.setDoneAt(null);
-            }
-        }
-        itemMapper.updateById(item);
-        push.pushCoupleEvent("items-changed", me, space.partnerOf(me), "共享清单有更新 ✨：" + item.getTitle());
-        return toItemVO(item);
-    }
-
-    public void deleteItem(String me, String itemId) {
-        CoupleSpace space = requireSpace(me);
-        CoupleItem item = requireItem(itemId, space);
-        itemMapper.deleteById(item.getId());
-        push.pushCoupleEvent("items-changed", me, space.partnerOf(me), "共享清单删掉了一项：" + item.getTitle());
-    }
 
     public List<AnniversaryVO> listAnniversaries(String me) {
         CoupleSpace space = requireSpace(me);
@@ -732,133 +436,31 @@ public class CoupleService {
         return result;
     }
 
-    // ========== 5. 恋爱时光轴 ==========
-    /**
-     * 最近 N 天（1-90，默认 30）的「我们的故事」：自动聚合空间建立、互道早晚安、
-     * 今日一问完成、承诺兑现、清单打卡、纪念日，按天分组新→旧。
-     */
-    public List<TimelineDay> timeline(String me, int days) {
-        CoupleSpace space = requireSpace(me);
-        String partner = space.partnerOf(me);
-        int limit = clampDays(days, 30);
-        LocalDate startDate = LocalDate.now().minusDays(limit - 1L);
-        String startDay = startDate.toString();
-        Map<String, List<TimelineEvent>> byDay = new TreeMap<>(Comparator.reverseOrder());
-
-        // 空间建立
-        LocalDate createdDay = Instant.ofEpochMilli(space.getCreated()).atZone(ZoneId.systemDefault()).toLocalDate();
-        if (!createdDay.isBefore(startDate)) {
-            byDay.computeIfAbsent(createdDay.toString(), k -> new ArrayList<>())
-                    .add(new TimelineEvent("space", "我们的情侣空间建立啦 💕", null, null, space.getCreated()));
-        }
-
-        // 双方互道早晚安的日期（有具体打卡时间取较晚的一条）
-        for (String kind : new String[]{CoupleCheckin.KIND_MORNING, CoupleCheckin.KIND_NIGHT}) {
-            Map<String, Long> mine = new HashMap<>();
-            Map<String, Long> theirs = new HashMap<>();
-            for (CoupleCheckin row : checkinMapper.findBySpaceAndKind(space.getId(), kind)) {
-                if (row.getCheckinDay().compareTo(startDay) < 0) {
-                    continue;
-                }
-                Map<String, Long> target = row.getUsername().equals(me) ? mine : theirs;
-                target.merge(row.getCheckinDay(), row.getCreated(), Math::max);
-            }
-            boolean morning = CoupleCheckin.KIND_MORNING.equals(kind);
-            for (String day : mine.keySet()) {
-                Long theirsAt = theirs.get(day);
-                if (theirsAt == null) {
-                    continue;
-                }
-                byDay.computeIfAbsent(day, k -> new ArrayList<>()).add(new TimelineEvent("ritual",
-                        morning ? "互道早安 ☀️" : "互道晚安 🌙", null, null, Math.max(mine.get(day), theirsAt)));
-            }
-        }
-
-        // 今日一问：双方都回答的日子（题目按日期复算）
-        Map<String, Map<String, CoupleAnswer>> answersByDay = new HashMap<>();
-        for (CoupleAnswer row : answerMapper.findBySpace(space.getId())) {
-            if (row.getAnswerDay().compareTo(startDay) < 0) {
-                continue;
-            }
-            answersByDay.computeIfAbsent(row.getAnswerDay(), k -> new HashMap<>()).put(row.getUsername(), row);
-        }
-        for (Map.Entry<String, Map<String, CoupleAnswer>> entry : answersByDay.entrySet()) {
-            Map<String, CoupleAnswer> users = entry.getValue();
-            CoupleAnswer mine = users.get(me);
-            CoupleAnswer theirs = users.get(partner);
-            if (mine == null || theirs == null) {
-                continue;
-            }
-            byDay.computeIfAbsent(entry.getKey(), k -> new ArrayList<>()).add(new TimelineEvent("question",
-                    "今日一问完成 💬", CoupleQuestions.pick(entry.getKey()).text(), null,
-                    Math.max(mine.getCreated(), theirs.getCreated())));
-        }
-
-        // 承诺兑现
-        for (CouplePromise p : promiseMapper.findBySpace(space.getId())) {
-            if (!CouplePromise.STATUS_DONE.equals(p.getStatus()) || p.getDoneAt() == null) {
-                continue;
-            }
-            String day = Instant.ofEpochMilli(p.getDoneAt()).atZone(ZoneId.systemDefault()).toLocalDate().toString();
-            if (day.compareTo(startDay) < 0) {
-                continue;
-            }
-            byDay.computeIfAbsent(day, k -> new ArrayList<>()).add(new TimelineEvent("promise",
-                    "兑现了承诺 🎉：" + p.getContent(), null, p.getPromiser(), p.getDoneAt()));
-        }
-
-        // 共享清单完成
-        for (CoupleItem item : itemMapper.findBySpace(space.getId())) {
-            if (!item.doneFlag() || item.getDoneAt() == null) {
-                continue;
-            }
-            String day = Instant.ofEpochMilli(item.getDoneAt()).atZone(ZoneId.systemDefault()).toLocalDate().toString();
-            if (day.compareTo(startDay) < 0) {
-                continue;
-            }
-            byDay.computeIfAbsent(day, k -> new ArrayList<>()).add(new TimelineEvent("item",
-                    "一起完成了 ✅：" + item.getTitle(), null, item.getDoneBy(), item.getDoneAt()));
-        }
-
-        // 纪念日（yearly 的按本年度落位）
-        for (CoupleAnniversary row : anniversaryMapper.findBySpace(space.getId())) {
-            LocalDate date = anniversaryOccurrence(row, startDate);
-            if (date == null) {
-                continue;
-            }
-            byDay.computeIfAbsent(date.toString(), k -> new ArrayList<>()).add(new TimelineEvent("anniversary",
-                    row.getTitle() + " 🎊", null, row.getCreatedBy(),
-                    date.atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli()));
-        }
-
-        // 天内事件按时间正序，天与天之间新→旧
-        List<TimelineDay> result = new ArrayList<>();
-        for (Map.Entry<String, List<TimelineEvent>> entry : byDay.entrySet()) {
-            entry.getValue().sort(Comparator.comparingLong(e -> e.at() == null ? 0L : e.at()));
-            result.add(new TimelineDay(entry.getKey(), entry.getValue()));
-        }
-        return result;
-    }
-
     // ========== 6. 心动值 & 恋爱等级 ==========
 
     /**
-     * 心动值：双方互道早安 +1/天、互道晚安 +2/天、一问双方都答 +2/天、心情记录 +1/条，
-     * 再加积分台账的累计赚分（好事簿 / 家务轮盘 / 刮刮乐三个入口）；累计分数映射恋爱等级。
+     * 心动值 = 心情条数×1 + 贴贴双向往来天数×2 + 好事簿条数×2 + 留灯次数×3
+     *          + 安全词复盘次数×2 + 积分台账累计赚分×1；累计分数映射恋爱等级。
+     * 六项全部由保留的 10 张卡供数。早晚安打卡与每日一问下线后，原来那三个乘数项
+     * 会永远停在 0，header 数字就不再增长，所以整体换成活的数据源。
      */
     public IntimacyVO intimacy(String me) {
         CoupleSpace space = requireSpace(me);
-        long morning = ritualBothDays(space, CoupleCheckin.KIND_MORNING);
-        long night = ritualBothDays(space, CoupleCheckin.KIND_NIGHT);
-        long questionDays = bothAnsweredDays(space);
         long moodDays = moodMapper.findBySpace(space.getId()).size();
-        // 系统裁剪：兑现承诺与清单完成两张卡都已下线，心动值改由积分台账累计赚分供数，
-        // 否则这个 header 数字会永远停在裁剪前那天不再增长
+        long bondDays = bondBothDays(space);
+        long deedCount = deedMapper.findBySpace(space.getId()).size();
+        long lampCount = overtimeMapper.findBySpace(space.getId()).stream()
+                .filter(o -> o.getLampBy() != null && !o.getLampBy().isBlank())
+                .count();
+        long reflectCount = safewordUseMapper.findBySpace(space.getId()).stream()
+                .filter(u -> u.getReflect() != null && !u.getReflect().isBlank())
+                .count();
         long pointEarned = ledgerMapper.findBySpace(space.getId()).stream()
                 .filter(l -> CouplePointLedger.TYPE_EARN.equals(l.getType()))
                 .mapToLong(l -> l.getPoints() == null ? 0 : l.getPoints()).sum();
-        int score = (int) (morning + night * 2 + questionDays * 2 + moodDays + pointEarned);
-        IntimacyBreakdown breakdown = new IntimacyBreakdown(morning, night, questionDays, moodDays, pointEarned);
+        int score = (int) (moodDays + bondDays * 2 + deedCount * 2 + lampCount * 3 + reflectCount * 2 + pointEarned);
+        IntimacyBreakdown breakdown = new IntimacyBreakdown(moodDays, bondDays, deedCount, lampCount,
+                reflectCount, pointEarned);
 
         // 等级阶梯：L1 怦然心动(0) → L2 心动初启(50) → L3 甜甜热恋(150) → L4 形影不离(300)
         //          → L5 心有灵犀(500) → L6 相依相伴(800) → L7 相守一生(1300)
@@ -896,233 +498,13 @@ public class CoupleService {
 
     // ========== 7. 悄悄话信箱 ==========
 
-    /**
-     * 写一封悄悄话给 TA：content 1-300 字；deliverAt 为空 = 立即可拆，
-     * 非空 = 慢递（必须是未来时间且不超过 7 天），到点前收件人拆不了。
-     */
-    public LetterVO saveLetter(String me, String content, Long deliverAt) {
-        CoupleSpace space = requireSpace(me);
-        String partner = space.partnerOf(me);
-        String text = requireText(content, "写下你想说的话（1-300 字）", CoupleLetter.CONTENT_MAX);
-        long now = System.currentTimeMillis();
-        if (deliverAt != null && deliverAt <= now) {
-            throw new BusinessException(400, "慢递时间要晚于现在哦");
-        }
-        if (deliverAt != null && deliverAt > now + CoupleLetter.DELIVER_MAX_MILLIS) {
-            throw new BusinessException(400, "慢递最长 7 天，再多就等不及啦");
-        }
-        CoupleLetter letter = CoupleLetter.of(space.getId(), me, partner, text, deliverAt);
-        letterMapper.insert(letter);
-        String detail = deliverAt == null
-                ? "TA 给你写了一封悄悄话 💌，快去拆开看看"
-                : "TA 给你写了一封慢递悄悄话 💌，到点才能拆开哦";
-        push.pushCoupleEvent("letter-created", me, partner, detail);
-        return toLetterVO(letter, me, now);
-    }
-
-    /** 信箱列表：发件 + 收件都在一个列表里（新→旧），未到期慢递对收件人隐藏内容。 */
-    public List<LetterVO> listLetters(String me) {
-        CoupleSpace space = requireSpace(me);
-        long now = System.currentTimeMillis();
-        return letterMapper.findBySpace(space.getId()).stream()
-                .map(letter -> toLetterVO(letter, me, now))
-                .toList();
-    }
-
-    /** 拆信：只有收件人能拆，且要到了可拆时间；拆开推送给发件人。 */
-    public LetterVO openLetter(String me, String letterId) {
-        CoupleSpace space = requireSpace(me);
-        CoupleLetter letter = requireLetter(letterId, space);
-        long now = System.currentTimeMillis();
-        if (!letter.getRecipient().equals(me)) {
-            throw new BusinessException(403, "只能由收件人拆开哦");
-        }
-        if (CoupleLetter.STATUS_OPENED.equals(letter.getStatus())) {
-            throw new BusinessException(409, "这封信已经拆过了");
-        }
-        if (letter.locked(now)) {
-            throw new BusinessException(400, "慢递还没到点，再等等哦 ⏳");
-        }
-        letter.setStatus(CoupleLetter.STATUS_OPENED);
-        letter.setOpenedAt(now);
-        letterMapper.updateById(letter);
-        push.pushCoupleEvent("letter-opened", me, letter.getSender(), "TA 拆开了你的悄悄话 💌");
-        return toLetterVO(letter, me, now);
-    }
-
-    /** 撤回：只有发件人、且还没被拆开时可以撤。 */
-    public void deleteLetter(String me, String letterId) {
-        CoupleSpace space = requireSpace(me);
-        CoupleLetter letter = requireLetter(letterId, space);
-        if (!letter.getSender().equals(me)) {
-            throw new BusinessException(403, "只能撤回自己写的悄悄话");
-        }
-        if (CoupleLetter.STATUS_OPENED.equals(letter.getStatus())) {
-            throw new BusinessException(409, "已经拆开的信不能再撤回了");
-        }
-        letterMapper.deleteById(letter.getId());
-    }
-
     // ========== 8. 今日一问历史回顾 ==========
-
-    /** 双方都回答过的一问存档（最近 N 天，1-90 默认 30，新→旧），题目按日期复算。 */
-    public List<QuestionHistoryVO> questionHistory(String me, int days) {
-        CoupleSpace space = requireSpace(me);
-        int limit = clampDays(days, 30);
-        String startDay = LocalDate.now().minusDays(limit - 1L).toString();
-        Map<String, Map<String, CoupleAnswer>> byDay = new HashMap<>();
-        for (CoupleAnswer row : answerMapper.findBySpace(space.getId())) {
-            if (row.getAnswerDay().compareTo(startDay) < 0) {
-                continue;
-            }
-            byDay.computeIfAbsent(row.getAnswerDay(), k -> new HashMap<>()).put(row.getUsername(), row);
-        }
-        List<QuestionHistoryVO> result = new ArrayList<>();
-        for (String day : byDay.keySet().stream().sorted(Comparator.reverseOrder()).toList()) {
-            Map<String, CoupleAnswer> users = byDay.get(day);
-            CoupleAnswer mine = users.get(me);
-            CoupleAnswer partner = users.get(space.partnerOf(me));
-            if (mine == null || partner == null) {
-                continue;
-            }
-            CoupleQuestions.BankQuestion picked = CoupleQuestions.pick(day);
-            result.add(new QuestionHistoryVO(day, picked.topic(), picked.text(),
-                    mine.getAnswer(), partner.getAnswer()));
-        }
-        return result;
-    }
 
     // ========== 9. 恋爱条约 ==========
 
-    /** 提出一条恋爱条约（待对方盖章）。 */
-    public PactVO createPact(String me, String content) {
-        CoupleSpace space = requireSpace(me);
-        String text = requireText(content, "写下条约内容（1-100 字）", CouplePact.CONTENT_MAX);
-        CouplePact pact = CouplePact.of(space.getId(), me, text);
-        pactMapper.insert(pact);
-        push.pushCoupleEvent("pact-created", me, space.partnerOf(me),
-                "TA 提出了一条恋爱条约等你盖章：「" + text + "」🤝");
-        return toPactVO(pact, me);
-    }
-
-    public List<PactVO> listPacts(String me) {
-        CoupleSpace space = requireSpace(me);
-        return pactMapper.findBySpace(space.getId()).stream().map(p -> toPactVO(p, me)).toList();
-    }
-
-    /** 盖章生效：只有对方（非提出人）能盖。 */
-    public PactVO acceptPact(String me, String pactId) {
-        CoupleSpace space = requireSpace(me);
-        CouplePact pact = requirePact(pactId, space);
-        if (pact.getProposedBy().equals(me)) {
-            throw new BusinessException(400, "自己提的条约要等 TA 来盖章哦");
-        }
-        if (pact.isAccepted()) {
-            throw new BusinessException(409, "这条条约已经生效过了");
-        }
-        pact.setAcceptedBy(me);
-        pact.setAcceptedAt(System.currentTimeMillis());
-        pactMapper.updateById(pact);
-        push.pushCoupleEvent("pact-accepted", me, space.partnerOf(me),
-                "TA 盖章通过了恋爱条约：「" + pact.getContent() + "」💕 从今天起一起遵守");
-        return toPactVO(pact, me);
-    }
-
-    /** 废除条约：双方都可以删。 */
-    public void deletePact(String me, String pactId) {
-        CoupleSpace space = requireSpace(me);
-        CouplePact pact = requirePact(pactId, space);
-        pactMapper.deleteById(pact.getId());
-        push.pushCoupleEvent("pact-deleted", me, space.partnerOf(me),
-                "有一条恋爱条约被移除了：" + pact.getContent());
-    }
-
     // ========== 10. 异地恋助手 ==========
 
-    /** 设置我的城市（手填，最长 20 字；匹配内置城市库才能算时差/距离）。 */
-    public CityCardVO setCity(String me, String city) {
-        CoupleSpace space = requireSpace(me);
-        String name = requireOptional(city, "城市名最长 20 个字", 20);
-        if (me.equals(space.getUserA())) {
-            space.setCityA(name);
-        } else {
-            space.setCityB(name);
-        }
-        spaceMapper.updateById(space);
-        push.pushCoupleEvent("city-changed", me, space.partnerOf(me),
-                "TA 更新了所在城市：" + (name == null ? "清空" : name) + " 📍");
-        return cityCard(space, me);
-    }
-
-    public CityCardVO cityCard(String me) {
-        CoupleSpace space = requireSpace(me);
-        return cityCard(space, me);
-    }
-
     // ========== 11. 心愿基金 ==========
-
-    /** 建一个共同存钱目标（金额单位：分）。 */
-    public FundVO createFund(String me, String title, Long targetAmount) {
-        CoupleSpace space = requireSpace(me);
-        String name = requireText(title, "写下心愿名称（1-60 字）", CoupleFund.TITLE_MAX);
-        if (targetAmount == null || targetAmount <= 0) {
-            throw new BusinessException(400, "目标金额要大于 0 哦");
-        }
-        if (targetAmount > 9_999_999_999L) {
-            throw new BusinessException(400, "目标金额太大了，先立个小目标 💰");
-        }
-        CoupleFund fund = CoupleFund.of(space.getId(), me, name, targetAmount);
-        fundMapper.insert(fund);
-        push.pushCoupleEvent("fund-created", me, space.partnerOf(me),
-                "TA 发起了一个共同心愿：「" + name + "」，一起攒钱实现它 💰");
-        return toFundVO(fund, me);
-    }
-
-    public List<FundVO> listFunds(String me) {
-        CoupleSpace space = requireSpace(me);
-        return fundMapper.findBySpace(space.getId()).stream().map(f -> toFundVO(f, me)).toList();
-    }
-
-    /** 往目标里存一笔钱（金额单位：分，>0）；攒够自动标记达成并推送庆祝。 */
-    public FundVO depositFund(String me, String fundId, Long amount, String note) {
-        CoupleSpace space = requireSpace(me);
-        CoupleFund fund = requireFund(fundId, space);
-        if (amount == null || amount <= 0) {
-            throw new BusinessException(400, "存入金额要大于 0 哦");
-        }
-        if (fund.isReached()) {
-            throw new BusinessException(409, "这个心愿已经达成啦，换下一个目标吧 🎉");
-        }
-        String memo = requireOptional(note, "存钱留言最多 100 字", CoupleFundDeposit.NOTE_MAX);
-        long saved = fund.getSavedAmount() + amount;
-        fund.setSavedAmount(saved);
-        boolean justReached = saved >= fund.getTargetAmount();
-        if (justReached) {
-            fund.setStatus(CoupleFund.STATUS_REACHED);
-            fund.setDoneAt(System.currentTimeMillis());
-        }
-        fundMapper.updateById(fund);
-        fundDepositMapper.insert(CoupleFundDeposit.of(space.getId(), fund.getId(), me, amount, memo));
-        if (justReached) {
-            push.pushCoupleEventBoth("fund-reached", me, me, space.partnerOf(me),
-                    "共同心愿达成 🎉：「" + fund.getTitle() + "」攒够啦，准备实现它吧！");
-        } else {
-            push.pushCoupleEvent("fund-deposit", me, space.partnerOf(me),
-                    "TA 往共同心愿「" + fund.getTitle() + "」存了一笔钱，进度又近了一点 💰");
-        }
-        return toFundVO(fund, me);
-    }
-
-    /** 删除心愿（连流水一起删）：双方都可以操作。 */
-    public void deleteFund(String me, String fundId) {
-        CoupleSpace space = requireSpace(me);
-        CoupleFund fund = requireFund(fundId, space);
-        fundMapper.deleteById(fund.getId());
-        fundDepositMapper.delete(new LambdaQueryWrapper<CoupleFundDeposit>()
-                .eq(CoupleFundDeposit::getFundId, fund.getId()));
-        push.pushCoupleEvent("fund-deleted", me, space.partnerOf(me),
-                "共同心愿被移除了：" + fund.getTitle());
-    }
 
     // ========== 84 注销清理（AppUserService.deactivate 调用） ==========
 
@@ -1141,6 +523,20 @@ public class CoupleService {
 
     // ========== 内部工具 ==========
 
+    /** 贴贴双向往来的天数：同一天里两个人都发过动作才算一天（单向不计）。 */
+    private long bondBothDays(CoupleSpace space) {
+        Map<String, Set<String>> byDay = new HashMap<>();
+        for (CoupleAction action : actionMapper.findBySpace(space.getId())) {
+            if (action.getCreated() == null) {
+                continue;
+            }
+            String day = java.time.Instant.ofEpochMilli(action.getCreated())
+                    .atZone(java.time.ZoneId.systemDefault()).toLocalDate().toString();
+            byDay.computeIfAbsent(day, k -> new HashSet<>()).add(action.getUsername());
+        }
+        return byDay.values().stream().filter(users -> users.size() >= 2).count();
+    }
+
     private CoupleSpace requireSpace(String me) {
         return spaceMapper.findActiveByUser(me)
                 .orElseThrow(() -> new BusinessException(404, "还没有建立情侣空间，先邀请一位好友吧"));
@@ -1154,137 +550,12 @@ public class CoupleService {
         return Math.min(days, 90);
     }
 
-    /** 双方都完成某类打卡的自然日数量（互道早安/晚安天数）。 */
-    private long ritualBothDays(CoupleSpace space, String kind) {
-        Set<String> mine = new HashSet<>();
-        Set<String> theirs = new HashSet<>();
-        for (CoupleCheckin row : checkinMapper.findBySpaceAndKind(space.getId(), kind)) {
-            (row.getUsername().equals(space.getUserA()) ? mine : theirs).add(row.getCheckinDay());
-        }
-        return mine.stream().filter(theirs::contains).count();
-    }
-
-    /** 双方都回答了今日一问的自然日数量。 */
-    private long bothAnsweredDays(CoupleSpace space) {
-        Map<String, Set<String>> byDay = new HashMap<>();
-        for (CoupleAnswer row : answerMapper.findBySpace(space.getId())) {
-            byDay.computeIfAbsent(row.getAnswerDay(), k -> new HashSet<>()).add(row.getUsername());
-        }
-        return byDay.values().stream()
-                .filter(users -> users.contains(space.getUserA()) && users.contains(space.getUserB()))
-                .count();
-    }
-
-    /** 纪念日在查询区间内（startDate ~ 今天）的落位日期：yearly 取本年度，非 yearly 取当年；不在区间返回 null。 */
-    private LocalDate anniversaryOccurrence(CoupleAnniversary row, LocalDate startDate) {
-        LocalDate date;
-        try {
-            date = LocalDate.parse(row.getEventDate());
-        } catch (Exception e) {
-            return null;
-        }
-        LocalDate today = LocalDate.now();
-        if (row.yearlyFlag() && date.isBefore(startDate)) {
-            // 每年重复：落到今年（2/29 在平年跳过）
-            try {
-                date = date.withYear(today.getYear());
-            } catch (Exception e) {
-                return null;
-            }
-        }
-        if (date.isBefore(startDate) || date.isAfter(today)) {
-            return null;
-        }
-        return date;
-    }
-
     private CoupleInvite requireInvite(String inviteId) {
         CoupleInvite invite = inviteMapper.selectById(inviteId);
         if (invite == null) {
             throw new BusinessException(404, "邀请不存在");
         }
         return invite;
-    }
-
-    private CouplePromise requirePromise(String promiseId, CoupleSpace space) {
-        CouplePromise promise = promiseMapper.selectById(promiseId);
-        if (promise == null || !promise.getSpaceId().equals(space.getId())) {
-            throw new BusinessException(404, "约定不存在");
-        }
-        return promise;
-    }
-
-    private CoupleItem requireItem(String itemId, CoupleSpace space) {
-        CoupleItem item = itemMapper.selectById(itemId);
-        if (item == null || !item.getSpaceId().equals(space.getId())) {
-            throw new BusinessException(404, "清单事项不存在");
-        }
-        return item;
-    }
-
-    private CoupleLetter requireLetter(String letterId, CoupleSpace space) {
-        CoupleLetter letter = letterMapper.selectById(letterId);
-        if (letter == null || !letter.getSpaceId().equals(space.getId())) {
-            throw new BusinessException(404, "这封信不存在");
-        }
-        return letter;
-    }
-
-    private CouplePact requirePact(String pactId, CoupleSpace space) {
-        CouplePact pact = pactMapper.selectById(pactId);
-        if (pact == null || !pact.getSpaceId().equals(space.getId())) {
-            throw new BusinessException(404, "这条条约不存在");
-        }
-        return pact;
-    }
-
-    private CoupleFund requireFund(String fundId, CoupleSpace space) {
-        CoupleFund fund = fundMapper.selectById(fundId);
-        if (fund == null || !fund.getSpaceId().equals(space.getId())) {
-            throw new BusinessException(404, "这个心愿不存在");
-        }
-        return fund;
-    }
-
-    private PactVO toPactVO(CouplePact pact, String me) {
-        return new PactVO(pact.getId(), pact.getContent(), pact.getProposedBy(), pact.getAcceptedBy(),
-                pact.getAcceptedAt(), !pact.isAccepted(), pact.getProposedBy().equals(me), pact.getCreated());
-    }
-
-    /** 异地恋卡片：双方城市文本 +（都在城市库时）时差与球面距离。 */
-    private CityCardVO cityCard(CoupleSpace space, String me) {
-        String myName = me.equals(space.getUserA()) ? space.getCityA() : space.getCityB();
-        String partnerName = me.equals(space.getUserA()) ? space.getCityB() : space.getCityA();
-        var my = CoupleCities.find(myName).orElse(null);
-        var partner = CoupleCities.find(partnerName).orElse(null);
-        Integer hoursDiff = null;
-        Long distanceKm = null;
-        String partnerZoneId = null;
-        if (my != null && partner != null) {
-            hoursDiff = Math.round((float) (CoupleCities.offsetSeconds(partner) - CoupleCities.offsetSeconds(my)) / 3600);
-            distanceKm = CoupleCities.distanceKm(my, partner);
-            partnerZoneId = partner.zoneId();
-        }
-        return new CityCardVO(myName, partnerName, hoursDiff, distanceKm, partnerZoneId);
-    }
-
-    private FundVO toFundVO(CoupleFund fund, String me) {
-        List<FundDepositVO> deposits = fundDepositMapper.findByFund(fund.getId()).stream()
-                .map(d -> new FundDepositVO(d.getId(), d.getUsername(), d.getAmount(),
-                        d.getNote() == null ? "" : d.getNote(), d.getCreated()))
-                .toList();
-        int progress = fund.getTargetAmount() <= 0 ? 0
-                : (int) Math.min(100, Math.round(fund.getSavedAmount() * 100.0 / fund.getTargetAmount()));
-        return new FundVO(fund.getId(), fund.getTitle(), fund.getTargetAmount(), fund.getSavedAmount(),
-                fund.getStatus(), fund.isReached(), progress, fund.getCreatedBy(), deposits, fund.getCreated());
-    }
-
-    /** 悄悄话 VO：未到点的慢递对非发件人（即收件人）隐藏内容。 */
-    private LetterVO toLetterVO(CoupleLetter letter, String viewer, long now) {
-        boolean locked = letter.locked(now) && !letter.getSender().equals(viewer);
-        return new LetterVO(letter.getId(), letter.getSender(), locked ? null : letter.getContent(),
-                letter.getDeliverAt(), letter.getStatus(), letter.getOpenedAt(), letter.locked(now),
-                letter.getCreated());
     }
 
     private SpaceVO toSpaceVO(CoupleSpace space, String me) {
@@ -1311,66 +582,10 @@ public class CoupleService {
         return Math.max(days, 1);
     }
 
-    private CheckinStateVO checkinState(CoupleSpace space, String me) {
-        String day = today();
-        String partner = space.partnerOf(me);
-        CheckinHalf mine = new CheckinHalf(
-                checkinMapper.find(space.getId(), me, CoupleCheckin.KIND_MORNING, day).isPresent(),
-                checkinMapper.find(space.getId(), me, CoupleCheckin.KIND_NIGHT, day).isPresent());
-        CheckinHalf theirs = new CheckinHalf(
-                checkinMapper.find(space.getId(), partner, CoupleCheckin.KIND_MORNING, day).isPresent(),
-                checkinMapper.find(space.getId(), partner, CoupleCheckin.KIND_NIGHT, day).isPresent());
-        return new CheckinStateVO(mine, theirs, nightStreak(space));
-    }
-
-    /** 连续天数：双方互道晚安的连续自然天数，从今天往前数（今天还没互道则从昨天开始，避免白天清零）。 */
-    private int nightStreak(CoupleSpace space) {
-        Set<String> mine = nightDays(space, space.getUserA());
-        Set<String> theirs = nightDays(space, space.getUserB());
-        LocalDate cursor = LocalDate.now();
-        if (!(mine.contains(cursor.toString()) && theirs.contains(cursor.toString()))) {
-            cursor = cursor.minusDays(1);
-        }
-        int streak = 0;
-        while (mine.contains(cursor.toString()) && theirs.contains(cursor.toString()) && streak < 3650) {
-            streak++;
-            cursor = cursor.minusDays(1);
-        }
-        return streak;
-    }
-
-    private Set<String> nightDays(CoupleSpace space, String username) {
-        Set<String> days = new HashSet<>();
-        for (CoupleCheckin row : checkinMapper.findBySpaceAndKind(space.getId(), CoupleCheckin.KIND_NIGHT)) {
-            if (row.getUsername().equals(username)) {
-                days.add(row.getCheckinDay());
-            }
-        }
-        return days;
-    }
-
-    private PromiseVO toPromiseVO(CouplePromise p, long now) {
-        return new PromiseVO(p.getId(), p.getPromiser(), p.getCreditor(), p.getContent(), p.getDueAt(),
-                p.getStatus(), p.getDoneAt(), p.isOverdue(now), p.getCreated());
-    }
-
-    private static ItemVO toItemVO(CoupleItem item) {
-        return new ItemVO(item.getId(), item.getKind(), item.getTitle(),
-                item.getNote() == null ? "" : item.getNote(), item.getDueDate(), item.doneFlag(),
-                item.getDoneBy(), item.getDoneAt(), item.getCreatedBy(), item.getCreated());
-    }
-
     private static AnniversaryVO toAnniversaryVO(CoupleAnniversary row) {
         return new AnniversaryVO(row.getId(), row.getTitle(), row.getEventDate(), row.yearlyFlag(),
                 row.getKind() == null ? CoupleAnniversary.KIND_NORMAL : row.getKind(),
                 row.getCreatedBy(), row.getCreated());
-    }
-
-    private void validateKind(String kind) {
-        if (!CoupleItem.KIND_MOVIE.equals(kind) && !CoupleItem.KIND_FOOD.equals(kind)
-                && !CoupleItem.KIND_TRIP.equals(kind) && !CoupleItem.KIND_TODO.equals(kind)) {
-            throw new BusinessException(400, "清单类型只支持 MOVIE / FOOD / TRIP / TODO");
-        }
     }
 
     private String requireText(String value, String message, int max) {
