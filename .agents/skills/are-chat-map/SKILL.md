@@ -16,7 +16,7 @@ whenToUse: are-chat 后端开工前加载；新增/删除模块、表、接口�
 - 鉴权：登录态在 HttpSession；`com.smart.chat.common.Sessions.requireUser(session)` 取当前用户名
 - 统一返回：`ApiResponse.ok(data)` / 业务异常 `BusinessException(code, message)`
 - 构建：`mvn -q compile`；测试 `mvn test`（何时必跑见第六节）
-- 规模快照（2026-10-05 v8 第一批后）：couple 包 108 个文件 / 17 个情侣 Controller / 70 个情侣映射 / 22 张 `couple_*` 表（迁移链到 V52）/ 全仓 `mvn -o test` **266 用例**基线（2026-10-05 实测 `Tests run: 266, Failures: 0, Errors: 0, Skipped: 0` + BUILD SUCCESS）/ 44 个情侣 WS 事件 / 4 条定时任务。**注意**：本行只描述情侣空间，非情侣模块（auth/im/room/upload/system）的规模未变；逐端点与逐表清单见 `wiki/api.md`、`wiki/database.md`，裁剪决策见 `docs/couple-trim-ranking.md`，v8 新增功能的需求与取舍见 `docs/adr/0007-couple-v8-streak-question-wish.md`
+- 规模快照（2026-10-05 v8 第一批后）：couple 包 108 个文件 / 17 个情侣 Controller / 70 个情侣映射 / 22 张 `couple_*` 表（迁移链到 V52）/ 全仓 `mvn -o test` **267 用例**基线（2026-10-05 实测 `Tests run: 267, Failures: 0, Errors: 0, Skipped: 0` + BUILD SUCCESS）/ 44 个情侣 WS 事件 / 4 条定时任务。**注意**：本行只描述情侣空间，非情侣模块（auth/im/room/upload/system）的规模未变；逐端点与逐表清单见 `wiki/api.md`、`wiki/database.md`，裁剪决策见 `docs/couple-trim-ranking.md`，v8 新增功能的需求与取舍见 `docs/adr/0007-couple-v8-streak-question-wish.md`
 
 ### 目录与关键文件
 
@@ -68,7 +68,7 @@ Service → ImPushService.pushCoupleEvent(Both) ─┬→ WS 帧 {type:'couple',
 ### 命令速查
 
 - 编译门禁：`mvn -q compile`（提交前必跑）
-- 全量测试：`mvn test`（**当前基线 266 用例**，2026-10-05 实测 `Tests run: 266, Failures: 0, Errors: 0, Skipped: 0` + `BUILD SUCCESS`；旧的 158/202/381/409 几个写法都是过时快照）；单类：`mvn test -Dtest=CoupleStreakServiceTest`
+- 全量测试：`mvn test`（**当前基线 267 用例**，2026-10-05 实测 `Tests run: 267, Failures: 0, Errors: 0, Skipped: 0` + `BUILD SUCCESS`；旧的 158/202/381/409 几个写法都是过时快照）；单类：`mvn test -Dtest=CoupleStreakServiceTest`
 - 运行：`mvn spring-boot:run`（8080）；打包 `mvn -q -B package` 后按 Dockerfile/deploy 部署
 - 数表：`grep -c "^CREATE TABLE" src/main/resources/schema.sql`
 
