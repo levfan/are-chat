@@ -1,12 +1,11 @@
 package com.smart.chat.identity.application;
 
-import com.smart.chat.identity.infrastructure.persistence.AdminAudit;
-import com.smart.chat.identity.infrastructure.persistence.AdminAuditMapper;
-import com.smart.chat.identity.infrastructure.persistence.AppUserMapper;
-import com.smart.chat.identity.infrastructure.persistence.RegistrationApplicationMapper;
-import com.smart.chat.messaging.infrastructure.transport.ImPushService;
-import com.smart.chat.messaging.infrastructure.persistence.PrivateMessageMapper;
-import com.smart.chat.platform.application.AdminNotifyService;
+import com.smart.chat.identity.domain.account.AccountRepository;
+import com.smart.chat.identity.domain.audit.AdminAudit;
+import com.smart.chat.identity.domain.audit.AdminAuditRepository;
+import com.smart.chat.identity.domain.registration.RegistrationApplicationRepository;
+import com.smart.chat.identity.domain.AdminNotifyChannel;
+import com.smart.chat.identity.domain.WelcomeMessenger;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -20,30 +19,30 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-/** 79 用户管理：重置密码支持指定密码与随机临时密码两种方式 */
+/**
+ * 79 用户管理：重置密码支持指定密码与随机临时密码两种方式。
+ * mock 从三个 Mapper 换成三个仓储端口，审计断言的期望文本一字未改。
+ */
 @ExtendWith(MockitoExtension.class)
 class AdminServiceTest {
 
     @Mock
-    private RegistrationApplicationMapper applicationMapper;
+    private RegistrationApplicationRepository applications;
 
     @Mock
-    private AppUserMapper userMapper;
+    private AccountRepository accounts;
 
     @Mock
     private AppUserService userService;
 
     @Mock
-    private AdminAuditMapper auditMapper;
+    private AdminAuditRepository audits;
 
     @Mock
-    private PrivateMessageMapper messageMapper;
+    private WelcomeMessenger welcomeMessenger;
 
     @Mock
-    private ImPushService push;
-
-    @Mock
-    private AdminNotifyService notifyService;
+    private AdminNotifyChannel notifyChannel;
 
     @InjectMocks
     private AdminService service;
@@ -86,11 +85,11 @@ class AdminServiceTest {
 
     private void assertAudit(String expectedDetail) {
         ArgumentCaptor<AdminAudit> captor = ArgumentCaptor.forClass(AdminAudit.class);
-        verify(auditMapper).insert(captor.capture());
+        verify(audits).append(captor.capture());
         AdminAudit audit = captor.getValue();
-        assertThat(audit.getActor()).isEqualTo("admin");
-        assertThat(audit.getAction()).isEqualTo("RESET_PASSWORD");
-        assertThat(audit.getTarget()).isEqualTo("bob");
-        assertThat(audit.getDetail()).isEqualTo(expectedDetail);
+        assertThat(audit.actor()).isEqualTo("admin");
+        assertThat(audit.action()).isEqualTo("RESET_PASSWORD");
+        assertThat(audit.target()).isEqualTo("bob");
+        assertThat(audit.detail()).isEqualTo(expectedDetail);
     }
 }
