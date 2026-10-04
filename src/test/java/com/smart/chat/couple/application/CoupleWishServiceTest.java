@@ -2,8 +2,9 @@ package com.smart.chat.couple.application;
 
 import com.smart.chat.couple.domain.space.CoupleSpaceRepository;
 import com.smart.chat.couple.domain.space.CoupleSpace;
-import com.smart.chat.couple.infrastructure.persistence.CoupleWishMapper;
-import com.smart.chat.couple.infrastructure.persistence.CoupleWishPO;
+import com.smart.chat.couple.domain.wish.Wish;
+import com.smart.chat.couple.domain.wish.WishRepository;
+
 import com.smart.chat.messaging.domain.CoupleEventPublisher;
 import com.smart.chat.sharedkernel.web.BusinessException;
 import org.junit.jupiter.api.Test;
@@ -40,44 +41,51 @@ class CoupleWishServiceTest {
     @Mock
     private CoupleSpaceRepository spaceRepository;
     @Mock
-    private CoupleWishMapper wishMapper;
+    private WishRepository wishRepository;
     @Mock
     private CoupleEventPublisher push;
 
     @InjectMocks
     private CoupleWishService service;
 
+    /** 假清单：只在 WishRepository 这一层成立，PO 与 Mapper 不进用例。 */
     private final class Bag {
-        private final List<CoupleWishPO> rows = new ArrayList<>();
+        private final List<Wish> rows = new ArrayList<>();
         private boolean duplicateTitle;
 
         Bag stub() {
-            lenient().when(wishMapper.findBySpace(SPACE)).thenAnswer(inv -> List.copyOf(rows));
-            lenient().when(wishMapper.insert(any(CoupleWishPO.class))).thenAnswer(inv -> {
-                rows.add(inv.getArgument(0));
-                return 1;
-            });
-            lenient().when(wishMapper.selectById(any())).thenAnswer(inv -> rows.stream()
-                    .filter(r -> r.getId().equals(inv.getArgument(0))).findFirst().orElse(null));
-            lenient().when(wishMapper.updateById(any(CoupleWishPO.class))).thenReturn(1);
-            lenient().when(wishMapper.deleteById(anyString())).thenAnswer(inv -> {
-                rows.removeIf(r -> r.getId().equals(inv.getArgument(0)));
-                return 1;
-            });
-            lenient().when(wishMapper.existsSameTitle(eq(SPACE), anyString(), anyString()))
+            lenient().when(wishRepository.findBySpace(SPACE)).thenAnswer(inv -> List.copyOf(rows));
+            lenient().doAnswer(inv -> {
+                Wish saved = inv.getArgument(0);
+                if (saved.id() == null) {
+                    // 新愿望：id 与记录时刻由写这一层落定，和适配器一致
+                    rows.add(Wish.restore("w" + (rows.size() + 1), saved.spaceId(), saved.ownerUser(),
+                            saved.creatorUser(), saved.title(), saved.note(), saved.status(), saved.preparedBy(),
+                            saved.preparedAt(), saved.fulfilledAt(), System.currentTimeMillis()));
+                } else {
+                    rows.replaceAll(w -> w.id().equals(saved.id()) ? saved : w);
+                }
+                return null;
+            }).when(wishRepository).save(any(Wish.class));
+            lenient().when(wishRepository.findById(any())).thenAnswer(inv -> rows.stream()
+                    .filter(r -> r.id().equals(inv.getArgument(0))).findFirst());
+            lenient().doAnswer(inv -> {
+                rows.removeIf(r -> r.id().equals(inv.getArgument(0)));
+                return null;
+            }).when(wishRepository).deleteById(anyString());
+            lenient().when(wishRepository.sameTitleExists(eq(SPACE), anyString(), anyString()))
                     .thenAnswer(inv -> duplicateTitle);
-            lenient().when(wishMapper.countFulfilled(SPACE))
+            lenient().when(wishRepository.countFulfilled(SPACE))
                     .thenAnswer(inv -> rows.stream()
-                            .filter(r -> CoupleWishPO.STATUS_FULFILLED.equals(r.getStatus())).count());
+                            .filter(r -> Wish.STATUS_FULFILLED.equals(r.status())).count());
             return this;
         }
 
-        CoupleWishPO add(String owner, String creator, String title, String status) {
-            CoupleWishPO row = CoupleWishPO.of(SPACE, owner, creator, title, null);
-            row.setId("w" + (rows.size() + 1));
-            row.setStatus(status);
-            rows.add(row);
-            return row;
+        Wish add(String owner, String creator, String title, String status) {
+            Wish wish = Wish.restore("w" + (rows.size() + 1), SPACE, owner, creator, title, null, status,
+                    null, null, null, System.currentTimeMillis());
+            rows.add(wish);
+            return wish;
         }
     }
 
@@ -91,30 +99,30 @@ class CoupleWishServiceTest {
     void markingPreparedPushesNothingAtAll() {
         stubSpace();
         Bag bag = new Bag().stub();
-        CoupleWishPO row = bag.add("alice", "alice", "想要一副耳机", CoupleWishPO.STATUS_OPEN);
+        Wish row = bag.add("alice", "alice", "想要一副耳机", Wish.STATUS_OPEN);
 
-        service.prepare("bob", row.getId());
+        service.prepare("bob", row.id());
 
         verifyNoInteractions(push);
-        assertThat(row.getStatus()).isEqualTo(CoupleWishPO.STATUS_PREPARED);
-        assertThat(row.getPreparedBy()).isEqualTo("bob");
+        assertThat(row.status()).isEqualTo(Wish.STATUS_PREPARED);
+        assertThat(row.preparedBy()).isEqualTo("bob");
     }
 
     @Test
     void ownerSeesOpenStatusAndNoPreparedTimestamp() {
         stubSpace();
         Bag bag = new Bag().stub();
-        CoupleWishPO row = bag.add("alice", "alice", "想一起去海边", CoupleWishPO.STATUS_OPEN);
-        service.prepare("bob", row.getId());
+        Wish row = bag.add("alice", "alice", "想一起去海边", Wish.STATUS_OPEN);
+        service.prepare("bob", row.id());
 
         CoupleWishService.WishBoardVO mine = service.board("alice");
         CoupleWishService.WishBoardVO theirs = service.board("bob");
 
         // 许愿人这边：还在 open 组，状态是 OPEN，连标记时刻都是 null
-        assertThat(mine.open()).extracting(CoupleWishService.WishVO::id).contains(row.getId());
+        assertThat(mine.open()).extracting(CoupleWishService.WishVO::id).contains(row.id());
         assertThat(mine.prepared()).isEmpty();
         CoupleWishService.WishVO asOwner = mine.open().stream()
-                .filter(w -> w.id().equals(row.getId())).findFirst().orElseThrow();
+                .filter(w -> w.id().equals(row.id())).findFirst().orElseThrow();
         assertThat(asOwner.status()).isEqualTo("OPEN");
         assertThat(asOwner.preparedFlag()).isFalse();
         assertThat(asOwner.preparedAt()).isNull();
@@ -135,36 +143,36 @@ class CoupleWishServiceTest {
     void ownerCannotTouchPreparationWithoutLeakingItsState() {
         stubSpace();
         Bag bag = new Bag().stub();
-        CoupleWishPO row = bag.add("alice", "alice", "想要机械键盘", CoupleWishPO.STATUS_OPEN);
+        Wish row = bag.add("alice", "alice", "想要机械键盘", Wish.STATUS_OPEN);
 
-        assertThatThrownBy(() -> service.prepare("alice", row.getId()))
+        assertThatThrownBy(() -> service.prepare("alice", row.id()))
                 .isInstanceOf(BusinessException.class).hasMessageContaining("给 TA 留的");
-        service.prepare("bob", row.getId());
+        service.prepare("bob", row.id());
         // 已标记之后再让许愿人点一次：话术必须与「没标记过」时一模一样，
         // 不能出现「已经标过了」这种把惊喜说出去的字（本地真后端探针实测到的缺陷）
-        assertThatThrownBy(() -> service.prepare("alice", row.getId()))
+        assertThatThrownBy(() -> service.prepare("alice", row.id()))
                 .isInstanceOf(BusinessException.class).hasMessage("这条愿望是你自己许的，「已准备」那一格是给 TA 留的");
-        assertThatThrownBy(() -> service.unprepare("alice", row.getId()))
+        assertThatThrownBy(() -> service.unprepare("alice", row.id()))
                 .isInstanceOf(BusinessException.class).hasMessage("这条愿望是你自己许的，「已准备」那一格是给 TA 留的");
-        service.unprepare("bob", row.getId());
-        assertThat(row.getStatus()).isEqualTo(CoupleWishPO.STATUS_OPEN);
+        service.unprepare("bob", row.id());
+        assertThat(row.status()).isEqualTo(Wish.STATUS_OPEN);
     }
 
     @Test
     void fulfillingIsTheOwnersCallAndMakesItPublic() {
         stubSpace();
         Bag bag = new Bag().stub();
-        CoupleWishPO row = bag.add("alice", "alice", "想要那本书", CoupleWishPO.STATUS_OPEN);
-        service.prepare("bob", row.getId());
+        Wish row = bag.add("alice", "alice", "想要那本书", Wish.STATUS_OPEN);
+        service.prepare("bob", row.id());
 
-        assertThatThrownBy(() -> service.fulfill("bob", row.getId()))
+        assertThatThrownBy(() -> service.fulfill("bob", row.id()))
                 .isInstanceOf(BusinessException.class).hasMessageContaining("只有许愿的人");
 
-        CoupleWishService.WishBoardVO board = service.fulfill("alice", row.getId());
-        assertThat(board.fulfilled()).extracting(CoupleWishService.WishVO::id).contains(row.getId());
+        CoupleWishService.WishBoardVO board = service.fulfill("alice", row.id());
+        assertThat(board.fulfilled()).extracting(CoupleWishService.WishVO::id).contains(row.id());
         verify(push).pushCoupleEvent(eq("wish-fulfilled"), eq("alice"), eq("bob"), anyString());
         // 实现之后谁都不能再改状态
-        assertThatThrownBy(() -> service.prepare("bob", row.getId()))
+        assertThatThrownBy(() -> service.prepare("bob", row.id()))
                 .isInstanceOf(BusinessException.class).hasMessageContaining("已经实现");
     }
 
@@ -198,7 +206,7 @@ class CoupleWishServiceTest {
                 .isInstanceOf(BusinessException.class).hasMessageContaining("已经在清单上了");
 
         assertThat(bag.rows).isEmpty();
-        verify(wishMapper, never()).insert(any(CoupleWishPO.class));
+        verify(wishRepository, never()).save(any(Wish.class));
     }
 
     @Test
@@ -206,7 +214,7 @@ class CoupleWishServiceTest {
         stubSpace();
         Bag bag = new Bag().stub();
         for (int i = 0; i < 30; i++) {
-            bag.add("alice", "alice", "愿望 " + i, CoupleWishPO.STATUS_OPEN);
+            bag.add("alice", "alice", "愿望 " + i, Wish.STATUS_OPEN);
         }
         assertThatThrownBy(() -> service.add("alice", "再多一条", null, null))
                 .isInstanceOf(BusinessException.class).hasMessageContaining("最多同时挂 30 条");
@@ -216,16 +224,16 @@ class CoupleWishServiceTest {
     void removeAndEditNoteBelongToTheRecorder() {
         stubSpace();
         Bag bag = new Bag().stub();
-        CoupleWishPO row = bag.add("alice", "bob", "帮 TA 实现的盲盒", CoupleWishPO.STATUS_OPEN);
+        Wish row = bag.add("alice", "bob", "帮 TA 实现的盲盒", Wish.STATUS_OPEN);
 
-        assertThatThrownBy(() -> service.remove("alice", row.getId()))
+        assertThatThrownBy(() -> service.remove("alice", row.id()))
                 .isInstanceOf(BusinessException.class).hasMessageContaining("只有记这条愿望的人");
-        assertThatThrownBy(() -> service.updateNote("alice", row.getId(), "改一下"))
+        assertThatThrownBy(() -> service.updateNote("alice", row.id(), "改一下"))
                 .isInstanceOf(BusinessException.class).hasMessageContaining("只有记这条愿望的人能改");
 
-        service.updateNote("bob", row.getId(), "改成蓝色的");
-        assertThat(row.getNote()).isEqualTo("改成蓝色的");
-        service.remove("bob", row.getId());
+        service.updateNote("bob", row.id(), "改成蓝色的");
+        assertThat(row.note()).isEqualTo("改成蓝色的");
+        service.remove("bob", row.id());
         assertThat(bag.rows).isEmpty();
     }
 
@@ -233,8 +241,8 @@ class CoupleWishServiceTest {
     void wishFromAnotherSpaceIsNotFound() {
         stubSpace();
         Bag bag = new Bag().stub();
-        CoupleWishPO elsewhere = CoupleWishPO.of("other-space", "carol", "carol", "别人的愿望", null);
-        elsewhere.setId("w9");
+        Wish elsewhere = Wish.restore("w9", "other-space", "carol", "carol", "别人的愿望", null,
+                Wish.STATUS_OPEN, null, null, null, System.currentTimeMillis());
         bag.rows.add(elsewhere);
 
         assertThatThrownBy(() -> service.prepare("bob", "w9"))

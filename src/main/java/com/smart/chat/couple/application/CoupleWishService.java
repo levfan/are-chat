@@ -1,16 +1,16 @@
 package com.smart.chat.couple.application;
 
 import com.smart.chat.couple.domain.wish.Wish;
+import com.smart.chat.couple.domain.wish.WishRepository;
 import com.smart.chat.couple.domain.space.CoupleSpaceRepository;
 import com.smart.chat.couple.domain.space.CoupleSpace;
-import com.smart.chat.couple.infrastructure.persistence.CoupleWishMapper;
-import com.smart.chat.couple.infrastructure.persistence.CoupleWishPO;
 import com.smart.chat.messaging.domain.CoupleEventPublisher;
 import com.smart.chat.sharedkernel.web.BusinessException;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 
 import static com.smart.chat.couple.application.DomainRules.guard;
 import static com.smart.chat.couple.application.DomainRules.rule;
@@ -41,13 +41,13 @@ public class CoupleWishService {
     }
 
     private final CoupleSpaceRepository spaceRepository;
-    private final CoupleWishMapper wishMapper;
+    private final WishRepository wishRepository;
     private final CoupleEventPublisher push;
 
-    public CoupleWishService(CoupleSpaceRepository spaceRepository, CoupleWishMapper wishMapper,
+    public CoupleWishService(CoupleSpaceRepository spaceRepository, WishRepository wishRepository,
                              CoupleEventPublisher push) {
         this.spaceRepository = spaceRepository;
-        this.wishMapper = wishMapper;
+        this.wishRepository = wishRepository;
         this.push = push;
     }
 
@@ -60,20 +60,19 @@ public class CoupleWishService {
         List<WishVO> prepared = new ArrayList<>();
         List<WishVO> fulfilled = new ArrayList<>();
         int openTotal = 0;
-        for (CoupleWishPO row : wishMapper.findBySpace(space.id())) {
-            Wish wish = toDomain(row);
+        for (Wish wish : wishRepository.findBySpace(space.id())) {
             String visible = wish.visibleStatusFor(me);
             if (Wish.STATUS_FULFILLED.equals(visible)) {
-                fulfilled.add(toVO(wish, row, me, true));
+                fulfilled.add(toVO(wish, me, true));
                 continue;
             }
             if (Wish.STATUS_PREPARED.equals(visible)) {
                 // 只有标记人自己看得到这一组；许愿人那里它还是 OPEN
-                prepared.add(toVO(wish, row, me, false));
+                prepared.add(toVO(wish, me, false));
                 openTotal++;
                 continue;
             }
-            open.add(toVO(wish, row, me, false));
+            open.add(toVO(wish, me, false));
             openTotal++;
         }
         return new WishBoardVO(open, prepared, fulfilled, openTotal, OPEN_MAX, Wish.TITLE_MAX, Wish.NOTE_MAX);
@@ -88,18 +87,17 @@ public class CoupleWishService {
         if (!owner.equals(me) && !owner.equals(space.partnerOf(me))) {
             throw new BusinessException(400, "愿望只能许给自己或者你们的另一半");
         }
-        Wish wish = rule(() -> Wish.add(owner, me, title, note));
+        Wish wish = rule(() -> Wish.add(space.id(), owner, me, title, note));
         if (openCountOf(space.id()) >= OPEN_MAX) {
             throw new BusinessException(400, "愿望清单最多同时挂 " + OPEN_MAX + " 条，先实现几条再加吧");
         }
-        if (wishMapper.existsSameTitle(space.id(), owner, wish.title())) {
+        if (wishRepository.sameTitleExists(space.id(), owner, wish.title())) {
             throw new BusinessException(400, "这条愿望已经在清单上了，别再写一遍啦");
         }
-        CoupleWishPO row = CoupleWishPO.of(space.id(), owner, me, wish.title(), wish.note());
-        wishMapper.insert(row);
+        wishRepository.save(wish);
         if (!owner.equals(me)) {
             push.pushCoupleEvent("wish-added", me, owner,
-                    "TA 帮你把「" + row.getTitle() + "」记进愿望清单了 📝");
+                    "TA 帮你把「" + wish.title() + "」记进愿望清单了 📝");
         }
         return board(me);
     }
@@ -117,36 +115,29 @@ public class CoupleWishService {
     /** 许愿人确认实现：这时才公开，双方都看得见。 */
     public WishBoardVO fulfill(String me, String id) {
         CoupleSpace space = requireSpace(me);
-        CoupleWishPO row = requireWish(space, id);
-        Wish wish = toDomain(row);
+        Wish wish = requireWish(space, id);
         guard(() -> wish.fulfillBy(me, System.currentTimeMillis()));
-        row.setStatus(wish.status());
-        row.setFulfilledAt(wish.fulfilledAt());
-        row.setUpdatedAt(System.currentTimeMillis());
-        wishMapper.updateById(row);
+        wishRepository.save(wish);
         push.pushCoupleEvent("wish-fulfilled", me, space.partnerOf(me),
-                "你许的「" + row.getTitle() + "」实现啦 🎉 谢谢 TA");
+                "你许的「" + wish.title() + "」实现啦 🎉 谢谢 TA");
         return board(me);
     }
 
     /** 改补充说明：只有记录人能改。 */
     public WishBoardVO updateNote(String me, String id, String note) {
         CoupleSpace space = requireSpace(me);
-        CoupleWishPO row = requireWish(space, id);
-        Wish wish = toDomain(row);
+        Wish wish = requireWish(space, id);
         guard(() -> wish.editNote(me, note));
-        row.setNote(wish.note());
-        row.setUpdatedAt(System.currentTimeMillis());
-        wishMapper.updateById(row);
+        wishRepository.save(wish);
         return board(me);
     }
 
     /** 删除：只有记录人能删，已实现的删不掉。 */
     public WishBoardVO remove(String me, String id) {
         CoupleSpace space = requireSpace(me);
-        CoupleWishPO row = requireWish(space, id);
-        guard(() -> toDomain(row).requireDeletableBy(me));
-        wishMapper.deleteById(row.getId());
+        Wish wish = requireWish(space, id);
+        guard(() -> wish.requireDeletableBy(me));
+        wishRepository.deleteById(wish.id());
         return board(me);
     }
 
@@ -154,60 +145,44 @@ public class CoupleWishService {
 
     /** 已实现的愿望条数（百日回顾用）。 */
     public long fulfilledCount(String spaceId) {
-        return wishMapper.countFulfilled(spaceId);
+        return wishRepository.countFulfilled(spaceId);
     }
 
     // ========== 内部 ==========
 
     private WishBoardVO changeStatus(String me, String id, boolean prepare) {
         CoupleSpace space = requireSpace(me);
-        CoupleWishPO row = requireWish(space, id);
-        Wish wish = toDomain(row);
+        Wish wish = requireWish(space, id);
         if (prepare) {
             guard(() -> wish.prepareBy(me, System.currentTimeMillis()));
         } else {
             guard(() -> wish.unprepareBy(me));
         }
-        row.setStatus(wish.status());
-        row.setPreparedBy(wish.preparedBy());
-        row.setPreparedAt(wish.preparedAt());
-        row.setUpdatedAt(System.currentTimeMillis());
-        wishMapper.updateById(row);
+        wishRepository.save(wish);
         // 刻意不推送：标记「已准备」的意义就是别让许愿的人提前知道
         return board(me);
     }
 
     private long openCountOf(String spaceId) {
-        long count = 0;
-        for (CoupleWishPO row : wishMapper.findBySpace(spaceId)) {
-            if (!CoupleWishPO.STATUS_FULFILLED.equals(row.getStatus())) {
-                count++;
-            }
-        }
-        return count;
+        return wishRepository.findBySpace(spaceId).stream()
+                .filter(wish -> !Wish.STATUS_FULFILLED.equals(wish.status()))
+                .count();
     }
 
-    private WishVO toVO(Wish wish, CoupleWishPO row, String me, boolean fulfilled) {
+    private WishVO toVO(Wish wish, String me, boolean fulfilled) {
         String visible = wish.visibleStatusFor(me);
         boolean mine = wish.ownerUser().equals(me);
         // 已准备的时间只给标记人看，许愿人那边连时刻也不能露
         boolean keepsSecret = wish.keepsPreparationSecretFrom(me);
-        return new WishVO(row.getId(), wish.ownerUser(), wish.creatorUser(), wish.title(), wish.note(), visible,
+        return new WishVO(wish.id(), wish.ownerUser(), wish.creatorUser(), wish.title(), wish.note(), visible,
                 mine, !keepsSecret && wish.preparedFlag(), !mine && !fulfilled && !wish.preparedFlag(),
-                mine && !fulfilled, keepsSecret ? null : row.getPreparedAt(), row.getFulfilledAt(), row.getCreated());
+                mine && !fulfilled, keepsSecret ? null : wish.preparedAt(), wish.fulfilledAt(), wish.created());
     }
 
-    private CoupleWishPO requireWish(CoupleSpace space, String id) {
-        CoupleWishPO row = id == null ? null : wishMapper.selectById(id);
-        if (row == null || !row.getSpaceId().equals(space.id())) {
-            throw new BusinessException(404, "这条愿望不在你们的清单里");
-        }
-        return row;
-    }
-
-    private Wish toDomain(CoupleWishPO row) {
-        return Wish.restore(row.getId(), row.getOwnerUser(), row.getCreatorUser(), row.getTitle(), row.getNote(),
-                row.getStatus(), row.getPreparedBy(), row.getPreparedAt(), row.getFulfilledAt());
+    private Wish requireWish(CoupleSpace space, String id) {
+        return (id == null ? Optional.<Wish>empty() : wishRepository.findById(id))
+                .filter(wish -> space.id().equals(wish.spaceId()))
+                .orElseThrow(() -> new BusinessException(404, "这条愿望不在你们的清单里"));
     }
 
     private CoupleSpace requireSpace(String me) {

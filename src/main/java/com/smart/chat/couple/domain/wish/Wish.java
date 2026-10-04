@@ -20,6 +20,7 @@ public final class Wish {
     public static final String STATUS_FULFILLED = "FULFILLED";
 
     private final String id;
+    private final String spaceId;
     private final String ownerUser;
     private final String creatorUser;
     private final String title;
@@ -28,10 +29,12 @@ public final class Wish {
     private String preparedBy;
     private Long preparedAt;
     private Long fulfilledAt;
+    private final Long created;
 
-    private Wish(String id, String ownerUser, String creatorUser, String title, String note, String status,
-                 String preparedBy, Long preparedAt, Long fulfilledAt) {
+    private Wish(String id, String spaceId, String ownerUser, String creatorUser, String title, String note,
+                 String status, String preparedBy, Long preparedAt, Long fulfilledAt, Long created) {
         this.id = id;
+        this.spaceId = spaceId;
         this.ownerUser = ownerUser;
         this.creatorUser = creatorUser;
         this.title = title;
@@ -40,10 +43,16 @@ public final class Wish {
         this.preparedBy = preparedBy;
         this.preparedAt = preparedAt;
         this.fulfilledAt = fulfilledAt;
+        this.created = created;
     }
 
     /** 新记一条愿望：标题必填不超长，许愿人默认是记录人本人。 */
     public static Wish add(String ownerUser, String creatorUser, String title, String note) {
+        return add(null, ownerUser, creatorUser, title, note);
+    }
+
+    /** 带所属空间的新建：规则一样，空间只是这条愿望归属哪儿。 */
+    public static Wish add(String spaceId, String ownerUser, String creatorUser, String title, String note) {
         String text = title == null ? "" : title.trim();
         if (text.isEmpty()) {
             throw new RuleViolation("想要什么总得写一句呀");
@@ -59,12 +68,21 @@ public final class Wish {
             throw new RuleViolation("补充说明最多 " + NOTE_MAX + " 个字");
         }
         String owner = ownerUser == null || ownerUser.isBlank() ? creatorUser : ownerUser.trim();
-        return new Wish(null, owner, creatorUser, text, extra, STATUS_OPEN, null, null, null);
+        return new Wish(null, spaceId, owner, creatorUser, text, extra, STATUS_OPEN, null, null, null, null);
     }
 
     public static Wish restore(String id, String ownerUser, String creatorUser, String title, String note,
                                String status, String preparedBy, Long preparedAt, Long fulfilledAt) {
-        return new Wish(id, ownerUser, creatorUser, title, note, status, preparedBy, preparedAt, fulfilledAt);
+        return new Wish(id, null, ownerUser, creatorUser, title, note, status, preparedBy, preparedAt, fulfilledAt,
+                null);
+    }
+
+    /** 从存储完整还原：空间、愿望人、记录时刻都要带回来，清单卡片与隐藏回顾页要用。 */
+    public static Wish restore(String id, String spaceId, String ownerUser, String creatorUser, String title,
+                               String note, String status, String preparedBy, Long preparedAt, Long fulfilledAt,
+                               Long created) {
+        return new Wish(id, spaceId, ownerUser, creatorUser, title, note, status, preparedBy, preparedAt,
+                fulfilledAt, created);
     }
 
     /** 偷偷标记「已准备」：只有被许愿的那一位能标，且实现过的愿望不再改。 */
@@ -170,6 +188,16 @@ public final class Wish {
 
     public String id() {
         return id;
+    }
+
+    /** 这条愿望属于哪个空间（requireWish 的归属闸门按它判） */
+    public String spaceId() {
+        return spaceId;
+    }
+
+    /** 记下来的时刻，清单按它倒序 */
+    public Long created() {
+        return created;
     }
 
     public String ownerUser() {
