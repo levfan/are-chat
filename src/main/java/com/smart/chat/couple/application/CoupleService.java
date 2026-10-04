@@ -3,6 +3,8 @@ package com.smart.chat.couple.application;
 import com.smart.chat.couple.infrastructure.content.CoupleTermBank;
 import com.smart.chat.couple.domain.intimacy.IntimacyCalculator;
 import com.smart.chat.couple.domain.intimacy.IntimacySource;
+import com.smart.chat.couple.domain.space.CoupleSpace;
+import com.smart.chat.couple.domain.space.CoupleSpaceRepository;
 import com.smart.chat.couple.infrastructure.persistence.CoupleActionPO;
 import com.smart.chat.couple.infrastructure.persistence.CoupleActionMapper;
 import com.smart.chat.couple.infrastructure.persistence.CoupleAnniversaryPO;
@@ -100,6 +102,7 @@ public class CoupleService {
     // ========== 依赖 ==========
 
     private final CoupleSpaceMapper spaceMapper;
+    private final CoupleSpaceRepository spaceRepository;
     private final CoupleInviteMapper inviteMapper;
     private final CoupleAnniversaryMapper anniversaryMapper;
     private final CoupleMoodMapper moodMapper;
@@ -114,7 +117,8 @@ public class CoupleService {
     private final CoupleEventPublisher push;
 
     @SuppressWarnings("java:S107")
-    public CoupleService(CoupleSpaceMapper spaceMapper, CoupleInviteMapper inviteMapper,
+    public CoupleService(CoupleSpaceMapper spaceMapper, CoupleSpaceRepository spaceRepository,
+                         CoupleInviteMapper inviteMapper,
                          CoupleAnniversaryMapper anniversaryMapper, CoupleMoodMapper moodMapper,
                          CoupleActionMapper actionMapper, CoupleEchoDeedMapper deedMapper,
                          CoupleQuestOvertimeMapper overtimeMapper,
@@ -123,6 +127,7 @@ public class CoupleService {
                          FriendshipChecker friendships, PeerProfileReader profiles,
                          AccountDirectory accounts, CoupleEventPublisher push) {
         this.spaceMapper = spaceMapper;
+        this.spaceRepository = spaceRepository;
         this.inviteMapper = inviteMapper;
         this.anniversaryMapper = anniversaryMapper;
         this.moodMapper = moodMapper;
@@ -194,8 +199,10 @@ public class CoupleService {
         inviteMapper.updateById(invite);
 
         String[] pair = CoupleSpacePO.ordered(from, me);
-        CoupleSpacePO space = CoupleSpacePO.of(pair[0], pair[1]);
-        spaceMapper.insert(space);
+        // 建立走聚合工厂：字典序规范化与 ACTIVE 初值只在一处定义（couple.domain.space.CoupleSpace）
+        CoupleSpace opened = CoupleSpace.open(pair[0], pair[1], System.currentTimeMillis());
+        spaceRepository.save(opened);
+        CoupleSpacePO space = requireSpace(me);
         push.pushCoupleEvent("invite-accepted", me, from, "对方同意啦！你们的情侣空间已开启 🎉");
         return toSpaceVO(space, me);
     }
