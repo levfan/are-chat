@@ -1077,3 +1077,54 @@ CREATE TABLE `couple_catch_safeword_use` (
 -- F397 幽默风格图鉴：自评+互评幽默类型，差异出相处建议
 
 -- smart_collections.couple_laugh_style definition
+
+
+-- smart_collections.couple_bond_day definition（V52）
+
+CREATE TABLE `couple_bond_day` (
+    `id` varchar(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '主键UUID',
+    `space_id` varchar(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '所属情侣空间ID，关联 couple_space.id',
+    `day` varchar(10) NOT NULL COMMENT '打卡日期（yyyy-MM-dd，自然日）',
+    `source` varchar(10) NOT NULL DEFAULT 'AUTO' COMMENT '确认方式：AUTO 双方当天都发过贴贴 / MAKEUP 补签',
+    `operator_user` varchar(50) DEFAULT NULL COMMENT '补签操作人（AUTO 时为 NULL）',
+    `created` bigint(20) NOT NULL COMMENT '确认时间（毫秒时间戳）',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_couple8_bond_day` (`space_id`,`day`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='贴贴打卡日表：一行=一天双方共同贴贴过（或补签），连续天数与解锁档位由本表的 day 集合算出';
+
+
+-- smart_collections.couple_question_answer definition（V52）
+
+CREATE TABLE `couple_question_answer` (
+    `id` varchar(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '主键UUID',
+    `space_id` varchar(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '所属情侣空间ID，关联 couple_space.id',
+    `day` varchar(10) NOT NULL COMMENT '问题日期（yyyy-MM-dd，同空间同天同题）',
+    `question_index` int(11) NOT NULL COMMENT '题库下标（按空间+天稳定哈希得到，落库留快照）',
+    `question` varchar(200) NOT NULL COMMENT '题目原文（当日快照，题库后续扩充不影响历史）',
+    `username` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '回答人用户名（区分大小写）',
+    `answer` varchar(300) NOT NULL COMMENT '回答内容（当天可改写）',
+    `created` bigint(20) NOT NULL COMMENT '首次回答时间（毫秒时间戳）',
+    `updated_at` bigint(20) DEFAULT NULL COMMENT '最近改写时间（毫秒时间戳）',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_couple8_question_day_user` (`space_id`,`day`,`username`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='每日一问回答表：每人每天一行，双方都答过之后才互相可见';
+
+
+-- smart_collections.couple_wish definition（V52）
+
+CREATE TABLE `couple_wish` (
+    `id` varchar(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '主键UUID',
+    `space_id` varchar(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '所属情侣空间ID，关联 couple_space.id',
+    `owner_user` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '许愿人用户名（想要这个东西的人）',
+    `creator_user` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '记录人用户名（可以不是许愿人本人）',
+    `title` varchar(80) NOT NULL COMMENT '想要的东西（一句话，80 字内）',
+    `note` varchar(200) DEFAULT NULL COMMENT '补充说明（款式/尺码/什么时候想要）',
+    `status` varchar(16) NOT NULL DEFAULT 'OPEN' COMMENT '状态：OPEN 待实现 / PREPARED 对方已偷偷准备（仅标记人可见） / FULFILLED 已实现',
+    `prepared_by` varchar(50) DEFAULT NULL COMMENT '谁标记的「已准备」（只有对方能标自己许的愿）',
+    `prepared_at` bigint(20) DEFAULT NULL COMMENT '标记已准备的时间（毫秒时间戳）',
+    `fulfilled_at` bigint(20) DEFAULT NULL COMMENT '愿望实现的时间（毫秒时间戳）',
+    `created` bigint(20) NOT NULL COMMENT '创建时间（毫秒时间戳）',
+    `updated_at` bigint(20) DEFAULT NULL COMMENT '最近修改时间（毫秒时间戳）',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_couple8_wish_title` (`space_id`,`owner_user`,`title`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='愿望清单表：双方互相添加想要的东西，PREPARED 状态对被许愿人保密直到本人确认实现';
