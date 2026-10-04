@@ -69,7 +69,15 @@ public final class Wish {
 
     /** 偷偷标记「已准备」：只有被许愿的那一位能标，且实现过的愿望不再改。 */
     public void prepareBy(String me, long at) {
-        requireOpenToPrepare(me);
+        // 顺序即隐私：先过归属闸门，再谈状态。否则许愿人重复点一次就会收到
+        // 「已经标过『已准备』了」——这句话本身把惊喜说出去了（本地真后端探针实测到）。
+        requireCounterpartCanTouchPreparation(me);
+        if (STATUS_FULFILLED.equals(status)) {
+            throw new RuleViolation("这个愿望已经实现啦");
+        }
+        if (STATUS_PREPARED.equals(status)) {
+            throw new RuleViolation("已经标过「已准备」了，别再点一次");
+        }
         this.status = STATUS_PREPARED;
         this.preparedBy = me;
         this.preparedAt = at;
@@ -77,6 +85,7 @@ public final class Wish {
 
     /** 撤销「已准备」：只有当初点的那个人能撤，别人撤等于偷看别人的进度。 */
     public void unprepareBy(String me) {
+        requireCounterpartCanTouchPreparation(me);
         if (!STATUS_PREPARED.equals(status)) {
             throw new RuleViolation("这条愿望没被标记过「已准备」");
         }
@@ -141,15 +150,13 @@ public final class Wish {
         return STATUS_PREPARED.equals(status) && ownerUser.equals(me);
     }
 
-    private void requireOpenToPrepare(String me) {
-        if (STATUS_FULFILLED.equals(status)) {
-            throw new RuleViolation("这个愿望已经实现啦");
-        }
-        if (STATUS_PREPARED.equals(status)) {
-            throw new RuleViolation("已经标过「已准备」了，别再点一次");
-        }
+    /**
+     * 「已准备」这一格只有对方能碰。许愿人自己来动时必须在这一层就被挡下，
+     * 而且话术不能透露当前状态——否则等于告诉她「有人准备了」。
+     */
+    private void requireCounterpartCanTouchPreparation(String me) {
         if (ownerUser.equals(me)) {
-            throw new RuleViolation("这是你自己许的愿——「已准备」是给对方偷偷标的");
+            throw new RuleViolation("这条愿望是你自己许的，「已准备」那一格是给 TA 留的");
         }
     }
 

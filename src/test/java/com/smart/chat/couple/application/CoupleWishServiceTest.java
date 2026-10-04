@@ -136,16 +136,20 @@ class CoupleWishServiceTest {
     }
 
     @Test
-    void onlyThePartnerCanMarkAndOnlyTheMarkerCanUndo() {
+    void ownerCannotTouchPreparationWithoutLeakingItsState() {
         stubSpace();
         Bag bag = new Bag().stub();
         CoupleWishPO row = bag.add("alice", "alice", "想要机械键盘", CoupleWishPO.STATUS_OPEN);
 
         assertThatThrownBy(() -> service.prepare("alice", row.getId()))
-                .isInstanceOf(BusinessException.class).hasMessageContaining("给对方偷偷标的");
+                .isInstanceOf(BusinessException.class).hasMessageContaining("给 TA 留的");
         service.prepare("bob", row.getId());
+        // 已标记之后再让许愿人点一次：话术必须与「没标记过」时一模一样，
+        // 不能出现「已经标过了」这种把惊喜说出去的字（本地真后端探针实测到的缺陷）
+        assertThatThrownBy(() -> service.prepare("alice", row.getId()))
+                .isInstanceOf(BusinessException.class).hasMessage("这条愿望是你自己许的，「已准备」那一格是给 TA 留的");
         assertThatThrownBy(() -> service.unprepare("alice", row.getId()))
-                .isInstanceOf(BusinessException.class).hasMessageContaining("就只能由谁撤掉");
+                .isInstanceOf(BusinessException.class).hasMessage("这条愿望是你自己许的，「已准备」那一格是给 TA 留的");
         service.unprepare("bob", row.getId());
         assertThat(row.getStatus()).isEqualTo(CoupleWishPO.STATUS_OPEN);
     }

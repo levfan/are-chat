@@ -38,12 +38,35 @@ class WishTest {
     void onlyThePartnerCanMarkItPrepared() {
         Wish wish = aWish();
         assertThatThrownBy(() -> wish.prepareBy("alice", 1L))
-                .isInstanceOf(RuleViolation.class).hasMessageContaining("给对方偷偷标的");
+                .isInstanceOf(RuleViolation.class).hasMessageContaining("给 TA 留的");
         wish.prepareBy("bob", 100L);
         assertThat(wish.preparedFlag()).isTrue();
         assertThat(wish.status()).isEqualTo(Wish.STATUS_PREPARED);
         assertThatThrownBy(() -> wish.prepareBy("bob", 200L))
                 .isInstanceOf(RuleViolation.class).hasMessageContaining("别再点一次");
+    }
+
+    @Test
+    void ownerRejectedMessagesMustNotRevealThatSomethingWasPrepared() {
+        // 真后端探针实测到的缺陷：许愿人重复点一次，旧顺序会回她「已经标过「已准备」了」，
+        // 这句话本身就把惊喜说出去了。归属闸门必须排在状态闸门前面。
+        Wish prepared = aWish();
+        prepared.prepareBy("bob", 100L);
+
+        assertThatThrownBy(() -> prepared.prepareBy("alice", 200L))
+                .isInstanceOf(RuleViolation.class)
+                .hasMessage("这条愿望是你自己许的，「已准备」那一格是给 TA 留的");
+        assertThatThrownBy(() -> prepared.unprepareBy("alice"))
+                .isInstanceOf(RuleViolation.class)
+                .hasMessage("这条愿望是你自己许的，「已准备」那一格是给 TA 留的");
+        // 两条话术对许愿人来说与「没被标记过」的开放愿望完全同形，看不出状态差别
+        Wish open = aWish();
+        assertThatThrownBy(() -> open.prepareBy("alice", 200L))
+                .isInstanceOf(RuleViolation.class)
+                .hasMessage("这条愿望是你自己许的，「已准备」那一格是给 TA 留的");
+        assertThatThrownBy(() -> open.unprepareBy("alice"))
+                .isInstanceOf(RuleViolation.class)
+                .hasMessage("这条愿望是你自己许的，「已准备」那一格是给 TA 留的");
     }
 
     @Test
@@ -60,7 +83,14 @@ class WishTest {
     void onlyTheMarkerCanTakeThePreparationBack() {
         Wish wish = aWish();
         wish.prepareBy("bob", 100L);
-        assertThatThrownBy(() -> wish.unprepareBy("alice"))
+        // 许愿人先被归属闸门挡下（见上一条用例），所以「谁来撤」这条规则要用第三人来验：
+        // 两人空间里正常路径走不到它，但它是这条状态机的最后一道归属保护，不能当死代码。
+        Wish threeWay = Wish.restore("w9", "carol", "alice", "第三人视角", null,
+                Wish.STATUS_PREPARED, "bob", 100L, null);
+        assertThatThrownBy(() -> threeWay.unprepareBy("dave"))
+                .isInstanceOf(RuleViolation.class).hasMessageContaining("就只能由谁撤掉");
+
+        assertThatThrownBy(() -> wish.unprepareBy("nobody-but-marker"))
                 .isInstanceOf(RuleViolation.class).hasMessageContaining("就只能由谁撤掉");
         wish.unprepareBy("bob");
         assertThat(wish.status()).isEqualTo(Wish.STATUS_OPEN);
