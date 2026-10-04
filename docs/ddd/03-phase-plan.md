@@ -11,22 +11,28 @@
 | **B 核心域战术改造** | 仅 `couple`：实体改名 `*PO` 落 persistence；抽 `CoupleSpace`/`Intimacy` 聚合与 `IntimacyCalculator` 策略；声明 `CoupleSpaceRepository`/`PointLedgerRepository`/`CoupleEventPublisher` 端口并写适配器；Service 退化为编排 | 有，但**必须行为等价**：现有 158 用例（含 `CoupleIntimacyTest` 锁的六项权重、单向贴贴不算一天、阶梯阈值）不动断言直接通过 | `mvn -o test` 全绿 + 心动值六项逐项断言仍锁台账真插一行 | 端口/聚合/适配器各一 commit |
 | **C 破环** | 拆 `01` 第二节列出的 4 个包级环 | 有（依赖方向），无功能变化 | 重跑 `ddd-deps.mjs` 输出「无环」；先证明脚本**能测出环**（以现有 4 个环为阳性对照） | 一环一 commit |
 | **D 守卫与文档** | `ArchitectureGuardTest` 四条规则 + allowlist；`EntityReflectionGuardTest` 加实体总数断言；更新 map skill / wiki / `CONTEXT.md` | 无 | 守卫插违规必红、还原必绿；文档与代码逐条对齐 | 测试与文档各一 commit |
+| **E 全上下文战术收口**（2026-10-05，见 ADR-0008） | 其余四个上下文做完整战术改造；`couple` 把剩下 21 张表与 15 个 Service 收口；守卫第 5 条（PO 不外泄）+ 账本清空 | 有（依赖方向与类型归属），但**对外行为必须等价** | 路由/WS 事件/VO 字段/中文文案与基线集合逐条对齐；`mvn -o clean test` 全绿；账本清空后仍能注入违规变红 | 一上下文（或一组表）一 commit，守卫与文档各一 commit |
 
-不在本轮范围（明确不做，避免"铺开而半吊子"）：`messaging`/`identity`/`platform`/`filestorage` 的**战术改造**（聚合与端口）。它们只拿到 A 的分层骨架，状态在下表标为「战略分层」，由 allowlist 记账，未来按需求逐域推进。
+~~不在本轮范围：`messaging`/`identity`/`platform`/`filestorage` 的战术改造（聚合与端口）。~~
+——这句话在 2026-10-05 被 ADR-0008 作废：四个支撑域连同 `couple` 的其余表全部做到战术改造完成，
+本轮范围边界与"有意没做"清单改由 `docs/ddd/06-ddd-standard.md` 第二节末尾那张表承载（不引事件总线、不拆模块、不做 CQRS、VO 不搬 api）。
 
 ## 二、改造状态表（唯一权威，改一处代码就改一行）
 
-实测于 2026-10-04 Phase A/C/D 收官后（判据：`ArchitectureGuardTest` 4 条 + `.tmp-audit/ddd-deps.mjs` 现扫）：
+**2026-10-05 收口后：五个上下文全部「战术改造完成」，本表不再有"未改造"这一档。**
+判据是 `docs/ddd/05-tactical-playbook.md` 第一节五条 + `docs/ddd/06-ddd-standard.md` 的 12 条标准；
+实测数字来自脚本（`@TableName` 命中数 / 端口数 / 适配器数 / 守卫越界数），不是估的。
 
-| 上下文 | 分层实况 | domain 层 | 跨上下文 | 备注 |
-|---|---|---|---|---|
-| `identity` | api/application/domain/infrastructure | **有**（AccountDirectory、Account、AccountCascade、ProfileProvisioner、WelcomeMessenger、AdminAlerter、AdminNotifyChannel） | **零出向依赖**，纯上游 | 账号是谁都要问的通用域，方向理应当如此 |
-| `messaging` | api/application/domain/infrastructure | **有**（发布语言 7 个：CoupleEventPublisher、PresenceReader、AnnouncementBroadcaster、PeerProfileReader、FriendshipChecker、OutboundNotifySink、NotifySinkRegistry） | → identity.domain | 传输细节（帧格式、payload、注册表）不再外泄 |
-| `couple` | api/application/domain/infrastructure | **有**（CoupleSpace 聚合 + CoupleSpaceRepository 端口 + IntimacySource/IntimacyCalculator 策略） | → identity.domain、messaging.domain | 心动值六项加权与七级阶梯已从 CoupleService 整块搬进 domain；空间写路径（注销连带解散）走聚合+仓储 |
-| `platform` | api/application/infrastructure | 无 | → identity.domain、messaging.domain | 公告端点已从 identity 归位回来（路由未变） |
-| `filestorage` | api/application/infrastructure | 无 | 只到 sharedkernel/bootstrap.properties | 4 个文件，暂无改造需求 |
+| 上下文 | 分层实况 | domain 层（文件数 / 端口数 / 适配器数） | PO 外泄 | 跨上下文 | 备注 |
+|---|---|---|---|---|---|
+| `identity` | api/application/domain/infrastructure | 15 / 3 / 3 | **0** | **零出向依赖**，纯上游 | `Account` 聚合 + `AccountRules` 无状态规则 + `RegistrationApplication` 单向状态机（重复处理 409）+ `AdminAudit` 薄流水 + `SmsCode` 验证码规则 |
+| `messaging` | api/application/domain/infrastructure | 24 / 7 / 7 | **0** | → identity.domain | 7 张表全部 `*PO`；`Friendship`/`FriendRequest`/`PrivateMessage`/`Conversation`/`MessageStar`/`MessageReaction`/`UserProfile` 各带端口，7 个发布语言端口不变 |
+| `couple` | api/application/domain/infrastructure | 52 / 22 / 22 | **0** | → identity.domain、messaging.domain | 22 张表逐张建聚合或薄实体；心动值/贴贴/心情/求抱抱/安全词/饭票/轮盘/加班/愿望券/愿望清单/刮刮乐/盲盒/打卡七档/每日一问/收藏卡/好事簿/通知副本全在领域层有归属；`RuleViolation` 带对外状态码（400/403/404/409） |
+| `platform` | api/application/domain/infrastructure | 8 / 2 / 2 | **0** | → identity.domain、messaging.domain | `Announcement` 发布/关闭单向状态机 + 同一时刻只一条生效 + `AnnouncementRead` 薄流水；通知渠道配置端口 |
+| `filestorage` | api/application/domain/infrastructure | 8 / 1 / 1 | **0** | 只到 sharedkernel/bootstrap.properties | `UploadedFile` + 三个策略对象（`FileNaming` 清洗、`UploadAdmission` 扩展名黑名单、`StoragePath` 内容寻址与防穿越）；唯一索引冲突翻译成领域事实 `ContentAlreadyStored` |
 
-**Phase B 待做的具体事**（写清楚，别让它变成"以后再说"）：19 个 `@TableName` 实体改名 `*PO`（ADR-0002）；抽 `couple.domain` 的 CoupleSpace 聚合、IntimacyCalculator（心动值六项加权，`CoupleIntimacyTest` 已锁死权重与阈值）、Repository 端口与适配器。**不动**的行为口径：WS 事件名、路由、响应字段、心动值分值。
+历史行（Phase A/C/D 时期的"未改造"状态）由本节上方第一段的判据取代；`TACTICAL_PENDING` 已清空，
+守卫第 5 条从此无条件生效——任何一层（api/application/domain）重新 import 本上下文 PO/Mapper 都会让构建红。
 
 ## 2.5 验收台账（本轮实际退出码，不是计划）
 
@@ -61,3 +67,11 @@
 - B-2 领域层：`couple/domain/intimacy/{IntimacySource,IntimacyCalculator}`（六项权重 1/2/2/3/2/1 与阈值 0/50/150/300/500/800/1300 原样搬入，负数供数直接拒）、`couple/domain/space/{CoupleSpace,CoupleSpaceRepository}` + `infrastructure/persistence/CoupleSpaceRepositoryAdapter`（**只回写聚合持有的列**，cityA/cityB 有测试锁住不被清空）。`SpaceCascadeAdapter` 改走聚合。
 - 新增 18 条测试（计算器 8 / 聚合 7 / 适配器 3），全仓 `mvn -o test` **180 用例 0 失败**；`CoupleIntimacyTest` 断言一字未改仍然通过 = 行为等价护栏生效。
 - **仍待做的 B 部分（不含糊过去）**：其余 18 张表尚无聚合（好事簿/贴贴/安全词/饭票/轮盘/加班/愿望券/刮刮乐/盲盒等），目前仍是「Service 直接操作 PO」的事务脚本；`CoupleService` 里除心动值外仍兼着取数与拼装。按 ADR-0005 的节奏，等某张卡真要加规则时再抽，不预先造空聚合。
+
+### 2.7 Phase E 完成账（2026-10-05，全上下文收口）
+
+- 起点基线 267 用例 → 收口后 **563 用例 0 失败**（`mvn -o clean test` MVN_EXIT=0 / BUILD SUCCESS）。净增 296 条：新聚合与适配器单测为主，**既有断言一条没删**（两处 `verify(...).updateById` 改 `verify(...).save` 是端口只有一个写方法造成的次数变化，仍锁"写了几次"，`CoupleEchoServiceTest` / `CoupleCeremonyServiceTest` / `CoupleQuestionServiceTest` 各自在 commit body 里交代过）。
+- 35 张 `@TableName` 实体 = 35 个仓储端口 = 35 个适配器，全部 `*PO` 命名（`posBad=0`）；五个上下文的 `api`/`application`/`domain` 对 `infrastructure.persistence` 的 import 数 **0**。
+- 守卫新增：第 5 条（PO 不外泄，含内联全限定写法）、`tacticalLedgerMatchesReality`（账本必须等于实测违规集合，两个方向都拦）、domain 注解纯净。三条都做过注入变红实测，见 `06` 第三节台账。
+- 顺带修掉一个既有偶发红灯：`RequestLogEndToEndTest` 的完成行竞态（等到位再断言 + 变异检验证明没变恒绿），与分层无关，单独 `fix(test)` commit。
+- 过程与手法：五上下文一律照 `05-tactical-playbook.md` 五条判据 + 五种模板；identity/messaging/platform+filestorage 与 couple 的三组表由并行 agent 在各自 worktree 施工、主线程合并并按同一口径复测（契约 diff 独立重跑，不信 agent 的汇报）。

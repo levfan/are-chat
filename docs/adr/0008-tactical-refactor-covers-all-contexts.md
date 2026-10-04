@@ -38,3 +38,25 @@ ADR-0005 决定「只有 `couple` 做战术改造，其余四个上下文停在�
 - 负面：PO ↔ 聚合的双向翻译是新增样板（约 40 个适配器），读代码要多跳一层；这是 ADR-0002 已经认过的成本，本轮把它付到全项目。
 - 判据：任何人看到 `filestorage/domain` 里的薄实体时，能在本页与 `05` 第二节查到"有意保持薄"，而不是"改造没做完"。
 - 完成度以 `docs/ddd/03-phase-plan.md` 的状态表与本轮验收台账为准。
+
+## 落地结果（2026-10-05 收口，实测）
+
+七个决策全部执行完毕，无遗留欠账。逐项对账：
+
+| 决策 | 落地证据 |
+|---|---|
+| 1 五上下文做到战术改造完成 | `docs/ddd/06-ddd-standard.md` 第二节判定表全 ✅；267 → **563 用例 0 失败**，MVN_EXIT=0 |
+| 2 `*PO` 推广全项目 | 35 个 `@TableName` 类全部以 `PO` 结尾（脚本算的 `posBad=0`），业务名让给 35 个领域类型 |
+| 3 守卫第 5 条 + 账本 | `TACTICAL_PENDING` 现为**空集**；账本清空后注入不带 import 的 `Supplier<...persistence.CoupleUserPinPO>` 仍双双变红，还原后 6/6 绿 |
+| 4 platform / filestorage 补 domain | 各 8 个 domain 文件、2 与 1 个端口，都不是空包 |
+| 5 VO 留 application | 全仓 `find src/main/java -name '*VO.java'` = 0 个独立文件，VO 仍是 Service 内嵌 record，JSON 字段名与顺序未动 |
+| 6 不引事件总线 | 44 个 WS 事件名与推送时机集合与基线**逐条一致**（`ddd-contract.mjs` diff = 0） |
+| 7 不做 CQRS / 不拆模块 | 无新模块、无新依赖（`pom.xml` 本轮零改动） |
+
+执行中额外发现并修掉的两个"守卫自己会漏"的洞（都因实测而改，不是设计时想到）：
+`domainLayerStaysPure` 只按 import 查框架依赖会被全限定注解绕过；`poLeaks` 只查 import 会被内联
+`com.smart.chat.x.infrastructure.persistence.FooPO` 绕过——两条都改成"正文也扫"，并各自做了变红证明。
+
+一处诚实记账：filestorage 的 `UploadedFile.register` 新增三条入口不变式文案
+（`文件必须有名字`／`存储路径不能为空`／`文件指纹不合法`），现役管道上游已清洗裁决过，走不到；
+`同一内容已在库中：` 是 `DuplicateKeyException` 的领域翻译，回读语义与改造前一致（两条用例分别锁适配器翻译与用例回读）。
