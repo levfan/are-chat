@@ -1,7 +1,7 @@
 package com.smart.chat.couple.application;
 
-import com.smart.chat.couple.infrastructure.persistence.CoupleQuestOvertimePO;
-import com.smart.chat.couple.infrastructure.persistence.CoupleQuestOvertimeMapper;
+import com.smart.chat.couple.domain.quest.QuestOvertime;
+import com.smart.chat.couple.domain.quest.QuestOvertimeRepository;
 import com.smart.chat.couple.domain.space.CoupleSpace;
 import com.smart.chat.couple.domain.space.CoupleSpaceRepository;
 import com.smart.chat.sharedkernel.web.BusinessException;
@@ -16,7 +16,6 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Locale;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -32,7 +31,10 @@ import static org.mockito.Mockito.when;
 /**
  * 加班预报与留灯（保留卡 `couple-quest-overtime`）单测：每人每天一行 upsert 与小时钳制、
  * 灯卡只有对方能留、同一行在两侧的视角不同、无空间 404。
- * 关卡预告/战报/陪护单/静音舱/搬家/低谷/小胜利/关口预约 随功能下线，对应用例一并删除。
+ * <p>
+ * Service 改走 {@link QuestOvertimeRepository} 端口后，这里用内存领域列表复刻 upsert/查询语义；
+ * 期望值（钳后小时、灯卡文字、留灯人、视角、事件名）与改造前一字未改。insert-vs-update 落到
+ * {@code QuestOvertimeRepositoryAdapterTest} 验。
  */
 @ExtendWith(MockitoExtension.class)
 class CoupleQuestServiceTest {
@@ -40,7 +42,7 @@ class CoupleQuestServiceTest {
     @Mock
     private CoupleSpaceRepository spaceRepository;
     @Mock
-    private CoupleQuestOvertimeMapper overtimeMapper;
+    private QuestOvertimeRepository overtimeRepository;
     @Mock
     private ImPushService push;
 
@@ -49,7 +51,7 @@ class CoupleQuestServiceTest {
 
     private static final String DAY = LocalDate.now().toString();
 
-    private final List<CoupleQuestOvertimePO> overtimes = new ArrayList<>();
+    private final List<QuestOvertime> overtimes = new ArrayList<>();
 
     @BeforeEach
     void setUp() {
@@ -57,31 +59,47 @@ class CoupleQuestServiceTest {
         lenient().when(spaceRepository.findActiveByMember("alice")).thenReturn(Optional.of(space));
         lenient().when(spaceRepository.findActiveByMember("bob")).thenReturn(Optional.of(space));
 
-        lenient().when(overtimeMapper.find(eq("s1"), any(), any())).thenAnswer(inv -> overtimes.stream()
-                .filter(o -> o.getDay().equals(inv.getArgument(1)) && o.getFromUser().equals(inv.getArgument(2)))
-                .findFirst().orElse(null));
-        lenient().when(overtimeMapper.findByDay(eq("s1"), any())).thenAnswer(inv -> overtimes.stream()
-                .filter(o -> o.getDay().equals(inv.getArgument(1))).toList());
-        lenient().when(overtimeMapper.insert(any(CoupleQuestOvertimePO.class))).thenAnswer(inv -> {
-            overtimes.add(inv.getArgument(0));
-            return 1;
+        lenient().when(overtimeRepository.findBySpaceAndUserAndDay(eq("s1"), any(), any())).thenAnswer(inv -> {
+            String user = inv.getArgument(1);
+            String day = inv.getArgument(2);
+            return overtimes.stream().filter(o -> o.fromUser().equals(user) && o.day().equals(day)).findFirst();
         });
-        lenient().when(overtimeMapper.selectById(any())).thenAnswer(inv -> overtimes.stream()
-                .filter(o -> o.getId().equals(inv.getArgument(0))).findFirst().orElse(null));
-        lenient().when(overtimeMapper.updateById(any(CoupleQuestOvertimePO.class))).thenAnswer(inv -> 1);
+        lenient().when(overtimeRepository.findByIdInSpace(eq("s1"), any())).thenAnswer(inv -> {
+            String id = inv.getArgument(1, String.class);
+            return overtimes.stream().filter(o -> o.id().equals(id)).findFirst();
+        });
+        lenient().when(overtimeRepository.listByDay(eq("s1"), any())).thenAnswer(inv -> {
+            String day = inv.getArgument(1);
+            return overtimes.stream().filter(o -> o.day().equals(day)).toList();
+        });
+        lenient().doAnswer(inv -> {
+            QuestOvertime overtime = inv.getArgument(0);
+            int idx = -1;
+            for (int i = 0; i < overtimes.size(); i++) {
+                if (overtimes.get(i).id().equals(overtime.id())) {
+                    idx = i;
+                    break;
+                }
+            }
+            if (idx >= 0) {
+                overtimes.set(idx, overtime);
+            } else {
+                overtimes.add(overtime);
+            }
+            return null;
+        }).when(overtimeRepository).save(any());
     }
 
     @Test
     void overtimeUpsertsOnceADayAndClampsHour() {
         service.overtime("alice", 26, "赶年结");
         assertThat(overtimes).hasSize(1);
-        assertThat(overtimes.get(0).getUntilHour()).isEqualTo(23);
+        assertThat(overtimes.get(0).untilHour()).isEqualTo(23);
 
         service.overtime("alice", 2, null);
         assertThat(overtimes).hasSize(1);
-        assertThat(overtimes.get(0).getUntilHour()).isEqualTo(13);
-        verify(overtimeMapper, times(1)).insert(any(CoupleQuestOvertimePO.class));
-        verify(overtimeMapper).updateById(any(CoupleQuestOvertimePO.class));
+        assertThat(overtimes.get(0).untilHour()).isEqualTo(13);
+        verify(overtimeRepository, times(2)).save(any());
         verify(push, times(2)).pushCoupleEvent(eq("quest-overtime"), eq("alice"), eq("bob"), any());
 
         assertThatThrownBy(() -> service.overtime("alice", 20, "说".repeat(41)))
@@ -94,15 +112,15 @@ class CoupleQuestServiceTest {
                 .isInstanceOf(BusinessException.class);
 
         service.overtime("alice", 22, "加班");
-        CoupleQuestOvertimePO row = overtimes.get(0);
+        QuestOvertime row = overtimes.get(0);
         // 自己给自己留灯不算数
-        assertThatThrownBy(() -> service.leaveLamp("alice", row.getId(), "我自己留"))
+        assertThatThrownBy(() -> service.leaveLamp("alice", row.id(), "我自己留"))
                 .isInstanceOf(BusinessException.class).hasMessageContaining("自己留不算");
-        assertThat(row.getLampBy()).isNotEqualTo("alice");
+        assertThat(row.lampBy()).isNotEqualTo("alice");
 
-        service.leaveLamp("bob", row.getId(), "灯给你留着");
-        assertThat(overtimes.get(0).getLamp()).isEqualTo("灯给你留着");
-        assertThat(overtimes.get(0).getLampBy()).isEqualTo("bob");
+        service.leaveLamp("bob", row.id(), "灯给你留着");
+        assertThat(overtimes.get(0).lamp()).isEqualTo("灯给你留着");
+        assertThat(overtimes.get(0).lampBy()).isEqualTo("bob");
         verify(push).pushCoupleEvent(eq("quest-lamp"), eq("bob"), eq("alice"), any());
         // 同一条加班预报，两侧各自视角：记的人看到的是自己那格，对方看到的是 partner 那格
         assertThat(service.board("alice").myOvertime().lampBy()).isEqualTo("bob");
@@ -115,6 +133,6 @@ class CoupleQuestServiceTest {
         when(spaceRepository.findActiveByMember("carol")).thenReturn(Optional.empty());
         assertThatThrownBy(() -> service.board("carol"))
                 .isInstanceOf(BusinessException.class).hasMessageContaining("情侣空间");
-        verify(overtimeMapper, never()).insert(any(CoupleQuestOvertimePO.class));
+        verify(overtimeRepository, never()).save(any());
     }
 }
