@@ -1,14 +1,12 @@
 package com.smart.chat.couple.application;
 
 import com.smart.chat.couple.infrastructure.content.CoupleCatchBank;
-import com.smart.chat.couple.infrastructure.persistence.CoupleCatchSafewordPO;
-import com.smart.chat.couple.infrastructure.persistence.CoupleCatchSafewordMapper;
-import com.smart.chat.couple.infrastructure.persistence.CoupleCatchSafewordUsePO;
-import com.smart.chat.couple.infrastructure.persistence.CoupleCatchSafewordUseMapper;
 import com.smart.chat.couple.domain.space.CoupleSpace;
 import com.smart.chat.couple.domain.space.CoupleSpaceRepository;
 import com.smart.chat.couple.domain.safeword.Safeword;
+import com.smart.chat.couple.domain.safeword.SafewordRepository;
 import com.smart.chat.couple.domain.safeword.SafewordUse;
+import com.smart.chat.couple.domain.safeword.SafewordUseRepository;
 import com.smart.chat.sharedkernel.web.BusinessException;
 import com.smart.chat.messaging.domain.CoupleEventPublisher;
 import org.springframework.stereotype.Service;
@@ -25,6 +23,9 @@ import java.util.List;
  *
  * 系统裁剪：暗中心愿本、雷区、敏感日历、话头存档、反话词典、聆听协议、话题池、
  * 今日一句话、年报全部下线，本类只剩安全词一条链路。
+ *
+ * DDD 收口：这里只编排——取会话身份、经端口取/存 {@link Safeword}/{@link SafewordUse} 聚合、
+ * 用领域方法守不变式（词已约定、一天一次、复盘归属）、投影成 VO、推 WS。判定全在聚合里，经 {@link DomainRules} 翻译。
  */
 import static com.smart.chat.couple.application.DomainRules.guard;
 import static com.smart.chat.couple.application.DomainRules.rule;
@@ -32,17 +33,17 @@ import static com.smart.chat.couple.application.DomainRules.rule;
 public class CoupleCatchService {
 
     private final CoupleSpaceRepository spaceRepository;
-    private final CoupleCatchSafewordMapper safewordMapper;
-    private final CoupleCatchSafewordUseMapper useMapper;
+    private final SafewordRepository safewordRepository;
+    private final SafewordUseRepository useRepository;
     private final CoupleEventPublisher push;
 
     private static final int LIST_USE = 20;
 
-    public CoupleCatchService(CoupleSpaceRepository spaceRepository, CoupleCatchSafewordMapper safewordMapper,
-                              CoupleCatchSafewordUseMapper useMapper, CoupleEventPublisher push) {
+    public CoupleCatchService(CoupleSpaceRepository spaceRepository, SafewordRepository safewordRepository,
+                              SafewordUseRepository useRepository, CoupleEventPublisher push) {
         this.spaceRepository = spaceRepository;
-        this.safewordMapper = safewordMapper;
-        this.useMapper = useMapper;
+        this.safewordRepository = safewordRepository;
+        this.useRepository = useRepository;
         this.push = push;
     }
 
@@ -77,15 +78,7 @@ public class CoupleCatchService {
         Safeword agreed = rule(() -> Safeword.agree(word, note));
         String w = agreed.word();
         String n = agreed.note();
-        CoupleCatchSafewordPO row = safewordMapper.find(space.id(), me);
-        if (row == null) {
-            safewordMapper.insert(CoupleCatchSafewordPO.of(space.id(), me, w, n));
-        } else {
-            row.setWord(w);
-            row.setNote(n);
-            row.setUpdatedAt(System.currentTimeMillis());
-            safewordMapper.updateById(row);
-        }
+        safewordRepository.save(space.id(), me, agreed);
         push.pushCoupleEvent("catch-safeword", me, space.partnerOf(me), CoupleCatchBank.safewordSetLine(w, n));
         return build(space, me, now);
     }
@@ -94,15 +87,15 @@ public class CoupleCatchService {
     public CatchVO useSafeword(String me) {
         CoupleSpace space = requireSpace(me);
         LocalDate now = LocalDate.now();
-        CoupleCatchSafewordPO mine = safewordMapper.find(space.id(), me);
-        guard(() -> Safeword.requireAgreed(mine == null ? null : Safeword.agree(mine.getWord(), mine.getNote())));
+        Safeword mine = safewordRepository.findBySpaceAndUser(space.id(), me).orElse(null);
+        guard(() -> Safeword.requireAgreed(mine));
         String day = now.toString();
-        CoupleCatchSafewordUsePO todayRow = useMapper.find(space.id(), day, me);
-        guard(() -> SafewordUse.assertNotAlreadyToday(todayRow == null ? null : SafewordUse.restore(
-                todayRow.getId(), todayRow.getDay(), todayRow.getUserName(), todayRow.getReflect())));
-        useMapper.insert(CoupleCatchSafewordUsePO.of(space.id(), day, me));
+        SafewordUse today = useRepository.findBySpaceAndDayAndUser(space.id(), me, day).orElse(null);
+        guard(() -> SafewordUse.assertNotAlreadyToday(today));
+        SafewordUse pause = SafewordUse.shout(day, me);
+        useRepository.save(space.id(), pause);
         push.pushCoupleEvent("catch-safeword-use", me, space.partnerOf(me),
-                CoupleCatchBank.safewordUseLine(nz(mine.getWord()), me));
+                CoupleCatchBank.safewordUseLine(nz(mine.word()), me));
         return build(space, me, now);
     }
 
@@ -110,12 +103,9 @@ public class CoupleCatchService {
     public CatchVO reflectUse(String me, String id, String reflect) {
         CoupleSpace space = requireSpace(me);
         LocalDate now = LocalDate.now();
-        CoupleCatchSafewordUsePO use = requireUse(space, id);
-        SafewordUse pause = SafewordUse.restore(use.getId(), use.getDay(), use.getUserName(), use.getReflect());
+        SafewordUse pause = requireUse(space, id);
         guard(() -> pause.reflectBy(me, reflect));
-        use.setReflect(pause.reflect());
-        use.setUpdatedAt(System.currentTimeMillis());
-        useMapper.updateById(use);
+        useRepository.save(space.id(), pause);
         push.pushCoupleEventBoth("catch-safeword-reflect", me, space.userA(), space.userB(),
                 CoupleCatchBank.safewordReflectLine(pause.reflect()));
         return build(space, me, now);
@@ -127,44 +117,41 @@ public class CoupleCatchService {
         String day = now.toString();
         String week = now.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY)).toString();
 
-        List<CoupleCatchSafewordPO> words = safewordMapper.findBySpace(space.id());
-        CoupleCatchSafewordPO myRow = words.stream().filter(w -> me.equals(w.getFromUser())).findFirst().orElse(null);
-        CoupleCatchSafewordPO partnerRow = words.stream().filter(w -> !me.equals(w.getFromUser())).findFirst().orElse(null);
-        List<CoupleCatchSafewordUsePO> useRows = useMapper.findBySpace(space.id());
-        String myWordText = myRow == null ? "" : nz(myRow.getWord());
-        String partnerWordText = partnerRow == null ? "" : nz(partnerRow.getWord());
+        List<Safeword> words = safewordRepository.listBySpace(space.id());
+        Safeword myRow = words.stream().filter(w -> me.equals(w.fromUser())).findFirst().orElse(null);
+        Safeword partnerRow = words.stream().filter(w -> !me.equals(w.fromUser())).findFirst().orElse(null);
+        List<SafewordUse> useRows = useRepository.listBySpace(space.id());
+        String myWordText = myRow == null ? "" : nz(myRow.word());
+        String partnerWordText = partnerRow == null ? "" : nz(partnerRow.word());
 
-        SafewordVO myWord = myRow == null ? null : new SafewordVO(myRow.getId(), true, myWordText,
-                nz(myRow.getNote()), countBy(useRows, me));
-        SafewordVO partnerWord = partnerRow == null ? null : new SafewordVO(partnerRow.getId(), false,
-                partnerWordText, nz(partnerRow.getNote()), countBy(useRows, partnerRow.getFromUser()));
+        SafewordVO myWord = myRow == null ? null : new SafewordVO(myRow.id(), true, myWordText,
+                nz(myRow.note()), countBy(useRows, me));
+        SafewordVO partnerWord = partnerRow == null ? null : new SafewordVO(partnerRow.id(), false,
+                partnerWordText, nz(partnerRow.note()), countBy(useRows, partnerRow.fromUser()));
 
         List<UseVO> uses = useRows.stream().limit(LIST_USE)
-                .map(u -> new UseVO(u.getId(), nz(u.getDay()), me.equals(u.getUserName()),
-                        me.equals(u.getUserName()) ? myWordText : partnerWordText, nz(u.getReflect())))
+                .map(u -> new UseVO(u.id(), nz(u.day()), me.equals(u.by()),
+                        me.equals(u.by()) ? myWordText : partnerWordText, nz(u.reflect())))
                 .toList();
         int monthUses = (int) useRows.stream()
-                .filter(u -> nz(u.getDay()).startsWith(day.substring(0, 7))).count();
+                .filter(u -> nz(u.day()).startsWith(day.substring(0, 7))).count();
         boolean usedTodayMine = useRows.stream()
-                .anyMatch(u -> day.equals(nz(u.getDay())) && me.equals(u.getUserName()));
+                .anyMatch(u -> day.equals(nz(u.day())) && me.equals(u.by()));
         boolean usedTodayPartner = useRows.stream()
-                .anyMatch(u -> day.equals(nz(u.getDay())) && !me.equals(u.getUserName()));
+                .anyMatch(u -> day.equals(nz(u.day())) && !me.equals(u.by()));
 
         return new CatchVO(day, week, myWord, partnerWord, uses, monthUses, usedTodayMine, usedTodayPartner);
     }
 
-    private int countBy(List<CoupleCatchSafewordUsePO> rows, String user) {
-        return (int) rows.stream().filter(u -> user != null && user.equals(u.getUserName())).count();
+    private int countBy(List<SafewordUse> rows, String user) {
+        return (int) rows.stream().filter(u -> user != null && user.equals(u.by())).count();
     }
 
     // ========== 取行与校验 ==========
 
-    private CoupleCatchSafewordUsePO requireUse(CoupleSpace space, String id) {
-        CoupleCatchSafewordUsePO row = id == null || id.isBlank() ? null : useMapper.selectById(id);
-        if (row == null || !space.id().equals(row.getSpaceId())) {
-            throw new BusinessException(404, "找不到那次暂停记录 🛑");
-        }
-        return row;
+    private SafewordUse requireUse(CoupleSpace space, String id) {
+        return useRepository.findByIdInSpace(space.id(), id)
+                .orElseThrow(() -> new BusinessException(404, "找不到那次暂停记录 🛑"));
     }
 
     private String limit(String text, int max, String what) {
