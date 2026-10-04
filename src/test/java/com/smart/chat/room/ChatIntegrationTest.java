@@ -61,6 +61,10 @@ class ChatIntegrationTest {
         Session session = container.connectToServer(client, uri);
         // 不依赖客户端 @OnOpen 的执行时序，直接使用 connectToServer 返回的会话
         client.attach(session);
+        // 等这条连接自己的欢迎帧：服务端是「先 register 再发欢迎」（ChatWebSocketBridge.onOpen 的 40→43 行），
+        // 所以收到欢迎帧就等于该昵称已进注册表。不等的话，A 可能在 B 注册完成前就发 typing，
+        // sendToUser 返回 0、那一帧被永久丢弃，用例只能等满 5s 超时——实测套件变慢时必挂。
+        client.await(msg -> msg.contains("\"type\":\"system\""));
         return client;
     }
 
