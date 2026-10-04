@@ -1,7 +1,7 @@
 package com.smart.chat.identity.application;
 
-import com.smart.chat.identity.infrastructure.persistence.RegistrationApplication;
-import com.smart.chat.identity.infrastructure.persistence.RegistrationApplicationMapper;
+import com.smart.chat.identity.domain.registration.RegistrationApplication;
+import com.smart.chat.identity.domain.registration.RegistrationApplicationRepository;
 import com.smart.chat.identity.infrastructure.security.PasswordHasher;
 import com.smart.chat.sharedkernel.web.BusinessException;
 import com.smart.chat.identity.domain.AdminAlerter;
@@ -27,12 +27,17 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-/** 77 注册审批工作流：申请校验、昵称选填、重复申请拦截 */
+/**
+ * 77 注册审批工作流：申请校验、昵称必填、重复申请拦截。
+ * <p>
+ * 接线从 {@code RegistrationApplicationMapper} 换成 {@link RegistrationApplicationRepository} 端口，
+ * 所有期望值（文案、状态字面量、脱敏后的手机号）保持原样。
+ */
 @ExtendWith(MockitoExtension.class)
 class RegistrationServiceTest {
 
     @Mock
-    private RegistrationApplicationMapper applicationMapper;
+    private RegistrationApplicationRepository applications;
 
     @Mock
     private AppUserService userService;
@@ -60,11 +65,11 @@ class RegistrationServiceTest {
                 .thenAnswer(inv -> inv.getArgument(0, String.class).trim().toLowerCase());
         lenient().when(userService.exists(anyString())).thenReturn(false);
         lenient().when(userService.find(anyString())).thenReturn(Optional.empty());
-        lenient().when(applicationMapper.findPendingByUsername(anyString())).thenReturn(Optional.empty());
-        lenient().when(applicationMapper.findPendingByPhone(anyString())).thenReturn(Optional.empty());
-        lenient().when(applicationMapper.countByStatus(anyString())).thenReturn(0L);
+        lenient().when(applications.findPendingByUsername(anyString())).thenReturn(Optional.empty());
+        lenient().when(applications.findPendingByPhone(anyString())).thenReturn(Optional.empty());
+        lenient().when(applications.countPending()).thenReturn(0L);
         lenient().when(passwordHasher.encode(anyString())).thenReturn("hash");
-        // 昵称校验逻辑在 AppUserService，这里按真实规则打桩（注册必填）
+        // 昵称校验逻辑在 AppUserService（本体是 AccountRules），这里按真实规则打桩（注册必填）
         lenient().when(userService.requireValidNickname(any()))
                 .thenAnswer(inv -> {
                     String nickname = inv.getArgument(0);
@@ -89,8 +94,8 @@ class RegistrationServiceTest {
 
         ArgumentCaptor<RegistrationApplication> captor =
                 ArgumentCaptor.forClass(RegistrationApplication.class);
-        verify(applicationMapper).insert(captor.capture());
-        assertThat(captor.getValue().getNickname()).isEqualTo("张三");
+        verify(applications).save(captor.capture());
+        assertThat(captor.getValue().nickname()).isEqualTo("张三");
         assertThat(vo.nickname()).isEqualTo("张三");
         assertThat(vo.status()).isEqualTo(RegistrationApplication.STATUS_PENDING);
     }
@@ -103,7 +108,7 @@ class RegistrationServiceTest {
         assertThatThrownBy(() -> apply("   "))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("请输入昵称");
-        verify(applicationMapper, never()).insert(any(RegistrationApplication.class));
+        verify(applications, never()).save(any(RegistrationApplication.class));
     }
 
     @Test
@@ -111,16 +116,38 @@ class RegistrationServiceTest {
         assertThatThrownBy(() -> apply("x".repeat(33)))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("昵称");
-        verify(applicationMapper, never()).insert(any(RegistrationApplication.class));
+        verify(applications, never()).save(any(RegistrationApplication.class));
     }
 
     @Test
     void applyNotifiesAdminsWithPendingCount() {
-        when(applicationMapper.countByStatus(RegistrationApplication.STATUS_PENDING)).thenReturn(7L);
+        when(applications.countPending()).thenReturn(7L);
 
         apply("张三");
 
         verify(notifyChannel).pushTextAsync(anyString(), anyString());
         verify(adminAlerter).publishPendingCount(anyList(), anyLong());
+    }
+
+    @Test
+    void applyMasksPhoneInAdminPush() {
+        // 站外推送只给脱敏手机号（139****1111），期望值与改造前的 mask() 结果一致
+        apply("张三");
+
+        ArgumentCaptor<String> body = ArgumentCaptor.forClass(String.class);
+        verify(notifyChannel).pushTextAsync(anyString(), body.capture());
+        assertThat(body.getValue()).contains("139****1111");
+        assertThat(body.getValue()).doesNotContain("13900001111");
+    }
+
+    @Test
+    void duplicatePendingUsernameIsRejectedBeforeSaving() {
+        when(applications.findPendingByUsername("zhangsan"))
+                .thenReturn(Optional.of(RegistrationApplication.submit("13900001111", "zhangsan", "张三", "hash")));
+
+        assertThatThrownBy(() -> apply("张三"))
+                .isInstanceOf(BusinessException.class)
+                .hasMessage("该用户名已有待审批的申请，请耐心等待管理员处理");
+        verify(applications, never()).save(any(RegistrationApplication.class));
     }
 }

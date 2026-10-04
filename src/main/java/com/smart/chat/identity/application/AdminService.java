@@ -1,11 +1,11 @@
 package com.smart.chat.identity.application;
 
-import com.smart.chat.identity.infrastructure.persistence.AdminAudit;
-import com.smart.chat.identity.infrastructure.persistence.AdminAuditMapper;
-import com.smart.chat.identity.infrastructure.persistence.AppUser;
-import com.smart.chat.identity.infrastructure.persistence.AppUserMapper;
-import com.smart.chat.identity.infrastructure.persistence.RegistrationApplication;
-import com.smart.chat.identity.infrastructure.persistence.RegistrationApplicationMapper;
+import com.smart.chat.identity.domain.account.Account;
+import com.smart.chat.identity.domain.account.AccountRepository;
+import com.smart.chat.identity.domain.audit.AdminAudit;
+import com.smart.chat.identity.domain.audit.AdminAuditRepository;
+import com.smart.chat.identity.domain.registration.RegistrationApplication;
+import com.smart.chat.identity.domain.registration.RegistrationApplicationRepository;
 import com.smart.chat.sharedkernel.web.BusinessException;
 import com.smart.chat.identity.domain.WelcomeMessenger;
 import com.smart.chat.identity.domain.AdminNotifyChannel;
@@ -20,9 +20,14 @@ import java.util.Map;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+import static com.smart.chat.identity.application.DomainRules.guard;
+
 /**
- * 77/79 管理员服务：注册申请审批（通过→开通账号+欢迎消息 / 拒绝→留原因）、
+ * 77/79 管理员用例编排：注册申请审批（通过→开通账号+欢迎消息 / 拒绝→留原因）、
  * 用户管理（搜索/禁用启用/重置密码）、操作审计（93）。
+ * <p>
+ * 「一份申请只能被处理一次」这条状态机闸门在 {@link RegistrationApplication} 里，
+ * 「注销账号不可再改状态」在 {@link Account} 里，这里只把它们串起来并把结果投成 VO / 写审计。
  */
 @Service
 public class AdminService {
@@ -32,17 +37,17 @@ public class AdminService {
     /** 79 用户管理视图 */
     public record AdminUserVO(String username, String phone, String nickname, String status, String role,
                               Long created, Long lastLoginAt) {
-        static AdminUserVO of(AppUser user) {
-            return new AdminUserVO(user.getUsername(), user.maskedPhone(), user.getNickname(),
-                    user.getStatus(), user.getRole(), user.getCreated(), user.getLastLoginAt());
+        static AdminUserVO of(Account account) {
+            return new AdminUserVO(account.username(), account.maskedPhone(), account.nickname(),
+                    account.status(), account.role(), account.created(), account.lastLoginAt());
         }
     }
 
     /** 93 审计视图 */
     public record AuditVO(String id, String actor, String action, String target, String detail, Long created) {
         static AuditVO of(AdminAudit audit) {
-            return new AuditVO(audit.getId(), audit.getActor(), audit.getAction(), audit.getTarget(),
-                    audit.getDetail(), audit.getCreated());
+            return new AuditVO(audit.id(), audit.actor(), audit.action(), audit.target(),
+                    audit.detail(), audit.created());
         }
     }
 
@@ -50,90 +55,79 @@ public class AdminService {
     private static final String RESET_ALPHABET = "abcdefghjkmnpqrstuvwxyz";
     private static final String RESET_DIGITS = "23456789";
 
-    private final RegistrationApplicationMapper applicationMapper;
-    private final AppUserMapper userMapper;
+    private final RegistrationApplicationRepository applications;
+    private final AccountRepository accounts;
     private final AppUserService userService;
-    private final AdminAuditMapper auditMapper;
+    private final AdminAuditRepository audits;
     private final WelcomeMessenger welcomeMessenger;
     private final AdminNotifyChannel notifyChannel;
 
-    public AdminService(RegistrationApplicationMapper applicationMapper, AppUserMapper userMapper,
-                        AppUserService userService, AdminAuditMapper auditMapper,
+    public AdminService(RegistrationApplicationRepository applications, AccountRepository accounts,
+                        AppUserService userService, AdminAuditRepository audits,
                         WelcomeMessenger welcomeMessenger,
                         AdminNotifyChannel notifyChannel) {
-        this.applicationMapper = applicationMapper;
-        this.userMapper = userMapper;
+        this.applications = applications;
+        this.accounts = accounts;
         this.userService = userService;
-        this.auditMapper = auditMapper;
+        this.audits = audits;
         this.welcomeMessenger = welcomeMessenger;
         this.notifyChannel = notifyChannel;
     }
 
+    // ===== 注册审批（77） =====
+
     public List<RegistrationApplication> applications(String status) {
-        return applicationMapper.findByStatus(status);
+        return applications.listByStatus(status);
     }
 
     public long pendingCount() {
-        return applicationMapper.countByStatus(RegistrationApplication.STATUS_PENDING);
+        return applications.countPending();
     }
 
     /** 审批通过：申请 → 正式账号 + 个人资料 + 欢迎消息（93） */
     @Transactional
-    public AppUser approve(String applicationId, String reviewer) {
+    public Account approve(String applicationId, String reviewer) {
         RegistrationApplication application = requireApplication(applicationId);
-        if (!RegistrationApplication.STATUS_PENDING.equals(application.getStatus())) {
-            throw new BusinessException(409, "该申请已处理过（" + application.getStatus() + "）");
-        }
-        AppUser user = userService.createAccount(application.getPhone(), application.getUsername(),
-                application.getNickname(), application.getPasswordHash(), AppUser.ROLE_USER);
+        long now = System.currentTimeMillis();
+        guard(() -> application.approve(reviewer, now));
+        Account user = userService.createAccount(application.phone(), application.username(),
+                application.nickname(), application.passwordHash(), Account.ROLE_USER);
 
-        application.setStatus(RegistrationApplication.STATUS_APPROVED);
-        application.setReviewedAt(System.currentTimeMillis());
-        application.setReviewedBy(reviewer);
-        applicationMapper.updateById(application);
+        applications.save(application);
 
-        sendWelcome(user.getUsername(), reviewer);
-        audit(reviewer, "APPROVE", user.getUsername(), "通过注册申请 " + application.getId());
+        sendWelcome(user.username(), reviewer);
+        audit(reviewer, "APPROVE", user.username(), "通过注册申请 " + application.id());
         // 78 审批结果免费渠道推送（失败不影响审批结果）
-        notifyChannel.applicationReviewed(user.getUsername(), true, reviewer);
-        log.info("注册申请已通过：username={} reviewer={}", user.getUsername(), reviewer);
+        notifyChannel.applicationReviewed(user.username(), true, reviewer);
+        log.info("注册申请已通过：username={} reviewer={}", user.username(), reviewer);
         return user;
     }
 
     @Transactional
     public void reject(String applicationId, String reviewer, String reason) {
         RegistrationApplication application = requireApplication(applicationId);
-        if (!RegistrationApplication.STATUS_PENDING.equals(application.getStatus())) {
-            throw new BusinessException(409, "该申请已处理过（" + application.getStatus() + "）");
-        }
-        String cleanReason = reason == null ? "" : reason.trim();
-        if (cleanReason.length() > 200) {
-            cleanReason = cleanReason.substring(0, 200);
-        }
-        application.setStatus(RegistrationApplication.STATUS_REJECTED);
-        application.setRejectReason(cleanReason);
-        application.setReviewedAt(System.currentTimeMillis());
-        application.setReviewedBy(reviewer);
-        applicationMapper.updateById(application);
-        audit(reviewer, "REJECT", application.getUsername(),
+        guard(() -> application.reject(reviewer, reason, System.currentTimeMillis()));
+        applications.save(application);
+        String cleanReason = application.rejectReason();
+        audit(reviewer, "REJECT", application.username(),
                 cleanReason.isEmpty() ? "拒绝注册申请（未填原因）" : "拒绝注册申请：" + cleanReason);
         // 78 审批结果免费渠道推送（失败不影响审批结果）
-        notifyChannel.applicationReviewed(application.getUsername(), false, reviewer);
+        notifyChannel.applicationReviewed(application.username(), false, reviewer);
     }
 
+    // ===== 用户管理（79） =====
+
     public List<AdminUserVO> users(String keyword) {
-        return userMapper.searchAll(keyword, 200).stream().map(AdminUserVO::of).toList();
+        return accounts.listForAdmin(keyword, 200).stream().map(AdminUserVO::of).toList();
     }
 
     /** 禁用/启用（注销用户不可再改状态，避免覆盖 CLOSED 语义） */
     @Transactional
     public void setUserStatus(String actor, String username, boolean active) {
-        AppUser user = userService.find(username)
+        Account user = userService.find(username)
                 .orElseThrow(() -> new BusinessException(404, "账号不存在：" + username));
-        if (AppUser.STATUS_CLOSED.equals(user.getStatus())) {
-            throw new BusinessException(400, "该账号已注销，不能修改状态");
-        }
-        userService.setStatus(username, active ? AppUser.STATUS_ACTIVE : AppUser.STATUS_DISABLED);
+        guard(user::assertAdminMayChangeStatus);
+        userService.setStatus(username, active ? Account.STATUS_ACTIVE : Account.STATUS_DISABLED);
         audit(actor, active ? "ENABLE" : "DISABLE", username, active ? "启用账号" : "禁用账号");
     }
 
@@ -150,26 +144,25 @@ public class AdminService {
         return password;
     }
 
+    // ===== 审计（93） =====
+
     public void audit(String actor, String action, String target, String detail) {
-        auditMapper.insert(AdminAudit.of(actor, action, target, detail));
+        audits.append(AdminAudit.written(actor, action, target, detail));
     }
 
     public List<AuditVO> auditLogs(int limit) {
-        return auditMapper.findLatest(limit).stream().map(AuditVO::of).toList();
+        return audits.listLatest(limit).stream().map(AuditVO::of).toList();
     }
 
     /** 在线管理员用户名（WS 审批待办推送的收件人） */
-    public Map<String, AppUser> admins() {
+    public Map<String, Account> admins() {
         return userService.admins().stream()
-                .collect(Collectors.toMap(AppUser::getUsername, Function.identity()));
+                .collect(Collectors.toMap(Account::username, Function.identity()));
     }
 
     private RegistrationApplication requireApplication(String applicationId) {
-        RegistrationApplication application = applicationMapper.selectById(applicationId);
-        if (application == null) {
-            throw new BusinessException(404, "申请不存在");
-        }
-        return application;
+        return applications.findById(applicationId)
+                .orElseThrow(() -> new BusinessException(404, "申请不存在"));
     }
 
     /** 93 新用户欢迎消息：以审批人身份发一条系统消息，登录即可见未读 */
@@ -180,6 +173,7 @@ public class AdminService {
         welcomeMessenger.sendSystemWelcome(reviewer, username, content);
     }
 
+    /** 随机临时密码：6 位易认字母 + 2 位易认数字 + 1 字母 + 1 数字，共 10 位 */
     private static String generatePassword() {
         StringBuilder password = new StringBuilder(10);
         for (int i = 0; i < 6; i++) {

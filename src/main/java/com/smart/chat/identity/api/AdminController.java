@@ -2,8 +2,8 @@ package com.smart.chat.identity.api;
 
 import com.smart.chat.identity.application.AdminService;
 import com.smart.chat.identity.application.AppUserService;
-import com.smart.chat.identity.infrastructure.persistence.AppUser;
-import com.smart.chat.identity.infrastructure.persistence.RegistrationApplication;
+import com.smart.chat.identity.domain.account.Account;
+import com.smart.chat.identity.domain.registration.RegistrationApplication;
 import com.smart.chat.sharedkernel.web.ApiResponse;
 import com.smart.chat.sharedkernel.web.BusinessException;
 import com.smart.chat.sharedkernel.web.Sessions;
@@ -41,11 +41,8 @@ public class AdminController {
     public record ApplicationVO(String id, String username, String nickname, String phone, String status,
                                 String rejectReason, Long created, Long reviewedAt, String reviewedBy) {
         static ApplicationVO of(RegistrationApplication app) {
-            String phone = app.getPhone();
-            String masked = phone == null || phone.length() < 7 ? phone
-                    : phone.substring(0, 3) + "****" + phone.substring(phone.length() - 4);
-            return new ApplicationVO(app.getId(), app.getUsername(), app.getNickname(), masked, app.getStatus(),
-                    app.getRejectReason(), app.getCreated(), app.getReviewedAt(), app.getReviewedBy());
+            return new ApplicationVO(app.id(), app.username(), app.nickname(), app.maskedPhone(), app.status(),
+                    app.rejectReason(), app.created(), app.reviewedAt(), app.reviewedBy());
         }
     }
 
@@ -75,8 +72,8 @@ public class AdminController {
     @PostMapping("/applications/{id}/approve")
     public ApiResponse<Map<String, String>> approve(@PathVariable String id, HttpSession session) {
         String reviewer = requireAdmin(session);
-        AppUser user = adminService.approve(id, reviewer);
-        return ApiResponse.ok(Map.of("username", user.getUsername(), "status", "APPROVED"));
+        Account user = adminService.approve(id, reviewer);
+        return ApiResponse.ok(Map.of("username", user.username(), "status", "APPROVED"));
     }
 
     @PostMapping("/applications/{id}/reject")

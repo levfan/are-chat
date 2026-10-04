@@ -3,8 +3,8 @@ package com.smart.chat.identity.api;
 import com.smart.chat.identity.application.AppUserService;
 import com.smart.chat.identity.application.RegistrationService;
 import com.smart.chat.identity.application.SmsCodeService;
-import com.smart.chat.identity.infrastructure.persistence.AppUser;
-import com.smart.chat.identity.infrastructure.persistence.RegistrationApplication;
+import com.smart.chat.identity.domain.account.Account;
+import com.smart.chat.identity.domain.registration.RegistrationApplication;
 import com.smart.chat.identity.infrastructure.throttle.LoginRateLimiter;
 import com.smart.chat.sharedkernel.web.BusinessException;
 import com.smart.chat.bootstrap.config.FastJsonWebConfig;
@@ -46,8 +46,8 @@ class AuthControllerTest {
     @MockitoBean
     private RegistrationService registrationService;
 
-    private AppUser alice() {
-        return AppUser.of("13800000001", "alice", "hash", "alice", "c0");
+    private Account alice() {
+        return Account.bootstrap("13800000001", "alice", "hash", Account.ROLE_USER);
     }
 
     @BeforeEach
@@ -157,7 +157,8 @@ class AuthControllerTest {
     @Test
     void meWithSessionReturnsUser() throws Exception {
         when(userService.find("bob")).thenReturn(Optional.of(
-                AppUser.of("13800000002", "bob", "hash", "bob", "c1")));
+                Account.restore("u-bob", "13800000002", "bob", "bob", "hash", "c1",
+                        Account.STATUS_ACTIVE, Account.ROLE_USER, 1L, null)));
 
         mockMvc.perform(get("/api/auth/me").sessionAttr("CurrentUser", "bob"))
                 .andExpect(status().isOk())

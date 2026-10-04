@@ -3,7 +3,7 @@ package com.smart.chat.identity.api;
 import com.smart.chat.identity.application.AppUserService;
 import com.smart.chat.identity.application.RegistrationService;
 import com.smart.chat.identity.application.SmsCodeService;
-import com.smart.chat.identity.infrastructure.persistence.AppUser;
+import com.smart.chat.identity.domain.account.Account;
 import com.smart.chat.identity.infrastructure.throttle.LoginRateLimiter;
 import com.smart.chat.sharedkernel.web.ApiResponse;
 import com.smart.chat.sharedkernel.web.BusinessException;
@@ -42,10 +42,10 @@ public class AuthController {
 
     public record LoginResult(String username, String nickname, String phone, String greeting, Long loginAt,
                               String role) {
-        static LoginResult of(AppUser user) {
-            return new LoginResult(user.getUsername(), user.getNickname(), user.maskedPhone(),
-                    "success:欢迎进入小帆船！", user.getLastLoginAt(),
-                    user.getRole() == null ? AppUser.ROLE_USER : user.getRole());
+        static LoginResult of(Account user) {
+            return new LoginResult(user.username(), user.nickname(), user.maskedPhone(),
+                    "success:欢迎进入小帆船！", user.lastLoginAt(),
+                    user.role() == null ? Account.ROLE_USER : user.role());
         }
     }
 
@@ -122,7 +122,7 @@ public class AuthController {
             throw new BusinessException(429, "尝试次数过多，请 " + seconds + " 秒后再试");
         }
         try {
-            AppUser user = userService.login(account, req.password());
+            Account user = userService.login(account, req.password());
             rateLimiter.reset(key);
             startSession(session, user);
             return ApiResponse.ok(LoginResult.of(user));
@@ -149,12 +149,12 @@ public class AuthController {
         if (username == null) {
             throw new BusinessException(401, "还没有登录哦");
         }
-        AppUser user = userService.find(username)
+        Account user = userService.find(username)
                 .orElseThrow(() -> new BusinessException(401, "账号不存在或已注销"));
         Object loginAt = session.getAttribute(SESSION_LOGIN_AT);
-        return ApiResponse.ok(new LoginResult(user.getUsername(), user.getNickname(), user.maskedPhone(),
+        return ApiResponse.ok(new LoginResult(user.username(), user.nickname(), user.maskedPhone(),
                 "success:欢迎回来", loginAt instanceof Long ? (Long) loginAt : null,
-                user.getRole() == null ? AppUser.ROLE_USER : user.getRole()));
+                user.role() == null ? Account.ROLE_USER : user.role()));
     }
 
     /** 80 修改密码：旧密码校验 + 新密码强度校验 */
@@ -175,8 +175,8 @@ public class AuthController {
         return ApiResponse.ok();
     }
 
-    private void startSession(HttpSession session, AppUser user) {
-        session.setAttribute(Sessions.SESSION_USER, user.getUsername());
+    private void startSession(HttpSession session, Account user) {
+        session.setAttribute(Sessions.SESSION_USER, user.username());
         session.setAttribute(SESSION_LOGIN_AT, System.currentTimeMillis());
     }
 }

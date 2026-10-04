@@ -1,8 +1,8 @@
 package com.smart.chat.identity.application;
 
-import com.smart.chat.identity.infrastructure.persistence.AppUser;
-import com.smart.chat.identity.infrastructure.persistence.RegistrationApplication;
-import com.smart.chat.identity.infrastructure.persistence.RegistrationApplicationMapper;
+import com.smart.chat.identity.domain.account.Account;
+import com.smart.chat.identity.domain.registration.RegistrationApplication;
+import com.smart.chat.identity.domain.registration.RegistrationApplicationRepository;
 import com.smart.chat.identity.infrastructure.security.PasswordHasher;
 import com.smart.chat.sharedkernel.web.BusinessException;
 import com.smart.chat.identity.domain.AdminAlerter;
@@ -18,6 +18,9 @@ import java.util.Optional;
  * 77 注册审批工作流：申请 → 管理员审批 → 开通账号。
  * 申请阶段只写 registration_application 表，不产生任何合法用户；
  * 审批通过（AdminService）才把申请搬进 app_user。模拟用户播种已移除。
+ * <p>
+ * 战术改造后本类只做编排：格式校验调领域规则（{@code AccountRules} 经 {@code AppUserService} 门面），
+ * 在途申请/重名挡住靠仓储查询，「新申请一定 PENDING」由 {@link RegistrationApplication#submit} 守。
  */
 @Service
 public class RegistrationService {
@@ -28,25 +31,22 @@ public class RegistrationService {
     public record ApplicationVO(String id, String username, String nickname, String phone, String status,
                                 String rejectReason, Long created, Long reviewedAt, String reviewedBy) {
         static ApplicationVO of(RegistrationApplication app) {
-            String phone = app.getPhone();
-            String masked = phone == null || phone.length() < 7 ? phone
-                    : phone.substring(0, 3) + "****" + phone.substring(phone.length() - 4);
-            return new ApplicationVO(app.getId(), app.getUsername(), app.getNickname(), masked, app.getStatus(),
-                    app.getRejectReason(), app.getCreated(), app.getReviewedAt(), app.getReviewedBy());
+            return new ApplicationVO(app.id(), app.username(), app.nickname(), app.maskedPhone(), app.status(),
+                    app.rejectReason(), app.created(), app.reviewedAt(), app.reviewedBy());
         }
     }
 
-    private final RegistrationApplicationMapper applicationMapper;
+    private final RegistrationApplicationRepository applications;
     private final AppUserService userService;
     private final PasswordHasher passwordHasher;
     private final SmsCodeService smsCodeService;
     private final AdminNotifyChannel notifyChannel;
     private final AdminAlerter adminAlerter;
 
-    public RegistrationService(RegistrationApplicationMapper applicationMapper, AppUserService userService,
+    public RegistrationService(RegistrationApplicationRepository applications, AppUserService userService,
                                PasswordHasher passwordHasher, SmsCodeService smsCodeService,
                                AdminNotifyChannel notifyChannel, AdminAlerter adminAlerter) {
-        this.applicationMapper = applicationMapper;
+        this.applications = applications;
         this.userService = userService;
         this.passwordHasher = passwordHasher;
         this.smsCodeService = smsCodeService;
@@ -66,27 +66,27 @@ public class RegistrationService {
         if (userService.exists(name)) {
             throw new BusinessException(409, "该用户名已经注册过了，直接登录吧");
         }
-        if (userService.find(normalizePhoneAsAccount(validPhone)).isPresent()) {
+        if (userService.find(usernameOfPhone(validPhone)).isPresent()) {
             throw new BusinessException(409, "该手机号已经注册过了，直接登录吧");
         }
-        if (applicationMapper.findPendingByUsername(name).isPresent()) {
+        if (applications.findPendingByUsername(name).isPresent()) {
             throw new BusinessException(409, "该用户名已有待审批的申请，请耐心等待管理员处理");
         }
-        if (applicationMapper.findPendingByPhone(validPhone).isPresent()) {
+        if (applications.findPendingByPhone(validPhone).isPresent()) {
             throw new BusinessException(409, "该手机号已有待审批的申请，请耐心等待管理员处理");
         }
 
         RegistrationApplication application =
-                RegistrationApplication.of(validPhone, name, validNickname, passwordHasher.encode(password));
-        applicationMapper.insert(application);
+                RegistrationApplication.submit(validPhone, name, validNickname, passwordHasher.encode(password));
+        applications.save(application);
         log.info("新注册申请：username={} nickname={} phone={}", name, validNickname, validPhone);
 
         // 78 免费渠道推送 + 站内待办（推送失败不影响申请）
         notifyChannel.pushTextAsync("小帆船 新用户注册申请",
-                "**" + name + "**（手机号 " + mask(validPhone) + "）申请加入小帆船，请到管理后台审批。");
+                "**" + name + "**（手机号 " + application.maskedPhone() + "）申请加入小帆船，请到管理后台审批。");
         // 78 在线管理员实时收到待办角标
-        adminAlerter.publishPendingCount(userService.admins().stream().map(AppUser::getUsername).toList(),
-                applicationMapper.countByStatus(RegistrationApplication.STATUS_PENDING));
+        adminAlerter.publishPendingCount(userService.admins().stream().map(Account::username).toList(),
+                applications.countPending());
         return ApplicationVO.of(application);
     }
 
@@ -96,7 +96,7 @@ public class RegistrationService {
         if (key.isEmpty()) {
             throw new BusinessException(400, "请输入申请时使用的用户名或手机号");
         }
-        return applicationMapper.findLatestByAccount(key).map(ApplicationVO::of);
+        return applications.findLatestByAccount(key).map(ApplicationVO::of);
     }
 
     /** 登录时的友好提示：账号没建出来但存在申请 → 告知审批状态而不是「密码错误」 */
@@ -113,15 +113,16 @@ public class RegistrationService {
     }
 
     public long countPending() {
-        return applicationMapper.countByStatus(RegistrationApplication.STATUS_PENDING);
+        return applications.countPending();
     }
 
-    private static String normalizePhoneAsAccount(String phone) {
+    /**
+     * 手机号当账号用：与改造前一致，走的是「按用户名列查」而非按手机号列查。
+     * <p>
+     * 刻意保持这个不那么自然的行为——用户名规则允许全数字（{@code [a-z0-9_]{3,20}}），
+     * 换成按 phone 列查会让「占用判定」的口径当场变化，那是行为改造而不是分层改造。
+     */
+    private static String usernameOfPhone(String phone) {
         return phone == null ? "" : phone.trim().toLowerCase();
-    }
-
-    private static String mask(String phone) {
-        return phone == null || phone.length() < 7 ? phone
-                : phone.substring(0, 3) + "****" + phone.substring(phone.length() - 4);
     }
 }

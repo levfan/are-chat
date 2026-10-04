@@ -7,11 +7,11 @@ import org.apache.ibatis.annotations.Mapper;
 import java.util.List;
 
 @Mapper
-public interface AdminAuditMapper extends BaseMapperCompat<AdminAudit> {
+public interface AdminAuditMapper extends BaseMapperCompat<AdminAuditPO> {
 
-    default List<AdminAudit> findLatest(int limit) {
-        return selectList(new LambdaQueryWrapper<AdminAudit>()
-                .orderByDesc(AdminAudit::getCreated)
+    default List<AdminAuditPO> findLatest(int limit) {
+        return selectList(new LambdaQueryWrapper<AdminAuditPO>()
+                .orderByDesc(AdminAuditPO::getCreated)
                 .last("LIMIT " + Math.max(1, Math.min(limit, 200))));
     }
 }

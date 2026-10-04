@@ -169,7 +169,7 @@ class ArchitectureGuardTest {
      * 一旦收口干净就必须从 {@link #TACTICAL_PENDING} 删掉——否则这条测试红。
      * 两个方向都拦：新代码不许把 PO 递出 infrastructure，记账也不许停在过期状态假装还在改造。
      */
-    private static final Set<String> TACTICAL_PENDING = Set.of("couple", "messaging", "identity", "platform", "filestorage");
+    private static final Set<String> TACTICAL_PENDING = Set.of("couple", "messaging", "platform", "filestorage");
 
     @Test
     void persistenceTypesStayBehindRepositoryPorts() {
