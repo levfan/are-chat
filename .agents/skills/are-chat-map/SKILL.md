@@ -76,7 +76,7 @@ Service → ImPushService.pushCoupleEvent(Both) ─┬→ WS 帧 {type:'couple',
 
 | 上下文 | 域分类 | 由旧包合成 | 现状 |
 |---|---|---|---|
-| `couple` | **核心域** | couple | api(13 Controller) / application(11 Service) / infrastructure(persistence 19 PO+19 Mapper、content 8 库、scheduler 3 Job、notify、account)；**domain 层尚未建**（Phase B 待做，清单见 docs/ddd/03 第二节） |
+| `couple` | **核心域** | couple | api(13 Controller) / application(11 Service) / **domain**（space 聚合 + repository 端口、intimacy 策略与值对象）/ infrastructure(persistence 19 PO+19 Mapper+仓储适配器、content 8 库、scheduler 3 Job、notify、account) |
 | `messaging` | 支撑域 | im + room（合并后那条 im/room 互依赖自然消失） | domain 有 7 个发布语言端口（CoupleEventPublisher / PresenceReader / AnnouncementBroadcaster / PeerProfileReader / FriendshipChecker / OutboundNotifySink / NotifySinkRegistry），transport 归 infrastructure |
 | `identity` | 通用域 | auth | **零出向上下文依赖**的纯上游；domain 有 AccountDirectory（别人问账号只用它，含 Account 最小视图）与 AccountCascade / ProfileProvisioner / WelcomeMessenger / AdminAlerter / AdminNotifyChannel 五个「我需要别人配合」的端口 |
 | `platform` | 通用域 | system + notify + tools | 公告管理端点已从 identity 归位到 `AnnouncementAdminController`，路由 `/api/admin/announcements*` 一字未改 |

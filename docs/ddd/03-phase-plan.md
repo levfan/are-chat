@@ -22,7 +22,7 @@
 |---|---|---|---|---|
 | `identity` | api/application/domain/infrastructure | **有**（AccountDirectory、Account、AccountCascade、ProfileProvisioner、WelcomeMessenger、AdminAlerter、AdminNotifyChannel） | **零出向依赖**，纯上游 | 账号是谁都要问的通用域，方向理应当如此 |
 | `messaging` | api/application/domain/infrastructure | **有**（发布语言 7 个：CoupleEventPublisher、PresenceReader、AnnouncementBroadcaster、PeerProfileReader、FriendshipChecker、OutboundNotifySink、NotifySinkRegistry） | → identity.domain | 传输细节（帧格式、payload、注册表）不再外泄 |
-| `couple` | api/application/infrastructure | **无——Phase B 未做** | → identity.domain、messaging.domain | 10 张卡与心动值的领域规则目前长在 `CoupleService` 里；分层与方向已就位，补聚合/端口是纯增量 |
+| `couple` | api/application/domain/infrastructure | **有**（CoupleSpace 聚合 + CoupleSpaceRepository 端口 + IntimacySource/IntimacyCalculator 策略） | → identity.domain、messaging.domain | 心动值六项加权与七级阶梯已从 CoupleService 整块搬进 domain；空间写路径（注销连带解散）走聚合+仓储 |
 | `platform` | api/application/infrastructure | 无 | → identity.domain、messaging.domain | 公告端点已从 identity 归位回来（路由未变） |
 | `filestorage` | api/application/infrastructure | 无 | 只到 sharedkernel/bootstrap.properties | 4 个文件，暂无改造需求 |
 
@@ -54,3 +54,10 @@
 | Spring 扫描/装配行为变化 | 根包 `com.smart.chat` 不变：`@SpringBootApplication`、`@ConfigurationPropertiesScan`、`@MapperScan(basePackages="com.smart.chat")` 全部保持，实测无 XML namespace 需要改 |
 | 实体改名 `*PO` 漏引用 | 改名与 import 改写同批，编译 + `EntityReflectionGuardTest`（加总数断言）双保险 |
 | 心动值改造悄悄改算法 | Phase B 明确**不动** `CoupleIntimacyTest` 的断言；断言不过说明行为变了，必须回退而非改测试 |
+
+### 2.6 Phase B 完成账（2026-10-04）
+
+- B-1 改名：19 个实体 → `*PO`，818 处标识符、65 个文件，表名列名未动。
+- B-2 领域层：`couple/domain/intimacy/{IntimacySource,IntimacyCalculator}`（六项权重 1/2/2/3/2/1 与阈值 0/50/150/300/500/800/1300 原样搬入，负数供数直接拒）、`couple/domain/space/{CoupleSpace,CoupleSpaceRepository}` + `infrastructure/persistence/CoupleSpaceRepositoryAdapter`（**只回写聚合持有的列**，cityA/cityB 有测试锁住不被清空）。`SpaceCascadeAdapter` 改走聚合。
+- 新增 18 条测试（计算器 8 / 聚合 7 / 适配器 3），全仓 `mvn -o test` **180 用例 0 失败**；`CoupleIntimacyTest` 断言一字未改仍然通过 = 行为等价护栏生效。
+- **仍待做的 B 部分（不含糊过去）**：其余 18 张表尚无聚合（好事簿/贴贴/安全词/饭票/轮盘/加班/愿望券/刮刮乐/盲盒等），目前仍是「Service 直接操作 PO」的事务脚本；`CoupleService` 里除心动值外仍兼着取数与拼装。按 ADR-0005 的节奏，等某张卡真要加规则时再抽，不预先造空聚合。
