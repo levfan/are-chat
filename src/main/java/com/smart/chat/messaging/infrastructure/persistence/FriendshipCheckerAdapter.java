@@ -3,7 +3,7 @@ package com.smart.chat.messaging.infrastructure.persistence;
 import com.smart.chat.messaging.domain.FriendshipChecker;
 import org.springframework.stereotype.Component;
 
-/** 好友判定适配器：只回答是/否，不把 Friend PO 与 Mapper 交出去。 */
+/** 好友判定适配器：只回答是/否，不把 FriendPO 与 Mapper 交出去。 */
 @Component
 public class FriendshipCheckerAdapter implements FriendshipChecker {
 

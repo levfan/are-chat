@@ -1,12 +1,12 @@
 package com.smart.chat.messaging.application;
 
-import com.smart.chat.messaging.infrastructure.persistence.Friend;
+import com.smart.chat.messaging.infrastructure.persistence.FriendPO;
 import com.smart.chat.messaging.infrastructure.persistence.FriendMapper;
-import com.smart.chat.messaging.infrastructure.persistence.FriendRequest;
+import com.smart.chat.messaging.infrastructure.persistence.FriendRequestPO;
 import com.smart.chat.messaging.infrastructure.persistence.FriendRequestMapper;
-import com.smart.chat.messaging.infrastructure.persistence.PrivateMessage;
+import com.smart.chat.messaging.infrastructure.persistence.PrivateMessagePO;
 import com.smart.chat.messaging.infrastructure.persistence.PrivateMessageMapper;
-import com.smart.chat.messaging.infrastructure.persistence.UserProfile;
+import com.smart.chat.messaging.infrastructure.persistence.UserProfilePO;
 import com.smart.chat.messaging.infrastructure.persistence.UserProfileMapper;
 import com.smart.chat.messaging.infrastructure.transport.ImPushService;
 import com.smart.chat.identity.domain.AccountDirectory;
@@ -75,10 +75,10 @@ class FriendServiceTest {
 
         FriendService.FriendRequestVO vo = service.apply("alice", "bob", "我是carol，加个好友");
 
-        assertThat(vo.status()).isEqualTo(FriendRequest.STATUS_PENDING);
+        assertThat(vo.status()).isEqualTo(FriendRequestPO.STATUS_PENDING);
         assertThat(vo.fromUser()).isEqualTo("alice");
         assertThat(vo.message()).isEqualTo("我是carol，加个好友");
-        ArgumentCaptor<FriendRequest> captor = ArgumentCaptor.forClass(FriendRequest.class);
+        ArgumentCaptor<FriendRequestPO> captor = ArgumentCaptor.forClass(FriendRequestPO.class);
         verify(requestMapper).insert(captor.capture());
         assertThat(captor.getValue().getToUser()).isEqualTo("bob");
         assertThat(captor.getValue().getMessage()).isEqualTo("我是carol，加个好友");
@@ -110,21 +110,21 @@ class FriendServiceTest {
                 .hasMessageContaining("查无此人");
 
         when(friendMapper.findByOwnerAndFriend("alice", "bob"))
-                .thenReturn(Optional.of(Friend.of("alice", "bob")));
+                .thenReturn(Optional.of(FriendPO.of("alice", "bob")));
         assertThatThrownBy(() -> service.apply("alice", "bob", null))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("已经是好友");
 
         when(friendMapper.findByOwnerAndFriend("alice", "bob")).thenReturn(Optional.empty());
         when(requestMapper.findPendingBetween("alice", "bob"))
-                .thenReturn(Optional.of(FriendRequest.of("alice", "bob")));
+                .thenReturn(Optional.of(FriendRequestPO.of("alice", "bob")));
         assertThatThrownBy(() -> service.apply("alice", "bob", null))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("等对方处理");
 
         when(requestMapper.findPendingBetween("alice", "bob")).thenReturn(Optional.empty());
         when(requestMapper.findPendingBetween("bob", "alice"))
-                .thenReturn(Optional.of(FriendRequest.of("bob", "alice")));
+                .thenReturn(Optional.of(FriendRequestPO.of("bob", "alice")));
         assertThatThrownBy(() -> service.apply("alice", "bob", null))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("先向你发起");
@@ -132,23 +132,23 @@ class FriendServiceTest {
 
     @Test
     void acceptCreatesBothFriendRowsAndSystemMessage() {
-        FriendRequest request = FriendRequest.of("bob", "alice");
+        FriendRequestPO request = FriendRequestPO.of("bob", "alice");
         when(requestMapper.selectById(request.getId())).thenReturn(request);
         when(friendMapper.findByOwnerAndFriend("bob", "alice")).thenReturn(Optional.empty());
         when(friendMapper.findByOwnerAndFriend("alice", "bob")).thenReturn(Optional.empty());
 
         service.accept("alice", request.getId());
 
-        assertThat(request.getStatus()).isEqualTo(FriendRequest.STATUS_ACCEPTED);
+        assertThat(request.getStatus()).isEqualTo(FriendRequestPO.STATUS_ACCEPTED);
         verify(requestMapper).updateById(request);
-        verify(friendMapper, times(2)).insert(any(Friend.class));
+        verify(friendMapper, times(2)).insert(any(FriendPO.class));
 
-        ArgumentCaptor<PrivateMessage> msgCaptor = ArgumentCaptor.forClass(PrivateMessage.class);
+        ArgumentCaptor<PrivateMessagePO> msgCaptor = ArgumentCaptor.forClass(PrivateMessagePO.class);
         verify(messageMapper).insert(msgCaptor.capture());
-        assertThat(msgCaptor.getValue().getMsgType()).isEqualTo(PrivateMessage.TYPE_SYSTEM);
+        assertThat(msgCaptor.getValue().getMsgType()).isEqualTo(PrivateMessagePO.TYPE_SYSTEM);
         assertThat(msgCaptor.getValue().getFromUser()).isEqualTo("alice");
         assertThat(msgCaptor.getValue().getToUser()).isEqualTo("bob");
-        verify(push).pushDm(any(PrivateMessage.class));
+        verify(push).pushDm(any(PrivateMessagePO.class));
         verify(push).pushFriendEvent(eq("friend-accepted"), eq("bob"), anyString());
     }
 
@@ -159,14 +159,14 @@ class FriendServiceTest {
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("申请不存在");
 
-        FriendRequest other = FriendRequest.of("alice", "bob");
+        FriendRequestPO other = FriendRequestPO.of("alice", "bob");
         when(requestMapper.selectById(other.getId())).thenReturn(other);
         assertThatThrownBy(() -> service.accept("alice", other.getId()))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("发给自己的");
 
-        FriendRequest handled = FriendRequest.of("bob", "alice");
-        handled.setStatus(FriendRequest.STATUS_REJECTED);
+        FriendRequestPO handled = FriendRequestPO.of("bob", "alice");
+        handled.setStatus(FriendRequestPO.STATUS_REJECTED);
         when(requestMapper.selectById(handled.getId())).thenReturn(handled);
         assertThatThrownBy(() -> service.accept("alice", handled.getId()))
                 .isInstanceOf(BusinessException.class)
@@ -175,7 +175,7 @@ class FriendServiceTest {
 
     @Test
     void deleteFriendRemovesPairAndNotifiesPeer() {
-        Friend row = Friend.of("alice", "bob");
+        FriendPO row = FriendPO.of("alice", "bob");
         when(friendMapper.selectById(row.getId())).thenReturn(row);
 
         service.deleteFriend("alice", row.getId());
@@ -186,7 +186,7 @@ class FriendServiceTest {
 
     @Test
     void deleteOnlyOwnFriendRow() {
-        Friend row = Friend.of("bob", "alice");
+        FriendPO row = FriendPO.of("bob", "alice");
         when(friendMapper.selectById(row.getId())).thenReturn(row);
 
         assertThatThrownBy(() -> service.deleteFriend("alice", row.getId()))
@@ -196,12 +196,12 @@ class FriendServiceTest {
 
     @Test
     void updateFriendSetsRemarkAndPin() {
-        Friend row = Friend.of("alice", "bob");
+        FriendPO row = FriendPO.of("alice", "bob");
         when(friendMapper.selectById(row.getId())).thenReturn(row);
 
         service.updateFriend("alice", row.getId(), "  老友  ", true, null, null, null);
 
-        ArgumentCaptor<Friend> captor = ArgumentCaptor.forClass(Friend.class);
+        ArgumentCaptor<FriendPO> captor = ArgumentCaptor.forClass(FriendPO.class);
         verify(friendMapper).updateById(captor.capture());
         assertThat(captor.getValue().getRemark()).isEqualTo("老友");
         assertThat(captor.getValue().getPinned()).isTrue();
@@ -213,12 +213,12 @@ class FriendServiceTest {
 
     @Test
     void updateFriendTogglesMute() {
-        Friend row = Friend.of("alice", "bob");
+        FriendPO row = FriendPO.of("alice", "bob");
         when(friendMapper.selectById(row.getId())).thenReturn(row);
 
         service.updateFriend("alice", row.getId(), null, null, true, null, null);
 
-        ArgumentCaptor<Friend> captor = ArgumentCaptor.forClass(Friend.class);
+        ArgumentCaptor<FriendPO> captor = ArgumentCaptor.forClass(FriendPO.class);
         verify(friendMapper).updateById(captor.capture());
         assertThat(captor.getValue().getMuted()).isTrue();
         assertThat(captor.getValue().getRemark()).isEmpty();
@@ -226,12 +226,12 @@ class FriendServiceTest {
 
     @Test
     void updateFriendSetsTagAndBlocked() {
-        Friend row = Friend.of("alice", "bob");
+        FriendPO row = FriendPO.of("alice", "bob");
         when(friendMapper.selectById(row.getId())).thenReturn(row);
 
         service.updateFriend("alice", row.getId(), null, null, null, "  同事  ", true);
 
-        ArgumentCaptor<Friend> captor = ArgumentCaptor.forClass(Friend.class);
+        ArgumentCaptor<FriendPO> captor = ArgumentCaptor.forClass(FriendPO.class);
         verify(friendMapper).updateById(captor.capture());
         assertThat(captor.getValue().getTag()).isEqualTo("同事");
         assertThat(captor.getValue().getBlocked()).isEqualTo(1);
@@ -242,22 +242,22 @@ class FriendServiceTest {
 
         // 解除拉黑
         service.updateFriend("alice", row.getId(), null, null, null, null, false);
-        ArgumentCaptor<Friend> unblock = ArgumentCaptor.forClass(Friend.class);
+        ArgumentCaptor<FriendPO> unblock = ArgumentCaptor.forClass(FriendPO.class);
         verify(friendMapper, org.mockito.Mockito.times(2)).updateById(unblock.capture());
         assertThat(unblock.getValue().getBlocked()).isZero();
     }
 
     @Test
     void listFriendsSortsPinnedFirstAndCarriesUnreadAndPreview() {
-        Friend pinned = Friend.of("alice", "carol");
+        FriendPO pinned = FriendPO.of("alice", "carol");
         pinned.setPinned(true);
         pinned.setTag("家人");
-        Friend normal = Friend.of("alice", "bob");
+        FriendPO normal = FriendPO.of("alice", "bob");
         normal.setBlocked(1);
         when(friendMapper.findAllByOwner("alice")).thenReturn(List.of(normal, pinned));
         when(profileMapper.selectBatchIds(any())).thenReturn(java.util.List.of());
 
-        PrivateMessage latest = PrivateMessage.of("bob", "alice", "晚上一起吃饭吗", PrivateMessage.TYPE_TEXT);
+        PrivateMessagePO latest = PrivateMessagePO.of("bob", "alice", "晚上一起吃饭吗", PrivateMessagePO.TYPE_TEXT);
         // 批量口径：一次算出各对端最后一条的时间点，一趟 JOIN 算出各对端未读数，再按时间点回捞整行
         lenient().when(messageMapper.findLatestCreatedPerPeer("alice"))
                 .thenReturn(java.util.Map.of("bob", latest.getCreated()));
@@ -288,7 +288,7 @@ class FriendServiceTest {
     @Test
     void listFriendsNeverFallsBackToPerPeerQueries() {
         when(friendMapper.findAllByOwner("alice"))
-                .thenReturn(List.of(Friend.of("alice", "bob"), Friend.of("alice", "carol"), Friend.of("alice", "dave")));
+                .thenReturn(List.of(FriendPO.of("alice", "bob"), FriendPO.of("alice", "carol"), FriendPO.of("alice", "dave")));
         lenient().when(messageMapper.findLatestCreatedPerPeer("alice")).thenReturn(java.util.Map.of());
         lenient().when(messageMapper.findMessagesAtCreated(anyString(), anyList(), anyCollection())).thenReturn(List.of());
         lenient().when(friendMapper.selectUnreadCountsByPeer("alice")).thenReturn(List.of());
@@ -305,9 +305,9 @@ class FriendServiceTest {
 
     @Test
     void listFriendsCarriesPeerNicknameFromProfile() {
-        Friend row = Friend.of("alice", "bob");
+        FriendPO row = FriendPO.of("alice", "bob");
         when(friendMapper.findAllByOwner("alice")).thenReturn(List.of(row));
-        UserProfile bobProfile = new UserProfile();
+        UserProfilePO bobProfile = new UserProfilePO();
         bobProfile.setUsername("bob");
         bobProfile.setNickname("波波");
         bobProfile.setPresenceStatus("busy");
@@ -327,13 +327,13 @@ class FriendServiceTest {
 
     @Test
     void rejectMarksRequestRejected() {
-        FriendRequest request = FriendRequest.of("bob", "alice");
+        FriendRequestPO request = FriendRequestPO.of("bob", "alice");
         when(requestMapper.selectById(request.getId())).thenReturn(request);
 
         service.reject("alice", request.getId());
 
-        assertThat(request.getStatus()).isEqualTo(FriendRequest.STATUS_REJECTED);
+        assertThat(request.getStatus()).isEqualTo(FriendRequestPO.STATUS_REJECTED);
         verify(requestMapper).updateById(request);
-        verify(messageMapper, never()).insert(any(PrivateMessage.class));
+        verify(messageMapper, never()).insert(any(PrivateMessagePO.class));
     }
 }

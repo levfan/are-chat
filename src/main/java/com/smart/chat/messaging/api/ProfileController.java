@@ -1,7 +1,7 @@
 package com.smart.chat.messaging.api;
 
 import com.smart.chat.messaging.infrastructure.persistence.FriendMapper;
-import com.smart.chat.messaging.infrastructure.persistence.UserProfile;
+import com.smart.chat.messaging.infrastructure.persistence.UserProfilePO;
 import com.smart.chat.messaging.infrastructure.persistence.UserProfileMapper;
 import com.smart.chat.identity.domain.AccountDirectory;
 import com.smart.chat.sharedkernel.web.ApiResponse;
@@ -32,7 +32,7 @@ public class ProfileController {
 
     public record ProfileVO(String username, String nickname, String signature, String avatar, String presenceStatus,
                             String birthday) {
-        static ProfileVO of(UserProfile p) {
+        static ProfileVO of(UserProfilePO p) {
             return new ProfileVO(p.getUsername(), p.getNickname(), p.getSignature(), p.getAvatar(),
                     p.getPresenceStatus() == null ? "online" : p.getPresenceStatus(), p.getBirthday());
         }
@@ -75,7 +75,7 @@ public class ProfileController {
     @PutMapping
     public ApiResponse<ProfileVO> update(@RequestBody UpdateProfileRequest req, HttpSession session) {
         String username = Sessions.requireUser(session);
-        UserProfile profile = ensureProfile(username);
+        UserProfilePO profile = ensureProfile(username);
         if (req.nickname() != null) {
             String nickname = req.nickname().trim();
             if (nickname.isEmpty() || nickname.length() > 32) {
@@ -130,11 +130,11 @@ public class ProfileController {
         var friends = friendMapper.findAllByOwner(me);
         // 资料一次批量取：原先每个好友 selectById 一次，好友越多这个接口越慢（N+1）
         List<String> peers = friends.stream().map(f -> f.getFriendUsername()).toList();
-        Map<String, UserProfile> profileMap = peers.isEmpty() ? Map.of()
+        Map<String, UserProfilePO> profileMap = peers.isEmpty() ? Map.of()
                 : profileMapper.selectBatchIds(peers).stream()
-                        .collect(Collectors.toMap(UserProfile::getUsername, p -> p));
+                        .collect(Collectors.toMap(UserProfilePO::getUsername, p -> p));
         for (var friend : friends) {
-            UserProfile profile = profileMap.get(friend.getFriendUsername());
+            UserProfilePO profile = profileMap.get(friend.getFriendUsername());
             String birthday = profile == null ? null : profile.getBirthday();
             if (birthday == null || birthday.isBlank()) {
                 continue;
@@ -181,10 +181,10 @@ public class ProfileController {
         }
     }
 
-    private UserProfile ensureProfile(String username) {
-        UserProfile profile = profileMapper.selectById(username);
+    private UserProfilePO ensureProfile(String username) {
+        UserProfilePO profile = profileMapper.selectById(username);
         if (profile == null) {
-            profile = new UserProfile();
+            profile = new UserProfilePO();
             profile.setUsername(username);
             profile.setNickname(username);
             profile.setSignature("");

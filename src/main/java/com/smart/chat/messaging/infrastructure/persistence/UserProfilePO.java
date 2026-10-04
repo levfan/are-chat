@@ -10,7 +10,7 @@ import lombok.Data;
  */
 @Data
 @TableName("user_profile")
-public class UserProfile {
+public class UserProfilePO {
 
     @TableId(value = "username", type = IdType.INPUT)
     private String username;

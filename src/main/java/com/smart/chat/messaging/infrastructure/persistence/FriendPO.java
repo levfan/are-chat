@@ -13,7 +13,7 @@ import java.util.UUID;
  */
 @Data
 @TableName("friend")
-public class Friend {
+public class FriendPO {
 
     @TableId(value = "id", type = IdType.INPUT)
     private String id;
@@ -28,8 +28,8 @@ public class Friend {
     private Long lastSeenAt;
     private Long created;
 
-    public static Friend of(String owner, String friend) {
-        Friend row = new Friend();
+    public static FriendPO of(String owner, String friend) {
+        FriendPO row = new FriendPO();
         row.id = UUID.randomUUID().toString();
         row.ownerUsername = owner;
         row.friendUsername = friend;

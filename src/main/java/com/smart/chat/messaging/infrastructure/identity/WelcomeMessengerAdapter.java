@@ -1,7 +1,7 @@
 package com.smart.chat.messaging.infrastructure.identity;
 
 import com.smart.chat.identity.domain.WelcomeMessenger;
-import com.smart.chat.messaging.infrastructure.persistence.PrivateMessage;
+import com.smart.chat.messaging.infrastructure.persistence.PrivateMessagePO;
 import com.smart.chat.messaging.infrastructure.persistence.PrivateMessageMapper;
 import com.smart.chat.messaging.infrastructure.transport.ImPushService;
 import org.springframework.stereotype.Component;
@@ -20,7 +20,7 @@ public class WelcomeMessengerAdapter implements WelcomeMessenger {
 
     @Override
     public void sendSystemWelcome(String reviewer, String toUser, String content) {
-        PrivateMessage welcome = PrivateMessage.of(reviewer, toUser, content, PrivateMessage.TYPE_SYSTEM);
+        PrivateMessagePO welcome = PrivateMessagePO.of(reviewer, toUser, content, PrivateMessagePO.TYPE_SYSTEM);
         messageMapper.insert(welcome);
         if (push.isOnline(toUser)) {
             push.pushDm(welcome);

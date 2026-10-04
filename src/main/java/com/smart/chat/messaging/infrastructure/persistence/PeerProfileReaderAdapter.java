@@ -5,7 +5,7 @@ import org.springframework.stereotype.Component;
 
 import java.util.Optional;
 
-/** 资料卡视图适配器：把 UserProfile PO 关在 messaging 内部。 */
+/** 资料卡视图适配器：把 UserProfilePO 关在 messaging 内部。 */
 @Component
 public class PeerProfileReaderAdapter implements PeerProfileReader {
 
@@ -17,7 +17,7 @@ public class PeerProfileReaderAdapter implements PeerProfileReader {
 
     @Override
     public Optional<PeerProfile> read(String username) {
-        UserProfile profile = profileMapper.selectById(username);
+        UserProfilePO profile = profileMapper.selectById(username);
         if (profile == null) {
             return Optional.empty();
         }

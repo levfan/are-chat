@@ -1,12 +1,12 @@
 package com.smart.chat.messaging.application;
 
-import com.smart.chat.messaging.infrastructure.persistence.Friend;
+import com.smart.chat.messaging.infrastructure.persistence.FriendPO;
 import com.smart.chat.messaging.infrastructure.persistence.FriendMapper;
-import com.smart.chat.messaging.infrastructure.persistence.FriendRequest;
+import com.smart.chat.messaging.infrastructure.persistence.FriendRequestPO;
 import com.smart.chat.messaging.infrastructure.persistence.FriendRequestMapper;
-import com.smart.chat.messaging.infrastructure.persistence.PrivateMessage;
+import com.smart.chat.messaging.infrastructure.persistence.PrivateMessagePO;
 import com.smart.chat.messaging.infrastructure.persistence.PrivateMessageMapper;
-import com.smart.chat.messaging.infrastructure.persistence.UserProfile;
+import com.smart.chat.messaging.infrastructure.persistence.UserProfilePO;
 import com.smart.chat.messaging.infrastructure.persistence.UserProfileMapper;
 import com.smart.chat.messaging.infrastructure.transport.ImPushService;
 import com.smart.chat.identity.domain.AccountDirectory;
@@ -36,7 +36,7 @@ public class FriendService {
 
     public record FriendRequestVO(String id, String fromUser, String toUser, String message, String status,
                                   Long created) {
-        public static FriendRequestVO of(FriendRequest r) {
+        public static FriendRequestVO of(FriendRequestPO r) {
             return new FriendRequestVO(r.getId(), r.getFromUser(), r.getToUser(),
                     r.getMessage() == null ? "" : r.getMessage(), r.getStatus(), r.getCreated());
         }
@@ -62,12 +62,12 @@ public class FriendService {
     }
 
     public List<FriendVO> listFriends(String me) {
-        List<Friend> rows = friendMapper.findAllByOwner(me);
+        List<FriendPO> rows = friendMapper.findAllByOwner(me);
         // 对方资料（昵称 / 在线状态 online/busy/away）来自用户资料表
-        List<String> peers = rows.stream().map(Friend::getFriendUsername).toList();
-        Map<String, UserProfile> profileMap = peers.isEmpty() ? Map.of()
+        List<String> peers = rows.stream().map(FriendPO::getFriendUsername).toList();
+        Map<String, UserProfilePO> profileMap = peers.isEmpty() ? Map.of()
                 : profileMapper.selectBatchIds(peers).stream()
-                        .collect(Collectors.toMap(UserProfile::getUsername, p -> p));
+                        .collect(Collectors.toMap(UserProfilePO::getUsername, p -> p));
         // 未读数与「最后一条」各一趟批量取，替代原先每人两趟（联系人越多省得越多，见 V49 与两个批量方法注释）
         Map<String, Long> latestCreated = messageMapper.findLatestCreatedPerPeer(me);
         Map<String, Long> unreadMap = new HashMap<>();
@@ -76,17 +76,17 @@ public class FriendService {
                 unreadMap.put(String.valueOf(row.get("peer")), number.longValue());
             }
         }
-        Map<String, PrivateMessage> lastMessage = pickLastMessages(
+        Map<String, PrivateMessagePO> lastMessage = pickLastMessages(
                 messageMapper.findMessagesAtCreated(me, peers, latestCreated.values()), me, latestCreated);
         List<FriendVO> result = new ArrayList<>();
-        for (Friend row : rows) {
+        for (FriendPO row : rows) {
             String peer = row.getFriendUsername();
             long unread = unreadMap.getOrDefault(peer, 0L);
-            PrivateMessage latest = lastMessage.get(peer);
+            PrivateMessagePO latest = lastMessage.get(peer);
             MessagePreview preview = latest == null ? null
                     : new MessagePreview(latest.getContent(), latest.getMsgType(), latest.getCreated(),
                             latest.getFromUser().equals(me));
-            UserProfile profile = profileMap.get(peer);
+            UserProfilePO profile = profileMap.get(peer);
             result.add(new FriendVO(row.getId(), peer,
                     profile == null ? "" : profile.getNickname(),
                     row.getRemark() == null ? "" : row.getRemark(),
@@ -119,10 +119,10 @@ public class FriendService {
      * 所以再按 {@code latestCreated} 精确对齐；同一毫秒真有多行时取先遇到的一行，
      * 与原先 {@code ORDER BY created DESC LIMIT 1} 在并列时的任意行为一致。
      */
-    private Map<String, PrivateMessage> pickLastMessages(List<PrivateMessage> messages, String me,
+    private Map<String, PrivateMessagePO> pickLastMessages(List<PrivateMessagePO> messages, String me,
                                                          Map<String, Long> latestCreated) {
-        Map<String, PrivateMessage> out = new HashMap<>();
-        for (PrivateMessage m : messages) {
+        Map<String, PrivateMessagePO> out = new HashMap<>();
+        for (PrivateMessagePO m : messages) {
             String peer = m.getFromUser().equals(me) ? m.getToUser() : m.getFromUser();
             Long at = latestCreated.get(peer);
             if (at == null || m.getCreated() == null || !m.getCreated().equals(at)) {
@@ -155,7 +155,7 @@ public class FriendService {
         if (requestMapper.findPendingBetween(targetName, me).isPresent()) {
             throw new BusinessException(409, "对方已经先向你发起了申请，去「好友申请」处理吧");
         }
-        FriendRequest request = FriendRequest.of(me, targetName);
+        FriendRequestPO request = FriendRequestPO.of(me, targetName);
         if (message != null && !message.isBlank()) {
             String note = message.trim();
             if (note.length() > 100) {
@@ -200,14 +200,14 @@ public class FriendService {
 
     @Transactional
     public void accept(String me, String requestId) {
-        FriendRequest request = requireRequest(requestId);
+        FriendRequestPO request = requireRequest(requestId);
         if (!request.getToUser().equals(me)) {
             throw new BusinessException(403, "只能处理发给自己的申请");
         }
-        if (!FriendRequest.STATUS_PENDING.equals(request.getStatus())) {
+        if (!FriendRequestPO.STATUS_PENDING.equals(request.getStatus())) {
             throw new BusinessException(409, "该申请已经处理过了");
         }
-        request.setStatus(FriendRequest.STATUS_ACCEPTED);
+        request.setStatus(FriendRequestPO.STATUS_ACCEPTED);
         request.setUpdatedAt(System.currentTimeMillis());
         requestMapper.updateById(request);
 
@@ -216,21 +216,21 @@ public class FriendService {
         ensureFriendRow(me, from);
 
         // 系统消息进入双方会话流（收件人视角未读 +1）
-        PrivateMessage system = PrivateMessage.of(me, from, "我们已经成为好友，现在开始聊天吧！", PrivateMessage.TYPE_SYSTEM);
+        PrivateMessagePO system = PrivateMessagePO.of(me, from, "我们已经成为好友，现在开始聊天吧！", PrivateMessagePO.TYPE_SYSTEM);
         messageMapper.insert(system);
         push.pushDm(system);
         push.pushFriendEvent("friend-accepted", from, request.getId());
     }
 
     public void reject(String me, String requestId) {
-        FriendRequest request = requireRequest(requestId);
+        FriendRequestPO request = requireRequest(requestId);
         if (!request.getToUser().equals(me)) {
             throw new BusinessException(403, "只能处理发给自己的申请");
         }
-        if (!FriendRequest.STATUS_PENDING.equals(request.getStatus())) {
+        if (!FriendRequestPO.STATUS_PENDING.equals(request.getStatus())) {
             throw new BusinessException(409, "该申请已经处理过了");
         }
-        request.setStatus(FriendRequest.STATUS_REJECTED);
+        request.setStatus(FriendRequestPO.STATUS_REJECTED);
         request.setUpdatedAt(System.currentTimeMillis());
         requestMapper.updateById(request);
     }
@@ -245,7 +245,7 @@ public class FriendService {
 
     public void updateFriend(String me, String friendId, String remark, Boolean pinned, Boolean muted,
                              String tag, Boolean blocked) {
-        Friend row = requireOwnFriend(me, friendId);
+        FriendPO row = requireOwnFriend(me, friendId);
         if (remark != null) {
             String trimmed = remark.trim();
             if (trimmed.length() > 32) {
@@ -273,22 +273,22 @@ public class FriendService {
     }
 
     public void deleteFriend(String me, String friendId) {
-        Friend row = requireOwnFriend(me, friendId);
+        FriendPO row = requireOwnFriend(me, friendId);
         String peer = row.getFriendUsername();
         friendMapper.deletePair(me, peer);
         push.pushFriendEvent("friend-deleted", peer, row.getId());
     }
 
-    private Friend requireOwnFriend(String me, String friendId) {
-        Friend row = friendMapper.selectById(friendId);
+    private FriendPO requireOwnFriend(String me, String friendId) {
+        FriendPO row = friendMapper.selectById(friendId);
         if (row == null || !row.getOwnerUsername().equals(me)) {
             throw new BusinessException(404, "好友不存在");
         }
         return row;
     }
 
-    private FriendRequest requireRequest(String requestId) {
-        FriendRequest request = requestMapper.selectById(requestId);
+    private FriendRequestPO requireRequest(String requestId) {
+        FriendRequestPO request = requestMapper.selectById(requestId);
         if (request == null) {
             throw new BusinessException(404, "申请不存在");
         }
@@ -297,7 +297,7 @@ public class FriendService {
 
     private void ensureFriendRow(String owner, String friend) {
         if (friendMapper.findByOwnerAndFriend(owner, friend).isEmpty()) {
-            friendMapper.insert(Friend.of(owner, friend));
+            friendMapper.insert(FriendPO.of(owner, friend));
         }
     }
 }

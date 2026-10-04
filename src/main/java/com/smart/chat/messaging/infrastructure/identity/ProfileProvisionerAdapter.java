@@ -1,7 +1,7 @@
 package com.smart.chat.messaging.infrastructure.identity;
 
 import com.smart.chat.identity.domain.ProfileProvisioner;
-import com.smart.chat.messaging.infrastructure.persistence.UserProfile;
+import com.smart.chat.messaging.infrastructure.persistence.UserProfilePO;
 import com.smart.chat.messaging.infrastructure.persistence.UserProfileMapper;
 import org.springframework.stereotype.Component;
 
@@ -20,7 +20,7 @@ public class ProfileProvisionerAdapter implements ProfileProvisioner {
         if (profileMapper.selectById(username) != null) {
             return;
         }
-        UserProfile profile = new UserProfile();
+        UserProfilePO profile = new UserProfilePO();
         profile.setUsername(username);
         profile.setNickname(nickname);
         profile.setSignature("");

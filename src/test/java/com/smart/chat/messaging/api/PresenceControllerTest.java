@@ -1,6 +1,6 @@
 package com.smart.chat.messaging.api;
 
-import com.smart.chat.messaging.infrastructure.persistence.Friend;
+import com.smart.chat.messaging.infrastructure.persistence.FriendPO;
 import com.smart.chat.messaging.infrastructure.persistence.FriendMapper;
 import com.smart.chat.identity.domain.AccountDirectory;
 import com.smart.chat.sharedkernel.web.ApiResponse;
@@ -68,7 +68,7 @@ class PresenceControllerTest {
                 new AccountDirectory.Account("alice", "alice", false, "138****0001")));
         // alice 的通讯录：bob 与 dave（carol 不是好友）
         when(friendMapper.findAllByOwner("alice"))
-                .thenReturn(List.of(Friend.of("alice", "bob"), Friend.of("alice", "dave")));
+                .thenReturn(List.of(FriendPO.of("alice", "bob"), FriendPO.of("alice", "dave")));
 
         ApiResponse<PresenceController.OnlineVO> response = controller.online(sessionOf("alice"));
 

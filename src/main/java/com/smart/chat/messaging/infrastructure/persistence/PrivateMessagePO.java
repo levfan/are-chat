@@ -13,7 +13,7 @@ import java.util.UUID;
  */
 @Data
 @TableName("private_message")
-public class PrivateMessage {
+public class PrivateMessagePO {
 
     public static final String TYPE_TEXT = "text";
     public static final String TYPE_IMAGE = "image";
@@ -47,8 +47,8 @@ public class PrivateMessage {
     private Long heartAt;
     private Long created;
 
-    public static PrivateMessage of(String from, String to, String content, String msgType) {
-        PrivateMessage row = new PrivateMessage();
+    public static PrivateMessagePO of(String from, String to, String content, String msgType) {
+        PrivateMessagePO row = new PrivateMessagePO();
         row.id = UUID.randomUUID().toString();
         row.fromUser = from;
         row.toUser = to;

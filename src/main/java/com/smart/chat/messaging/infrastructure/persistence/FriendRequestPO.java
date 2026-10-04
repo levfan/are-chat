@@ -12,7 +12,7 @@ import java.util.UUID;
  */
 @Data
 @TableName("friend_request")
-public class FriendRequest {
+public class FriendRequestPO {
 
     public static final String STATUS_PENDING = "PENDING";
     public static final String STATUS_ACCEPTED = "ACCEPTED";
@@ -27,8 +27,8 @@ public class FriendRequest {
     private Long created;
     private Long updatedAt;
 
-    public static FriendRequest of(String from, String to) {
-        FriendRequest row = new FriendRequest();
+    public static FriendRequestPO of(String from, String to) {
+        FriendRequestPO row = new FriendRequestPO();
         row.id = UUID.randomUUID().toString();
         row.fromUser = from;
         row.toUser = to;

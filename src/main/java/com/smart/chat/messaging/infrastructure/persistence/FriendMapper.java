@@ -11,7 +11,7 @@ import java.util.Map;
 import java.util.Optional;
 
 @Mapper
-public interface FriendMapper extends BaseMapperCompat<Friend> {
+public interface FriendMapper extends BaseMapperCompat<FriendPO> {
 
     /**
      * 联系人列表专用：一趟算完每个好友的未读数。
@@ -36,42 +36,42 @@ public interface FriendMapper extends BaseMapperCompat<Friend> {
             """)
     List<Map<String, Object>> selectUnreadCountsByPeer(String owner);
 
-    default Optional<Friend> findByOwnerAndFriend(String owner, String friend) {
-        return Optional.ofNullable(selectOne(new LambdaQueryWrapper<Friend>()
-                .eq(Friend::getOwnerUsername, owner)
-                .eq(Friend::getFriendUsername, friend)
+    default Optional<FriendPO> findByOwnerAndFriend(String owner, String friend) {
+        return Optional.ofNullable(selectOne(new LambdaQueryWrapper<FriendPO>()
+                .eq(FriendPO::getOwnerUsername, owner)
+                .eq(FriendPO::getFriendUsername, friend)
                 .last("LIMIT 1")));
     }
 
-    default List<Friend> findAllByOwner(String owner) {
-        return selectList(new LambdaQueryWrapper<Friend>()
-                .eq(Friend::getOwnerUsername, owner));
+    default List<FriendPO> findAllByOwner(String owner) {
+        return selectList(new LambdaQueryWrapper<FriendPO>()
+                .eq(FriendPO::getOwnerUsername, owner));
     }
 
     /** 删除双向好友关系。 */
     default void deletePair(String a, String b) {
-        delete(new LambdaQueryWrapper<Friend>()
-                .eq(Friend::getOwnerUsername, a)
-                .eq(Friend::getFriendUsername, b));
-        delete(new LambdaQueryWrapper<Friend>()
-                .eq(Friend::getOwnerUsername, b)
-                .eq(Friend::getFriendUsername, a));
+        delete(new LambdaQueryWrapper<FriendPO>()
+                .eq(FriendPO::getOwnerUsername, a)
+                .eq(FriendPO::getFriendUsername, b));
+        delete(new LambdaQueryWrapper<FriendPO>()
+                .eq(FriendPO::getOwnerUsername, b)
+                .eq(FriendPO::getFriendUsername, a));
     }
 
     /** 84 注销清理：删除以该用户为发起人的全部好友关系 */
     default void deleteAllByOwner(String owner) {
-        delete(new LambdaQueryWrapper<Friend>().eq(Friend::getOwnerUsername, owner));
+        delete(new LambdaQueryWrapper<FriendPO>().eq(FriendPO::getOwnerUsername, owner));
     }
 
     /** 84 注销清理：删除以该用户为对方的其他人的好友关系 */
     default void deleteAllByFriend(String friendUsername) {
-        delete(new LambdaQueryWrapper<Friend>().eq(Friend::getFriendUsername, friendUsername));
+        delete(new LambdaQueryWrapper<FriendPO>().eq(FriendPO::getFriendUsername, friendUsername));
     }
 
     /** 刷新某用户在所有好友列表里的「最近在线」时间。 */
     default void updateLastSeenByUsername(String friendUsername, Long lastSeenAt) {
-        update(null, new LambdaUpdateWrapper<Friend>()
-                .eq(Friend::getFriendUsername, friendUsername)
-                .set(Friend::getLastSeenAt, lastSeenAt));
+        update(null, new LambdaUpdateWrapper<FriendPO>()
+                .eq(FriendPO::getFriendUsername, friendUsername)
+                .set(FriendPO::getLastSeenAt, lastSeenAt));
     }
 }

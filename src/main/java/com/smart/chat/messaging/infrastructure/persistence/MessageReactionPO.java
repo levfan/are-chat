@@ -8,23 +8,25 @@ import lombok.Data;
 import java.util.UUID;
 
 /**
- * 收藏的消息（个人视角，跨会话）。
+ * 消息表情回应：一条消息 + 一个用户 + 一个表情唯一，toggle 语义。
  */
 @Data
-@TableName("message_star")
-public class MessageStar {
+@TableName("message_reaction")
+public class MessageReactionPO {
 
     @TableId(value = "id", type = IdType.INPUT)
     private String id;
-    private String username;
     private String msgId;
+    private String username;
+    private String emoji;
     private Long created;
 
-    public static MessageStar of(String username, String msgId) {
-        MessageStar row = new MessageStar();
+    public static MessageReactionPO of(String msgId, String username, String emoji) {
+        MessageReactionPO row = new MessageReactionPO();
         row.id = UUID.randomUUID().toString();
-        row.username = username;
         row.msgId = msgId;
+        row.username = username;
+        row.emoji = emoji;
         row.created = System.currentTimeMillis();
         return row;
     }

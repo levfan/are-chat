@@ -7,18 +7,18 @@ import org.apache.ibatis.annotations.Mapper;
 import java.util.Optional;
 
 @Mapper
-public interface ConversationPinMapper extends BaseMapperCompat<ConversationPin> {
+public interface ConversationPinMapper extends BaseMapperCompat<ConversationPinPO> {
 
-    default Optional<ConversationPin> findForConversation(String userA, String userB) {
-        return Optional.ofNullable(selectOne(new LambdaQueryWrapper<ConversationPin>()
-                .eq(ConversationPin::getUserA, userA)
-                .eq(ConversationPin::getUserB, userB)
+    default Optional<ConversationPinPO> findForConversation(String userA, String userB) {
+        return Optional.ofNullable(selectOne(new LambdaQueryWrapper<ConversationPinPO>()
+                .eq(ConversationPinPO::getUserA, userA)
+                .eq(ConversationPinPO::getUserB, userB)
                 .last("LIMIT 1")));
     }
 
     default void deleteForConversation(String userA, String userB) {
-        delete(new LambdaQueryWrapper<ConversationPin>()
-                .eq(ConversationPin::getUserA, userA)
-                .eq(ConversationPin::getUserB, userB));
+        delete(new LambdaQueryWrapper<ConversationPinPO>()
+                .eq(ConversationPinPO::getUserA, userA)
+                .eq(ConversationPinPO::getUserB, userB));
     }
 }

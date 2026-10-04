@@ -1,14 +1,14 @@
 package com.smart.chat.messaging.application;
 
-import com.smart.chat.messaging.infrastructure.persistence.ConversationPin;
+import com.smart.chat.messaging.infrastructure.persistence.ConversationPinPO;
 import com.smart.chat.messaging.infrastructure.persistence.ConversationPinMapper;
-import com.smart.chat.messaging.infrastructure.persistence.Friend;
+import com.smart.chat.messaging.infrastructure.persistence.FriendPO;
 import com.smart.chat.messaging.infrastructure.persistence.FriendMapper;
-import com.smart.chat.messaging.infrastructure.persistence.MessageReaction;
+import com.smart.chat.messaging.infrastructure.persistence.MessageReactionPO;
 import com.smart.chat.messaging.infrastructure.persistence.MessageReactionMapper;
-import com.smart.chat.messaging.infrastructure.persistence.MessageStar;
+import com.smart.chat.messaging.infrastructure.persistence.MessageStarPO;
 import com.smart.chat.messaging.infrastructure.persistence.MessageStarMapper;
-import com.smart.chat.messaging.infrastructure.persistence.PrivateMessage;
+import com.smart.chat.messaging.infrastructure.persistence.PrivateMessagePO;
 import com.smart.chat.messaging.infrastructure.persistence.PrivateMessageMapper;
 import com.smart.chat.messaging.infrastructure.transport.ImPushService;
 import com.smart.chat.identity.domain.AccountDirectory;
@@ -79,7 +79,7 @@ class PrivateMessageServiceTest {
 
     private void stubFriendship(String me, String peer) {
         lenient().when(friendMapper.findByOwnerAndFriend(me, peer))
-                .thenReturn(Optional.of(Friend.of(me, peer)));
+                .thenReturn(Optional.of(FriendPO.of(me, peer)));
     }
 
     @Test
@@ -87,12 +87,12 @@ class PrivateMessageServiceTest {
         stubFriendship("alice", "bob");
         when(push.isOnline("bob")).thenReturn(true);
 
-        PrivateMessage sent = service.send("alice", "bob", "  在吗？  ", "text", null);
+        PrivateMessagePO sent = service.send("alice", "bob", "  在吗？  ", "text", null);
 
         assertThat(sent.getFromUser()).isEqualTo("alice");
         assertThat(sent.getToUser()).isEqualTo("bob");
         assertThat(sent.getContent()).isEqualTo("在吗？");
-        assertThat(sent.getStatus()).isEqualTo(PrivateMessage.STATUS_SENT);
+        assertThat(sent.getStatus()).isEqualTo(PrivateMessagePO.STATUS_SENT);
         verify(messageMapper).insert(sent);
         verify(push).pushDm(sent);
     }
@@ -102,7 +102,7 @@ class PrivateMessageServiceTest {
         stubFriendship("alice", "bob");
         when(push.isOnline("bob")).thenReturn(false);
 
-        PrivateMessage sent = service.send("alice", "bob", "留言", "text", null);
+        PrivateMessagePO sent = service.send("alice", "bob", "留言", "text", null);
 
         verify(messageMapper).insert(sent);
         verify(push, never()).pushDm(any());
@@ -116,9 +116,9 @@ class PrivateMessageServiceTest {
         // 67 拍一拍支持自定义后缀；留空回落到默认文案
         assertThat(service.send("alice", "bob", "的小脑袋", "poke", null).getContent())
                 .isEqualTo("的小脑袋");
-        PrivateMessage blank = service.send("alice", "bob", "   ", "poke", null);
-        assertThat(blank.getMsgType()).isEqualTo(PrivateMessage.TYPE_POKE);
-        assertThat(blank.getContent()).isEqualTo(PrivateMessage.POKE_TEXT);
+        PrivateMessagePO blank = service.send("alice", "bob", "   ", "poke", null);
+        assertThat(blank.getMsgType()).isEqualTo(PrivateMessagePO.TYPE_POKE);
+        assertThat(blank.getContent()).isEqualTo(PrivateMessagePO.POKE_TEXT);
     }
 
     @Test
@@ -150,7 +150,7 @@ class PrivateMessageServiceTest {
     @Test
     void sendBlockedInEitherDirectionIsRejected() {
         // 我拉黑了对方
-        Friend mine = Friend.of("alice", "bob");
+        FriendPO mine = FriendPO.of("alice", "bob");
         mine.setBlocked(1);
         when(friendMapper.findByOwnerAndFriend("alice", "bob")).thenReturn(Optional.of(mine));
         assertThatThrownBy(() -> service.send("alice", "bob", "hi", "text", null))
@@ -159,7 +159,7 @@ class PrivateMessageServiceTest {
 
         // 对方拉黑了我
         stubFriendship("alice", "bob");
-        Friend theirs = Friend.of("bob", "alice");
+        FriendPO theirs = FriendPO.of("bob", "alice");
         theirs.setBlocked(1);
         when(friendMapper.findByOwnerAndFriend("bob", "alice")).thenReturn(Optional.of(theirs));
         assertThatThrownBy(() -> service.send("alice", "bob", "hi", "text", null))
@@ -169,16 +169,16 @@ class PrivateMessageServiceTest {
 
     @Test
     void historyReturnsAscendingPageWithEnrichment() {
-        PrivateMessage later = PrivateMessage.of("bob", "alice", "第二条", PrivateMessage.TYPE_TEXT);
-        PrivateMessage earlier = PrivateMessage.of("alice", "bob", "第一条", PrivateMessage.TYPE_TEXT);
+        PrivateMessagePO later = PrivateMessagePO.of("bob", "alice", "第二条", PrivateMessagePO.TYPE_TEXT);
+        PrivateMessagePO earlier = PrivateMessagePO.of("alice", "bob", "第一条", PrivateMessagePO.TYPE_TEXT);
         earlier.setCreated(later.getCreated() - 1000);
         earlier.setReadFlag(1);
         when(messageMapper.findConversationPage("alice", "bob", null, 20))
                 .thenReturn(List.of(later, earlier));
         when(reactionMapper.findByMsgIds(any())).thenReturn(
-                List.of(MessageReaction.of(earlier.getId(), "bob", "👍")));
+                List.of(MessageReactionPO.of(earlier.getId(), "bob", "👍")));
         when(starMapper.findByUsernameAndMsgIds(eq("alice"), any())).thenReturn(
-                List.of(MessageStar.of("alice", earlier.getId())));
+                List.of(MessageStarPO.of("alice", earlier.getId())));
 
         List<PrivateMessageService.MessageVO> history = service.history("alice", "bob", null, 20);
 
@@ -193,13 +193,13 @@ class PrivateMessageServiceTest {
 
     @Test
     void markReadUpdatesCursorAndReceipt() {
-        Friend row = Friend.of("alice", "bob");
+        FriendPO row = FriendPO.of("alice", "bob");
         row.setLastReadAt(0L);
         when(friendMapper.findByOwnerAndFriend("alice", "bob")).thenReturn(Optional.of(row));
 
         service.markRead("alice", "bob");
 
-        ArgumentCaptor<Friend> captor = ArgumentCaptor.forClass(Friend.class);
+        ArgumentCaptor<FriendPO> captor = ArgumentCaptor.forClass(FriendPO.class);
         verify(friendMapper).updateById(captor.capture());
         assertThat(captor.getValue().getLastReadAt()).isGreaterThan(0);
         verify(messageMapper).markIncomingRead("bob", "alice");
@@ -213,34 +213,34 @@ class PrivateMessageServiceTest {
 
     @Test
     void recallWithinWindowNotifiesPeer() {
-        PrivateMessage message = PrivateMessage.of("alice", "bob", "说错话了", PrivateMessage.TYPE_TEXT);
+        PrivateMessagePO message = PrivateMessagePO.of("alice", "bob", "说错话了", PrivateMessagePO.TYPE_TEXT);
         when(messageMapper.selectById(message.getId())).thenReturn(message);
         when(push.isOnline("bob")).thenReturn(true);
 
         service.recall("alice", message.getId());
 
-        assertThat(message.getStatus()).isEqualTo(PrivateMessage.STATUS_RECALLED);
+        assertThat(message.getStatus()).isEqualTo(PrivateMessagePO.STATUS_RECALLED);
         verify(messageMapper).updateById(message);
         verify(push).pushRecall(message);
     }
 
     @Test
     void recallValidatesOwnerWindowAndState() {
-        PrivateMessage other = PrivateMessage.of("bob", "alice", "别人的", PrivateMessage.TYPE_TEXT);
+        PrivateMessagePO other = PrivateMessagePO.of("bob", "alice", "别人的", PrivateMessagePO.TYPE_TEXT);
         when(messageMapper.selectById(other.getId())).thenReturn(other);
         assertThatThrownBy(() -> service.recall("alice", other.getId()))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("只能撤回自己");
 
-        PrivateMessage old = PrivateMessage.of("alice", "bob", "很久之前", PrivateMessage.TYPE_TEXT);
-        old.setCreated(System.currentTimeMillis() - PrivateMessage.RECALL_WINDOW_MS - 1);
+        PrivateMessagePO old = PrivateMessagePO.of("alice", "bob", "很久之前", PrivateMessagePO.TYPE_TEXT);
+        old.setCreated(System.currentTimeMillis() - PrivateMessagePO.RECALL_WINDOW_MS - 1);
         when(messageMapper.selectById(old.getId())).thenReturn(old);
         assertThatThrownBy(() -> service.recall("alice", old.getId()))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("2 分钟");
 
-        PrivateMessage recalled = PrivateMessage.of("alice", "bob", "已撤回", PrivateMessage.TYPE_TEXT);
-        recalled.setStatus(PrivateMessage.STATUS_RECALLED);
+        PrivateMessagePO recalled = PrivateMessagePO.of("alice", "bob", "已撤回", PrivateMessagePO.TYPE_TEXT);
+        recalled.setStatus(PrivateMessagePO.STATUS_RECALLED);
         when(messageMapper.selectById(recalled.getId())).thenReturn(recalled);
         assertThatThrownBy(() -> service.recall("alice", recalled.getId()))
                 .isInstanceOf(BusinessException.class)
@@ -261,9 +261,9 @@ class PrivateMessageServiceTest {
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("站内");
 
-        PrivateMessage sent = service.send("alice", "bob", "/api/files/abc/download", "image", null);
+        PrivateMessagePO sent = service.send("alice", "bob", "/api/files/abc/download", "image", null);
 
-        assertThat(sent.getMsgType()).isEqualTo(PrivateMessage.TYPE_IMAGE);
+        assertThat(sent.getMsgType()).isEqualTo(PrivateMessagePO.TYPE_IMAGE);
         assertThat(sent.getContent()).isEqualTo("/api/files/abc/download");
     }
 
@@ -271,10 +271,10 @@ class PrivateMessageServiceTest {
     void replyStoresQuoteIdForSameConversation() {
         stubFriendship("alice", "bob");
         when(push.isOnline("bob")).thenReturn(false);
-        PrivateMessage quoted = PrivateMessage.of("bob", "alice", "吃火锅吗", PrivateMessage.TYPE_TEXT);
+        PrivateMessagePO quoted = PrivateMessagePO.of("bob", "alice", "吃火锅吗", PrivateMessagePO.TYPE_TEXT);
         when(messageMapper.selectById(quoted.getId())).thenReturn(quoted);
 
-        PrivateMessage sent = service.send("alice", "bob", "吃！", "text", quoted.getId());
+        PrivateMessagePO sent = service.send("alice", "bob", "吃！", "text", quoted.getId());
 
         assertThat(sent.getReplyToId()).isEqualTo(quoted.getId());
     }
@@ -288,7 +288,7 @@ class PrivateMessageServiceTest {
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("不存在");
 
-        PrivateMessage otherChat = PrivateMessage.of("alice", "carol", "别的会话", PrivateMessage.TYPE_TEXT);
+        PrivateMessagePO otherChat = PrivateMessagePO.of("alice", "carol", "别的会话", PrivateMessagePO.TYPE_TEXT);
         when(messageMapper.selectById(otherChat.getId())).thenReturn(otherChat);
         assertThatThrownBy(() -> service.send("alice", "bob", "hi", "text", otherChat.getId()))
                 .isInstanceOf(BusinessException.class)
@@ -300,7 +300,7 @@ class PrivateMessageServiceTest {
         stubFriendship("alice", "bob");
         when(push.isOnline("bob")).thenReturn(false);
 
-        PrivateMessage sent = service.send("alice", "bob", null, "poke", "whatever");
+        PrivateMessagePO sent = service.send("alice", "bob", null, "poke", "whatever");
 
         assertThat(sent.getReplyToId()).isNull();
 
@@ -311,8 +311,8 @@ class PrivateMessageServiceTest {
 
     @Test
     void searchReturnsAscendingResults() {
-        PrivateMessage newer = PrivateMessage.of("bob", "alice", "火锅第一", PrivateMessage.TYPE_TEXT);
-        PrivateMessage older = PrivateMessage.of("alice", "bob", "火锅第二", PrivateMessage.TYPE_TEXT);
+        PrivateMessagePO newer = PrivateMessagePO.of("bob", "alice", "火锅第一", PrivateMessagePO.TYPE_TEXT);
+        PrivateMessagePO older = PrivateMessagePO.of("alice", "bob", "火锅第二", PrivateMessagePO.TYPE_TEXT);
         older.setCreated(newer.getCreated() - 1000);
         when(messageMapper.searchConversation("alice", "bob", "火锅"))
                 .thenReturn(List.of(newer, older));
@@ -326,15 +326,15 @@ class PrivateMessageServiceTest {
 
     @Test
     void toggleReactionAddsThenRemovesAndPushesBothSides() {
-        PrivateMessage message = PrivateMessage.of("bob", "alice", "晚上吃什么", PrivateMessage.TYPE_TEXT);
+        PrivateMessagePO message = PrivateMessagePO.of("bob", "alice", "晚上吃什么", PrivateMessagePO.TYPE_TEXT);
         when(messageMapper.selectById(message.getId())).thenReturn(message);
         when(reactionMapper.findUnique(message.getId(), "alice", "👍")).thenReturn(null);
 
         assertThat(service.toggleReaction("alice", message.getId(), "👍")).isTrue();
-        verify(reactionMapper).insert(any(MessageReaction.class));
+        verify(reactionMapper).insert(any(MessageReactionPO.class));
         verify(push).pushReaction(message, "alice", "👍", true);
 
-        MessageReaction existing = MessageReaction.of(message.getId(), "alice", "👍");
+        MessageReactionPO existing = MessageReactionPO.of(message.getId(), "alice", "👍");
         when(reactionMapper.findUnique(message.getId(), "alice", "👍")).thenReturn(existing);
         assertThat(service.toggleReaction("alice", message.getId(), "👍")).isFalse();
         verify(reactionMapper).deleteById(existing.getId());
@@ -343,12 +343,12 @@ class PrivateMessageServiceTest {
 
     @Test
     void reactionAcceptsExpandedEmojiSet() {
-        PrivateMessage message = PrivateMessage.of("bob", "alice", "早呀", PrivateMessage.TYPE_TEXT);
+        PrivateMessagePO message = PrivateMessagePO.of("bob", "alice", "早呀", PrivateMessagePO.TYPE_TEXT);
         when(messageMapper.selectById(message.getId())).thenReturn(message);
         when(reactionMapper.findUnique(message.getId(), "alice", "⛵")).thenReturn(null);
 
         assertThat(service.toggleReaction("alice", message.getId(), "⛵")).isTrue();
-        verify(reactionMapper).insert(any(MessageReaction.class));
+        verify(reactionMapper).insert(any(MessageReactionPO.class));
         verify(push).pushReaction(message, "alice", "⛵", true);
     }
 
@@ -359,13 +359,13 @@ class PrivateMessageServiceTest {
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("消息不存在");
 
-        PrivateMessage otherChat = PrivateMessage.of("carol", "bob", "跟我无关", PrivateMessage.TYPE_TEXT);
+        PrivateMessagePO otherChat = PrivateMessagePO.of("carol", "bob", "跟我无关", PrivateMessagePO.TYPE_TEXT);
         when(messageMapper.selectById(otherChat.getId())).thenReturn(otherChat);
         assertThatThrownBy(() -> service.toggleReaction("alice", otherChat.getId(), "👍"))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("本会话");
 
-        PrivateMessage message = PrivateMessage.of("bob", "alice", "在吗", PrivateMessage.TYPE_TEXT);
+        PrivateMessagePO message = PrivateMessagePO.of("bob", "alice", "在吗", PrivateMessagePO.TYPE_TEXT);
         when(messageMapper.selectById(message.getId())).thenReturn(message);
         assertThatThrownBy(() -> service.toggleReaction("alice", message.getId(), "🐱"))
                 .isInstanceOf(BusinessException.class)
@@ -374,18 +374,18 @@ class PrivateMessageServiceTest {
 
     @Test
     void toggleStarAndListStars() {
-        PrivateMessage message = PrivateMessage.of("bob", "alice", "这句要收藏", PrivateMessage.TYPE_TEXT);
+        PrivateMessagePO message = PrivateMessagePO.of("bob", "alice", "这句要收藏", PrivateMessagePO.TYPE_TEXT);
         when(messageMapper.selectById(message.getId())).thenReturn(message);
         when(starMapper.findUnique("alice", message.getId())).thenReturn(null);
 
         assertThat(service.toggleStar("alice", message.getId())).isTrue();
-        verify(starMapper).insert(any(MessageStar.class));
+        verify(starMapper).insert(any(MessageStarPO.class));
 
         when(starMapper.findUnique("alice", message.getId()))
-                .thenReturn(MessageStar.of("alice", message.getId()));
+                .thenReturn(MessageStarPO.of("alice", message.getId()));
         assertThat(service.toggleStar("alice", message.getId())).isFalse();
 
-        MessageStar star = MessageStar.of("alice", message.getId());
+        MessageStarPO star = MessageStarPO.of("alice", message.getId());
         when(starMapper.findByUsername("alice")).thenReturn(List.of(star));
         // 收藏夹一次批量取消息：原先每条收藏 selectById 一次（N+1），改成 selectBatchIds 一趟
         when(messageMapper.selectBatchIds(List.of(message.getId()))).thenReturn(List.of(message));
@@ -399,9 +399,9 @@ class PrivateMessageServiceTest {
 
     @Test
     void listStarsSkipsDeletedMessagesWithoutPerStarQuery() {
-        PrivateMessage alive = PrivateMessage.of("bob", "alice", "还在的", PrivateMessage.TYPE_TEXT);
+        PrivateMessagePO alive = PrivateMessagePO.of("bob", "alice", "还在的", PrivateMessagePO.TYPE_TEXT);
         when(starMapper.findByUsername("alice")).thenReturn(List.of(
-                MessageStar.of("alice", alive.getId()), MessageStar.of("alice", "已删除的消息")));
+                MessageStarPO.of("alice", alive.getId()), MessageStarPO.of("alice", "已删除的消息")));
         when(messageMapper.selectBatchIds(any())).thenReturn(List.of(alive));
 
         List<PrivateMessageService.StarVO> stars = service.listStars("alice");
@@ -415,10 +415,10 @@ class PrivateMessageServiceTest {
 
     @Test
     void editUpdatesContentAndBroadcasts() {
-        PrivateMessage message = PrivateMessage.of("alice", "bob", "原始内容", PrivateMessage.TYPE_TEXT);
+        PrivateMessagePO message = PrivateMessagePO.of("alice", "bob", "原始内容", PrivateMessagePO.TYPE_TEXT);
         when(messageMapper.selectById(message.getId())).thenReturn(message);
 
-        PrivateMessage edited = service.edit("alice", message.getId(), "  改好的内容  ");
+        PrivateMessagePO edited = service.edit("alice", message.getId(), "  改好的内容  ");
 
         assertThat(edited.getContent()).isEqualTo("改好的内容");
         assertThat(edited.getEdited()).isEqualTo(1);
@@ -433,33 +433,33 @@ class PrivateMessageServiceTest {
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("消息不存在");
 
-        PrivateMessage other = PrivateMessage.of("bob", "alice", "别人的", PrivateMessage.TYPE_TEXT);
+        PrivateMessagePO other = PrivateMessagePO.of("bob", "alice", "别人的", PrivateMessagePO.TYPE_TEXT);
         when(messageMapper.selectById(other.getId())).thenReturn(other);
         assertThatThrownBy(() -> service.edit("alice", other.getId(), "hi"))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("只能编辑自己");
 
-        PrivateMessage image = PrivateMessage.of("alice", "bob", "/api/files/a/download", PrivateMessage.TYPE_IMAGE);
+        PrivateMessagePO image = PrivateMessagePO.of("alice", "bob", "/api/files/a/download", PrivateMessagePO.TYPE_IMAGE);
         when(messageMapper.selectById(image.getId())).thenReturn(image);
         assertThatThrownBy(() -> service.edit("alice", image.getId(), "hi"))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("文本消息");
 
-        PrivateMessage old = PrivateMessage.of("alice", "bob", "很久之前", PrivateMessage.TYPE_TEXT);
-        old.setCreated(System.currentTimeMillis() - PrivateMessage.RECALL_WINDOW_MS - 1);
+        PrivateMessagePO old = PrivateMessagePO.of("alice", "bob", "很久之前", PrivateMessagePO.TYPE_TEXT);
+        old.setCreated(System.currentTimeMillis() - PrivateMessagePO.RECALL_WINDOW_MS - 1);
         when(messageMapper.selectById(old.getId())).thenReturn(old);
         assertThatThrownBy(() -> service.edit("alice", old.getId(), "hi"))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("2 分钟");
 
-        PrivateMessage recalled = PrivateMessage.of("alice", "bob", "已撤回", PrivateMessage.TYPE_TEXT);
-        recalled.setStatus(PrivateMessage.STATUS_RECALLED);
+        PrivateMessagePO recalled = PrivateMessagePO.of("alice", "bob", "已撤回", PrivateMessagePO.TYPE_TEXT);
+        recalled.setStatus(PrivateMessagePO.STATUS_RECALLED);
         when(messageMapper.selectById(recalled.getId())).thenReturn(recalled);
         assertThatThrownBy(() -> service.edit("alice", recalled.getId(), "hi"))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("已撤回");
 
-        PrivateMessage message = PrivateMessage.of("alice", "bob", "在吗", PrivateMessage.TYPE_TEXT);
+        PrivateMessagePO message = PrivateMessagePO.of("alice", "bob", "在吗", PrivateMessagePO.TYPE_TEXT);
         when(messageMapper.selectById(message.getId())).thenReturn(message);
         assertThatThrownBy(() -> service.edit("alice", message.getId(), "   "))
                 .isInstanceOf(BusinessException.class)
@@ -474,8 +474,8 @@ class PrivateMessageServiceTest {
         when(push.isOnline("bob")).thenReturn(false);
 
         String payload = "{\"name\":\"报表.xlsx\",\"size\":1024,\"url\":\"/api/files/abc/download\"}";
-        PrivateMessage sent = service.send("alice", "bob", payload, "file", null);
-        assertThat(sent.getMsgType()).isEqualTo(PrivateMessage.TYPE_FILE);
+        PrivateMessagePO sent = service.send("alice", "bob", payload, "file", null);
+        assertThat(sent.getMsgType()).isEqualTo(PrivateMessagePO.TYPE_FILE);
         assertThat(sent.getContent()).isEqualTo(payload);
 
         // 非站内地址 / 缺名称直接拒绝
@@ -495,7 +495,7 @@ class PrivateMessageServiceTest {
         lenient().when(moderation.clean(eq("alice"), org.mockito.ArgumentMatchers.anyString()))
                 .thenAnswer(inv -> ((String) inv.getArgument(1)).replace("赌博", "＊＊"));
 
-        PrivateMessage sent = service.send("alice", "bob", "这里有赌博内容", "text", null);
+        PrivateMessagePO sent = service.send("alice", "bob", "这里有赌博内容", "text", null);
         assertThat(sent.getContent()).isEqualTo("这里有＊＊内容");
     }
 
@@ -506,19 +506,19 @@ class PrivateMessageServiceTest {
         assertThatThrownBy(() -> service.send("alice", "bob", "在吗", "text", null))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("发送太快");
-        verify(messageMapper, never()).insert(any(PrivateMessage.class));
+        verify(messageMapper, never()).insert(any(PrivateMessagePO.class));
     }
 
     @Test
     void pinReplacesPreviousPinAndUnpinClears() {
         stubFriendship("alice", "bob");
-        PrivateMessage message = PrivateMessage.of("alice", "bob", "重点", PrivateMessage.TYPE_TEXT);
+        PrivateMessagePO message = PrivateMessagePO.of("alice", "bob", "重点", PrivateMessagePO.TYPE_TEXT);
         when(messageMapper.selectById(message.getId())).thenReturn(message);
 
         PrivateMessageService.PinVO pin = service.pin("alice", "bob", message.getId());
         assertThat(pin.msgId()).isEqualTo(message.getId());
         verify(pinMapper).deleteForConversation("alice", "bob");
-        verify(pinMapper).insert(any(ConversationPin.class));
+        verify(pinMapper).insert(any(ConversationPinPO.class));
         verify(push).pushPin(eq("alice"), eq("bob"), eq(message.getId()), eq(true));
 
         service.unpin("alice", "bob");

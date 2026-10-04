@@ -1,8 +1,8 @@
 package com.smart.chat.messaging.api;
 
-import com.smart.chat.messaging.infrastructure.persistence.Friend;
+import com.smart.chat.messaging.infrastructure.persistence.FriendPO;
 import com.smart.chat.messaging.infrastructure.persistence.FriendMapper;
-import com.smart.chat.messaging.infrastructure.persistence.UserProfile;
+import com.smart.chat.messaging.infrastructure.persistence.UserProfilePO;
 import com.smart.chat.messaging.infrastructure.persistence.UserProfileMapper;
 import com.smart.chat.identity.domain.AccountDirectory;
 import com.smart.chat.bootstrap.config.FastJsonWebConfig;
@@ -45,8 +45,8 @@ class ProfileControllerTest {
     @MockitoBean
     private AccountDirectory accounts;
 
-    private UserProfile profileOf(String username) {
-        UserProfile profile = new UserProfile();
+    private UserProfilePO profileOf(String username) {
+        UserProfilePO profile = new UserProfilePO();
         profile.setUsername(username);
         profile.setNickname(username);
         profile.setSignature("");
@@ -68,7 +68,7 @@ class ProfileControllerTest {
                 .andExpect(jsonPath("$.data.nickname").value("新昵称"));
 
         verify(accounts).updateNickname("alice", "新昵称");
-        ArgumentCaptor<UserProfile> captor = ArgumentCaptor.forClass(UserProfile.class);
+        ArgumentCaptor<UserProfilePO> captor = ArgumentCaptor.forClass(UserProfilePO.class);
         verify(profileMapper).updateById(captor.capture());
         org.assertj.core.api.Assertions.assertThat(captor.getValue().getNickname()).isEqualTo("新昵称");
         org.assertj.core.api.Assertions.assertThat(captor.getValue().getSignature()).isEqualTo("你好");
@@ -88,8 +88,8 @@ class ProfileControllerTest {
         verify(accounts, never()).updateNickname(eq("alice"), org.mockito.ArgumentMatchers.anyString());
     }
 
-    private Friend friendOf(String owner, String peer) {
-        Friend friend = new Friend();
+    private FriendPO friendOf(String owner, String peer) {
+        FriendPO friend = new FriendPO();
         friend.setId(owner + "-" + peer);
         friend.setOwnerUsername(owner);
         friend.setFriendUsername(peer);
@@ -99,10 +99,10 @@ class ProfileControllerTest {
     @Test
     void friendsBirthdaysReadsAllProfilesInOneBatch() throws Exception {
         when(friendMapper.findAllByOwner("alice")).thenReturn(List.of(friendOf("alice", "bob"), friendOf("alice", "carol")));
-        UserProfile bob = profileOf("bob");
+        UserProfilePO bob = profileOf("bob");
         bob.setNickname("阿波");
         bob.setBirthday("1990-" + LocalDate.now().minusDays(1).format(java.time.format.DateTimeFormatter.ofPattern("MM-dd")));
-        UserProfile carol = profileOf("carol");
+        UserProfilePO carol = profileOf("carol");
         carol.setBirthday(LocalDate.now().toString());
         when(profileMapper.selectBatchIds(List.of("bob", "carol"))).thenReturn(List.of(carol, bob));
 

@@ -35,22 +35,22 @@ class FriendListBatchQueryTest {
             friendMapper.deleteAllByOwner(me);
             friendMapper.deleteAllByFriend(me);
             messageMapper.delete(new com.baomidou.mybatisplus.core.conditions.query
-                    .LambdaQueryWrapper<PrivateMessage>()
-                    .eq(PrivateMessage::getFromUser, me).or().eq(PrivateMessage::getToUser, me));
+                    .LambdaQueryWrapper<PrivateMessagePO>()
+                    .eq(PrivateMessagePO::getFromUser, me).or().eq(PrivateMessagePO::getToUser, me));
         }
     }
 
-    private Friend friend(String owner, String peer, Long lastReadAt) {
-        Friend f = Friend.of(owner, peer);
+    private FriendPO friend(String owner, String peer, Long lastReadAt) {
+        FriendPO f = FriendPO.of(owner, peer);
         f.setLastReadAt(lastReadAt);
         friendMapper.insert(f);
         return f;
     }
 
-    private PrivateMessage msg(String from, String to, String content, long created) {
-        PrivateMessage m = PrivateMessage.of(from, to, content, PrivateMessage.TYPE_TEXT);
+    private PrivateMessagePO msg(String from, String to, String content, long created) {
+        PrivateMessagePO m = PrivateMessagePO.of(from, to, content, PrivateMessagePO.TYPE_TEXT);
         m.setCreated(created);
-        m.setStatus(PrivateMessage.STATUS_SENT);
+        m.setStatus(PrivateMessagePO.STATUS_SENT);
         messageMapper.insert(m);
         return m;
     }
@@ -86,9 +86,9 @@ class FriendListBatchQueryTest {
         assertThat(latest.get(BOB)).isEqualTo(1_500L);
         assertThat(latest.get(CAROL)).isEqualTo(2_600L);
 
-        List<PrivateMessage> rows = messageMapper.findMessagesAtCreated(
+        List<PrivateMessagePO> rows = messageMapper.findMessagesAtCreated(
                 ALICE, List.of(BOB, CAROL), latest.values());
-        assertThat(rows).extracting(PrivateMessage::getContent)
+        assertThat(rows).extracting(PrivateMessagePO::getContent)
                 .containsExactlyInAnyOrder("bob 最新的一条", "我发给 carol 的最新版");
     }
 

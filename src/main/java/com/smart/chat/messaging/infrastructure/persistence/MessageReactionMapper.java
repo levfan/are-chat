@@ -8,22 +8,22 @@ import java.util.Collection;
 import java.util.List;
 
 @Mapper
-public interface MessageReactionMapper extends BaseMapperCompat<MessageReaction> {
+public interface MessageReactionMapper extends BaseMapperCompat<MessageReactionPO> {
 
     /** 批量取一组消息的回应（会话页一次性装配）。 */
-    default List<MessageReaction> findByMsgIds(Collection<String> msgIds) {
+    default List<MessageReactionPO> findByMsgIds(Collection<String> msgIds) {
         if (msgIds.isEmpty()) {
             return List.of();
         }
-        return selectList(new LambdaQueryWrapper<MessageReaction>()
-                .in(MessageReaction::getMsgId, msgIds));
+        return selectList(new LambdaQueryWrapper<MessageReactionPO>()
+                .in(MessageReactionPO::getMsgId, msgIds));
     }
 
-    default MessageReaction findUnique(String msgId, String username, String emoji) {
-        return selectOne(new LambdaQueryWrapper<MessageReaction>()
-                .eq(MessageReaction::getMsgId, msgId)
-                .eq(MessageReaction::getUsername, username)
-                .eq(MessageReaction::getEmoji, emoji)
+    default MessageReactionPO findUnique(String msgId, String username, String emoji) {
+        return selectOne(new LambdaQueryWrapper<MessageReactionPO>()
+                .eq(MessageReactionPO::getMsgId, msgId)
+                .eq(MessageReactionPO::getUsername, username)
+                .eq(MessageReactionPO::getEmoji, emoji)
                 .last("LIMIT 1"));
     }
 }

@@ -8,27 +8,27 @@ import java.util.Collection;
 import java.util.List;
 
 @Mapper
-public interface MessageStarMapper extends BaseMapperCompat<MessageStar> {
+public interface MessageStarMapper extends BaseMapperCompat<MessageStarPO> {
 
-    default List<MessageStar> findByUsername(String username) {
-        return selectList(new LambdaQueryWrapper<MessageStar>()
-                .eq(MessageStar::getUsername, username)
-                .orderByDesc(MessageStar::getCreated));
+    default List<MessageStarPO> findByUsername(String username) {
+        return selectList(new LambdaQueryWrapper<MessageStarPO>()
+                .eq(MessageStarPO::getUsername, username)
+                .orderByDesc(MessageStarPO::getCreated));
     }
 
-    default List<MessageStar> findByUsernameAndMsgIds(String username, Collection<String> msgIds) {
+    default List<MessageStarPO> findByUsernameAndMsgIds(String username, Collection<String> msgIds) {
         if (msgIds.isEmpty()) {
             return List.of();
         }
-        return selectList(new LambdaQueryWrapper<MessageStar>()
-                .eq(MessageStar::getUsername, username)
-                .in(MessageStar::getMsgId, msgIds));
+        return selectList(new LambdaQueryWrapper<MessageStarPO>()
+                .eq(MessageStarPO::getUsername, username)
+                .in(MessageStarPO::getMsgId, msgIds));
     }
 
-    default MessageStar findUnique(String username, String msgId) {
-        return selectOne(new LambdaQueryWrapper<MessageStar>()
-                .eq(MessageStar::getUsername, username)
-                .eq(MessageStar::getMsgId, msgId)
+    default MessageStarPO findUnique(String username, String msgId) {
+        return selectOne(new LambdaQueryWrapper<MessageStarPO>()
+                .eq(MessageStarPO::getUsername, username)
+                .eq(MessageStarPO::getMsgId, msgId)
                 .last("LIMIT 1"));
     }
 }

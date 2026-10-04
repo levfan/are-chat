@@ -13,7 +13,7 @@ import java.util.UUID;
  */
 @Data
 @TableName("conversation_pin")
-public class ConversationPin {
+public class ConversationPinPO {
 
     @TableId(value = "id", type = IdType.INPUT)
     private String id;
@@ -23,8 +23,8 @@ public class ConversationPin {
     private String createdBy;
     private Long created;
 
-    public static ConversationPin of(String userA, String userB, String msgId, String createdBy) {
-        ConversationPin pin = new ConversationPin();
+    public static ConversationPinPO of(String userA, String userB, String msgId, String createdBy) {
+        ConversationPinPO pin = new ConversationPinPO();
         pin.id = UUID.randomUUID().toString();
         pin.userA = userA;
         pin.userB = userB;
