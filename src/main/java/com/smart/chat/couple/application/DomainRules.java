@@ -31,6 +31,10 @@ final class DomainRules {
     }
 
     private static BusinessException translate(RuleViolation e) {
-        return new BusinessException(e.notFound() ? 404 : 400, e.getMessage());
+        int status = e.status();
+        if (status == 0) {
+            status = e.notFound() ? 404 : 400;
+        }
+        return new BusinessException(status, e.getMessage());
     }
 }
