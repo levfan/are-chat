@@ -1,7 +1,7 @@
 package com.smart.chat.filestorage.api;
 
 import com.smart.chat.filestorage.application.FileStorageService;
-import com.smart.chat.filestorage.infrastructure.persistence.UploadedFile;
+import com.smart.chat.filestorage.domain.file.UploadedFile;
 import com.smart.chat.sharedkernel.web.ApiResponse;
 import org.springframework.core.io.FileSystemResource;
 import org.springframework.core.io.Resource;
@@ -29,9 +29,10 @@ public class FileController {
     public record FileInfo(String id, String originalName, String contentType, long size,
                            String sha256, boolean deduplicated, String downloadUrl, Long uploadedAt) {
 
+        /** 字段名与口径不变（前端逐字段对账）；来源由 PO 换成领域档案，fastjson2 按名排序输出，顺序一致。 */
         static FileInfo of(UploadedFile f, boolean deduplicated) {
-            return new FileInfo(f.getId(), f.getOriginalName(), f.getContentType(), f.getSize(),
-                    f.getSha256(), deduplicated, "/api/files/" + f.getId() + "/download", f.getUploadedAt());
+            return new FileInfo(f.id(), f.originalName(), f.contentType(), f.size(),
+                    f.sha256(), deduplicated, "/api/files/" + f.id() + "/download", f.uploadedAt());
         }
     }
 

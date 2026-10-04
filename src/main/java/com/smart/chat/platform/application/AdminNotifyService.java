@@ -1,7 +1,9 @@
 package com.smart.chat.platform.application;
 
 import com.alibaba.fastjson2.JSON;
-import com.smart.chat.bootstrap.properties.NotifyProperties;
+import com.smart.chat.platform.domain.notify.EnabledNotifyChannels;
+import com.smart.chat.platform.domain.notify.NotifyChannel;
+import com.smart.chat.platform.domain.notify.NotifyChannelConfig;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -21,18 +23,21 @@ import java.util.concurrent.Executors;
  * 78 管理员通知服务：新注册申请通过免费渠道推给管理员，全部渠道失败也不影响申请落库
  * （审批待办始终在管理员控制台里可见，推送只是「更快知道」）。
  *
- * 渠道（配置见 NotifyProperties，可同时启用多个）：
+ * 渠道（配置经 {@link NotifyChannelConfig} 端口取数，实际值来自 NotifyProperties，可同时启用多个）：
  * - 企业微信群机器人 Webhook：免费、无条数限制，推荐首选
  * - WxPusher：免费微信公众号消息推送
  * - Server酱 Turbo：免费额度（每天 5 条）
  * - 虾推啥：免费微信公众号通知（https://www.xtuis.cn，每天 300 条 / 每分钟 30 条）
+ * <p>
+ * 「哪些渠道配齐了」的裁决在 {@code platform.domain.notify.EnabledNotifyChannels}，这里只按它给出的
+ * 顺序逐个发送。并发模型（单线程旁路队列）、连接与读超时、失败不重试的口径都保持原样，本轮不动。
  */
 @Service
 public class AdminNotifyService {
 
     private static final Logger log = LoggerFactory.getLogger(AdminNotifyService.class);
 
-    private final NotifyProperties properties;
+    private final NotifyChannelConfig config;
     private final HttpClient http;
     /** 单线程守护池：推送是尽力而为的旁路，不能拖慢注册请求 */
     private final ExecutorService executor = Executors.newSingleThreadExecutor(runnable -> {
@@ -41,8 +46,8 @@ public class AdminNotifyService {
         return thread;
     });
 
-    public AdminNotifyService(NotifyProperties properties) {
-        this.properties = properties;
+    public AdminNotifyService(NotifyChannelConfig config) {
+        this.config = config;
         this.http = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).build();
     }
 
@@ -64,23 +69,23 @@ public class AdminNotifyService {
 
     /** 全部渠道都未配置时返回 true：调用方可据此走纯站内提醒 */
     public boolean noChannelConfigured() {
-        return !configuredWecom() && !configuredWxpusher() && !configuredServerchan() && !configuredXtuis();
+        return EnabledNotifyChannels.noneConfigured(config);
     }
 
     public boolean configuredWecom() {
-        return notBlank(properties.wecomWebhook());
+        return EnabledNotifyChannels.isConfigured(NotifyChannel.WECOM, config);
     }
 
     public boolean configuredWxpusher() {
-        return notBlank(properties.wxpusherAppToken()) && notBlank(properties.wxpusherUids());
+        return EnabledNotifyChannels.isConfigured(NotifyChannel.WXPUSHER, config);
     }
 
     public boolean configuredServerchan() {
-        return notBlank(properties.serverchanSendkey());
+        return EnabledNotifyChannels.isConfigured(NotifyChannel.SERVERCHAN, config);
     }
 
     public boolean configuredXtuis() {
-        return notBlank(properties.xtuisSendkey());
+        return EnabledNotifyChannels.isConfigured(NotifyChannel.XTUIS, config);
     }
 
     /** 异步推送：注册请求路径上只入队，绝不阻塞 */
@@ -102,19 +107,21 @@ public class AdminNotifyService {
      */
     public List<ChannelResult> pushText(String title, String content) {
         List<ChannelResult> results = new ArrayList<>();
-        if (configuredWecom()) {
-            results.add(sendQuiet("wecom", () -> sendWecom(content)));
-        }
-        if (configuredWxpusher()) {
-            results.add(sendQuiet("wxpusher", () -> sendWxpusher(title, content)));
-        }
-        if (configuredServerchan()) {
-            results.add(sendQuiet("serverchan", () -> sendServerchan(title, content)));
-        }
-        if (configuredXtuis()) {
-            results.add(sendQuiet("xtuis", () -> sendXtuis(title, content)));
+        // 渠道顺序与「配了才发」的裁决都由领域给出（EnabledNotifyChannels 按枚举声明顺序）
+        for (NotifyChannel channel : EnabledNotifyChannels.of(config)) {
+            results.add(sendQuiet(channel.wireName(), () -> send(channel, title, content)));
         }
         return results;
+    }
+
+    /** 按渠道分派到具体发送器（每个渠道的请求体格式是对外契约，逐个保留） */
+    private void send(NotifyChannel channel, String title, String content) throws Exception {
+        switch (channel) {
+            case WECOM -> sendWecom(content);
+            case WXPUSHER -> sendWxpusher(title, content);
+            case SERVERCHAN -> sendServerchan(title, content);
+            case XTUIS -> sendXtuis(title, content);
+        }
     }
 
     /** 允许抛受检异常的发送动作（异常统一被 sendQuiet 吃掉转成结果） */
@@ -137,20 +144,20 @@ public class AdminNotifyService {
         String payload = JSON.toJSONString(java.util.Map.of(
                 "msgtype", "markdown",
                 "markdown", java.util.Map.of("content", content)));
-        postJson(properties.wecomWebhook(), payload);
+        postJson(config.wecomWebhook(), payload);
     }
 
     /** WxPusher：contentType 3 = markdown */
     private void sendWxpusher(String title, String content) throws Exception {
         List<String> uids = new ArrayList<>();
-        for (String uid : properties.wxpusherUids().split("[,;，；]")) {
+        for (String uid : config.wxpusherUids().split("[,;，；]")) {
             if (notBlank(uid)) {
                 uids.add(uid.trim());
             }
         }
         String summary = title;
         String payload = JSON.toJSONString(java.util.Map.of(
-                "appToken", properties.wxpusherAppToken(),
+                "appToken", config.wxpusherAppToken(),
                 "content", title + "\n\n" + content,
                 "summary", summary,
                 "contentType", 3,
@@ -160,14 +167,14 @@ public class AdminNotifyService {
 
     /** Server酱 Turbo：form-urlencoded，desp 支持 markdown */
     private void sendServerchan(String title, String content) throws Exception {
-        String url = "https://sctapi.ftqq.com/" + properties.serverchanSendkey() + ".send";
+        String url = "https://sctapi.ftqq.com/" + config.serverchanSendkey() + ".send";
         postForm(url, "title=" + urlEncode(title) + "&desp=" + urlEncode(content));
     }
 
     /** 虾推啥（https://www.xtuis.cn 微信通道）：form-urlencoded，text=标题（通知卡片约 13 字）+ desp=正文；
      *  desp 为纯文本展示，先把 markdown 加粗标记剥掉再发。限流时服务端返回 429 + Retry-After */
     private void sendXtuis(String title, String content) throws Exception {
-        String url = "https://wx.xtuis.cn/" + properties.xtuisSendkey() + ".send";
+        String url = "https://wx.xtuis.cn/" + config.xtuisSendkey() + ".send";
         postForm(url, "text=" + urlEncode(title) + "&desp=" + urlEncode(content.replace("**", "")));
     }
 

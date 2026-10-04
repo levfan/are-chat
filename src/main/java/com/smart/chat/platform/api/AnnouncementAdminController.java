@@ -2,7 +2,6 @@ package com.smart.chat.platform.api;
 
 import com.smart.chat.identity.domain.AccountDirectory;
 import com.smart.chat.platform.application.AnnouncementService;
-import com.smart.chat.platform.infrastructure.persistence.Announcement;
 import com.smart.chat.sharedkernel.web.ApiResponse;
 import com.smart.chat.sharedkernel.web.Sessions;
 import jakarta.servlet.http.HttpSession;
@@ -49,7 +48,7 @@ public class AnnouncementAdminController {
     }
 
     @GetMapping("/announcements")
-    public ApiResponse<List<Announcement>> announcements(HttpSession session) {
+    public ApiResponse<List<AnnouncementService.AnnouncementAdminVO>> announcements(HttpSession session) {
         requireAdmin(session);
         return ApiResponse.ok(announcementService.all());
     }
