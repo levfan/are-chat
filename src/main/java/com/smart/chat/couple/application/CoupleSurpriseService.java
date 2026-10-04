@@ -79,7 +79,8 @@ public class CoupleSurpriseService {
     /** 刮开我的券：只有收券人能刮，刮开后券面对双方可见。 */
     public ScratchVO scratch(String me, String id) {
         CoupleSpace space = requireSpace(me);
-        Scratch card = requireCard(space, id);
+        Scratch card = scratchRepository.findByIdIn(id, space.id())
+                .orElseThrow(() -> new BusinessException(404, "没有找到这张刮刮乐哦"));
         // 归属闸门与「已经刮过了」都在 Scratch.scratchBy 里：前者抛 403 原话，后者返回 false 走早退
         if (!rule(() -> card.scratchBy(me))) {
             return toScratchVO(card, me);
@@ -93,7 +94,8 @@ public class CoupleSurpriseService {
     /** 核销：只有送券人能点「已兑现」，让承诺闭环。 */
     public ScratchVO redeemScratch(String me, String id) {
         CoupleSpace space = requireSpace(me);
-        Scratch card = requireCard(space, id);
+        Scratch card = scratchRepository.findByIdIn(id, space.id())
+                .orElseThrow(() -> new BusinessException(404, "没有找到这张刮刮乐哦"));
         // 送券人闸门、未刮开不许核销、重复核销幂等，全在 Scratch.redeemBy
         if (!rule(() -> card.redeemBy(me))) {
             return toScratchVO(card, card.owner());
@@ -185,11 +187,6 @@ public class CoupleSurpriseService {
     // ========== 告白重现（F57） ==========
 
     // ========== 内部工具 ==========
-
-    private Scratch requireCard(CoupleSpace space, String id) {
-        return scratchRepository.findByIdIn(id, space.id())
-                .orElseThrow(() -> new BusinessException(404, "没有找到这张刮刮乐哦"));
-    }
 
     private MysteryBox requireBox(CoupleSpace space, String id) {
         return boxRepository.findByIdIn(id, space.id())
