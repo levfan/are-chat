@@ -7,13 +7,13 @@ import org.apache.ibatis.annotations.Mapper;
 import java.util.Optional;
 
 /**
- * 上传文件 Mapper（MyBatis-Plus BaseMapper）。
+ * 上传文件 Mapper（MyBatis-Plus BaseMapper）。不感知领域类型，只服务 {@link UploadedFilePO}。
  */
 @Mapper
-public interface UploadedFileMapper extends BaseMapper<UploadedFile> {
+public interface UploadedFileMapper extends BaseMapper<UploadedFilePO> {
 
-    default Optional<UploadedFile> findBySha256(String sha256) {
-        return Optional.ofNullable(selectOne(new LambdaQueryWrapper<UploadedFile>()
-                .eq(UploadedFile::getSha256, sha256)));
+    default Optional<UploadedFilePO> findBySha256(String sha256) {
+        return Optional.ofNullable(selectOne(new LambdaQueryWrapper<UploadedFilePO>()
+                .eq(UploadedFilePO::getSha256, sha256)));
     }
 }
