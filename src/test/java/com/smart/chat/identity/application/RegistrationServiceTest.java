@@ -5,7 +5,7 @@ import com.smart.chat.identity.infrastructure.persistence.RegistrationApplicatio
 import com.smart.chat.identity.infrastructure.security.PasswordHasher;
 import com.smart.chat.sharedkernel.web.BusinessException;
 import com.smart.chat.identity.domain.AdminAlerter;
-import com.smart.chat.platform.application.AdminNotifyService;
+import com.smart.chat.identity.domain.AdminNotifyChannel;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -44,7 +44,7 @@ class RegistrationServiceTest {
     private SmsCodeService smsCodeService;
 
     @Mock
-    private AdminNotifyService notifyService;
+    private AdminNotifyChannel notifyChannel;
 
     @Mock
     private AdminAlerter adminAlerter;
@@ -120,7 +120,7 @@ class RegistrationServiceTest {
 
         apply("张三");
 
-        verify(notifyService).pushTextAsync(anyString(), anyString());
+        verify(notifyChannel).pushTextAsync(anyString(), anyString());
         verify(adminAlerter).publishPendingCount(anyList(), anyLong());
     }
 }

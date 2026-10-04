@@ -8,7 +8,7 @@ import com.smart.chat.identity.infrastructure.persistence.RegistrationApplicatio
 import com.smart.chat.identity.infrastructure.persistence.RegistrationApplicationMapper;
 import com.smart.chat.sharedkernel.web.BusinessException;
 import com.smart.chat.identity.domain.WelcomeMessenger;
-import com.smart.chat.platform.application.AdminNotifyService;
+import com.smart.chat.identity.domain.AdminNotifyChannel;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -55,18 +55,18 @@ public class AdminService {
     private final AppUserService userService;
     private final AdminAuditMapper auditMapper;
     private final WelcomeMessenger welcomeMessenger;
-    private final AdminNotifyService notifyService;
+    private final AdminNotifyChannel notifyChannel;
 
     public AdminService(RegistrationApplicationMapper applicationMapper, AppUserMapper userMapper,
                         AppUserService userService, AdminAuditMapper auditMapper,
                         WelcomeMessenger welcomeMessenger,
-                        AdminNotifyService notifyService) {
+                        AdminNotifyChannel notifyChannel) {
         this.applicationMapper = applicationMapper;
         this.userMapper = userMapper;
         this.userService = userService;
         this.auditMapper = auditMapper;
         this.welcomeMessenger = welcomeMessenger;
-        this.notifyService = notifyService;
+        this.notifyChannel = notifyChannel;
     }
 
     public List<RegistrationApplication> applications(String status) {
@@ -95,7 +95,7 @@ public class AdminService {
         sendWelcome(user.getUsername(), reviewer);
         audit(reviewer, "APPROVE", user.getUsername(), "通过注册申请 " + application.getId());
         // 78 审批结果免费渠道推送（失败不影响审批结果）
-        notifyService.notifyApplicationReviewed(user.getUsername(), true, reviewer);
+        notifyChannel.applicationReviewed(user.getUsername(), true, reviewer);
         log.info("注册申请已通过：username={} reviewer={}", user.getUsername(), reviewer);
         return user;
     }
@@ -118,7 +118,7 @@ public class AdminService {
         audit(reviewer, "REJECT", application.getUsername(),
                 cleanReason.isEmpty() ? "拒绝注册申请（未填原因）" : "拒绝注册申请：" + cleanReason);
         // 78 审批结果免费渠道推送（失败不影响审批结果）
-        notifyService.notifyApplicationReviewed(application.getUsername(), false, reviewer);
+        notifyChannel.applicationReviewed(application.getUsername(), false, reviewer);
     }
 
     public List<AdminUserVO> users(String keyword) {

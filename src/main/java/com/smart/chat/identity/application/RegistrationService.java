@@ -6,7 +6,7 @@ import com.smart.chat.identity.infrastructure.persistence.RegistrationApplicatio
 import com.smart.chat.identity.infrastructure.security.PasswordHasher;
 import com.smart.chat.sharedkernel.web.BusinessException;
 import com.smart.chat.identity.domain.AdminAlerter;
-import com.smart.chat.platform.application.AdminNotifyService;
+import com.smart.chat.identity.domain.AdminNotifyChannel;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -40,17 +40,17 @@ public class RegistrationService {
     private final AppUserService userService;
     private final PasswordHasher passwordHasher;
     private final SmsCodeService smsCodeService;
-    private final AdminNotifyService notifyService;
+    private final AdminNotifyChannel notifyChannel;
     private final AdminAlerter adminAlerter;
 
     public RegistrationService(RegistrationApplicationMapper applicationMapper, AppUserService userService,
                                PasswordHasher passwordHasher, SmsCodeService smsCodeService,
-                               AdminNotifyService notifyService, AdminAlerter adminAlerter) {
+                               AdminNotifyChannel notifyChannel, AdminAlerter adminAlerter) {
         this.applicationMapper = applicationMapper;
         this.userService = userService;
         this.passwordHasher = passwordHasher;
         this.smsCodeService = smsCodeService;
-        this.notifyService = notifyService;
+        this.notifyChannel = notifyChannel;
         this.adminAlerter = adminAlerter;
     }
 
@@ -82,7 +82,7 @@ public class RegistrationService {
         log.info("新注册申请：username={} nickname={} phone={}", name, validNickname, validPhone);
 
         // 78 免费渠道推送 + 站内待办（推送失败不影响申请）
-        notifyService.pushTextAsync("小帆船 新用户注册申请",
+        notifyChannel.pushTextAsync("小帆船 新用户注册申请",
                 "**" + name + "**（手机号 " + mask(validPhone) + "）申请加入小帆船，请到管理后台审批。");
         // 78 在线管理员实时收到待办角标
         adminAlerter.publishPendingCount(userService.admins().stream().map(AppUser::getUsername).toList(),

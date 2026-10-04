@@ -7,8 +7,6 @@ import com.smart.chat.identity.infrastructure.persistence.RegistrationApplicatio
 import com.smart.chat.sharedkernel.web.ApiResponse;
 import com.smart.chat.sharedkernel.web.BusinessException;
 import com.smart.chat.sharedkernel.web.Sessions;
-import com.smart.chat.platform.infrastructure.persistence.Announcement;
-import com.smart.chat.platform.application.AnnouncementService;
 import jakarta.servlet.http.HttpSession;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -22,7 +20,7 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * 79 管理员控制台接口：注册审批 / 用户管理 / 审计日志 / 公告管理。
+ * 79 管理员控制台接口：注册审批 / 用户管理 / 审计日志（公告管理已归 platform 的 AnnouncementAdminController）。
  * 所有接口都要求 ADMIN 角色（AppUserService.requireAdmin 兜底鉴权）。
  */
 @RestController
@@ -33,9 +31,6 @@ public class AdminController {
     }
 
     public record StatusRequest(Boolean active) {
-    }
-
-    public record AnnouncementRequest(String content) {
     }
 
     /** 79 重置密码请求：password 选填，填了则重置为指定密码，留空则生成随机临时密码 */
@@ -62,13 +57,10 @@ public class AdminController {
 
     private final AdminService adminService;
     private final AppUserService userService;
-    private final AnnouncementService announcementService;
 
-    public AdminController(AdminService adminService, AppUserService userService,
-                           AnnouncementService announcementService) {
+    public AdminController(AdminService adminService, AppUserService userService) {
         this.adminService = adminService;
         this.userService = userService;
-        this.announcementService = announcementService;
     }
 
     // ---------- 注册审批（77） ----------
@@ -138,28 +130,6 @@ public class AdminController {
                                                          HttpSession session) {
         requireAdmin(session);
         return ApiResponse.ok(adminService.auditLogs(limit));
-    }
-
-    // ---------- 公告管理（88） ----------
-
-    @PostMapping("/announcements")
-    public ApiResponse<AnnouncementService.AnnouncementVO> publish(@RequestBody AnnouncementRequest req,
-                                                                   HttpSession session) {
-        String actor = requireAdmin(session);
-        return ApiResponse.ok(announcementService.publish(actor, req == null ? null : req.content()));
-    }
-
-    @PostMapping("/announcements/{id}/close")
-    public ApiResponse<Void> close(@PathVariable String id, HttpSession session) {
-        String actor = requireAdmin(session);
-        announcementService.close(actor, id);
-        return ApiResponse.ok();
-    }
-
-    @GetMapping("/announcements")
-    public ApiResponse<List<Announcement>> announcements(HttpSession session) {
-        requireAdmin(session);
-        return ApiResponse.ok(announcementService.all());
     }
 
     private String requireAdmin(HttpSession session) {
