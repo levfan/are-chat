@@ -66,6 +66,12 @@ arechat:
   # 87 发送频率限制（防刷屏）：单用户每分钟最多条数
   im:
     send-limit-per-minute: 30
+  # 接口访问日志：/api/** 每个请求打两行，进入=入参、完成=状态+耗时+成功/失败+响应体
+  # 同一请求的两行共用 [req N] 前缀，可直接 grep 串联；取舍理由见 docs/adr/0006
+  request-log:
+    enabled: true
+    # 单行正文最多记录多少字符，超出打截断标记；它同时是响应体旁路缓冲的字节上限（不支持不限，避免大响应整份进堆）
+    max-body-chars: 4000
 
 logging:
   level:
