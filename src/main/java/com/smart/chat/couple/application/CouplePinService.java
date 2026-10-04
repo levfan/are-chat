@@ -1,29 +1,26 @@
 package com.smart.chat.couple.application;
 
+import com.smart.chat.couple.domain.pin.UserPin;
+import com.smart.chat.couple.domain.pin.UserPinRepository;
 import com.smart.chat.couple.domain.space.CoupleSpace;
 import com.smart.chat.couple.domain.space.CoupleSpaceRepository;
-import com.smart.chat.couple.infrastructure.persistence.CoupleUserPinPO;
-import com.smart.chat.couple.infrastructure.persistence.CoupleUserPinMapper;
 import com.smart.chat.sharedkernel.web.BusinessException;
 import org.springframework.stereotype.Service;
 
-import java.util.Arrays;
-import java.util.LinkedHashSet;
 import java.util.List;
+
+import static com.smart.chat.couple.application.DomainRules.guard;
 
 /** F207 常用收藏：每人 pin ≤6 个功能卡键，页签顶部「我的常用」用。 */
 @Service
 public class CouplePinService {
 
-    static final int MAX_PINS = 6;
-    static final int KEY_MAX = 40;
-
     private final CoupleSpaceRepository spaceRepository;
-    private final CoupleUserPinMapper pinMapper;
+    private final UserPinRepository pinRepository;
 
-    public CouplePinService(CoupleSpaceRepository spaceRepository, CoupleUserPinMapper pinMapper) {
+    public CouplePinService(CoupleSpaceRepository spaceRepository, UserPinRepository pinRepository) {
         this.spaceRepository = spaceRepository;
-        this.pinMapper = pinMapper;
+        this.pinRepository = pinRepository;
     }
 
     public record PinVO(List<String> mine, List<String> partner) {
@@ -35,51 +32,22 @@ public class CouplePinService {
         return vo(space, me);
     }
 
-    /** 保存我的收藏（全量覆盖），返回双方最新收藏。 */
+    /** 保存我的收藏（全量覆盖），返回双方最新收藏。上限与键合法性都在 {@link UserPin#replaceWith}。 */
     public PinVO savePins(String me, List<String> pins) {
         CoupleSpace space = requireSpace(me);
-        LinkedHashSet<String> keys = new LinkedHashSet<>();
-        if (pins != null) {
-            for (String raw : pins) {
-                if (raw == null) {
-                    continue;
-                }
-                String key = raw.trim();
-                if (key.isEmpty()) {
-                    continue;
-                }
-                if (key.length() > KEY_MAX) {
-                    throw new BusinessException(400, "收藏键太长啦");
-                }
-                keys.add(key);
-            }
-        }
-        if (keys.size() > MAX_PINS) {
-            throw new BusinessException(400, "最多收藏 " + MAX_PINS + " 个，先放下一个再钉新的");
-        }
-        String joined = String.join(",", keys);
-        CoupleUserPinPO row = pinMapper.find(space.id(), me);
-        if (row == null) {
-            pinMapper.insert(CoupleUserPinPO.of(space.id(), me, joined));
-        } else {
-            row.setPins(joined);
-            row.setUpdatedAt(System.currentTimeMillis());
-            pinMapper.updateById(row);
-        }
-        return new PinVO(List.copyOf(keys), parse(pinMapper.find(space.id(), space.partnerOf(me))));
+        UserPin mine = pinRepository.findBySpaceAndUser(space.id(), me)
+                .orElseGet(() -> UserPin.blank(space.id(), me));
+        guard(() -> mine.replaceWith(pins));
+        pinRepository.save(mine);
+        return new PinVO(mine.keys(), pinned(space.id(), space.partnerOf(me)));
     }
 
     private PinVO vo(CoupleSpace space, String me) {
-        return new PinVO(parse(pinMapper.find(space.id(), me)),
-                parse(pinMapper.find(space.id(), space.partnerOf(me))));
+        return new PinVO(pinned(space.id(), me), pinned(space.id(), space.partnerOf(me)));
     }
 
-    static List<String> parse(CoupleUserPinPO row) {
-        if (row == null || row.getPins() == null || row.getPins().isBlank()) {
-            return List.of();
-        }
-        return Arrays.stream(row.getPins().split(","))
-                .map(String::trim).filter(s -> !s.isEmpty()).toList();
+    private List<String> pinned(String spaceId, String user) {
+        return pinRepository.findBySpaceAndUser(spaceId, user).map(UserPin::keys).orElse(List.of());
     }
 
     private CoupleSpace requireSpace(String me) {

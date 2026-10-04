@@ -1,9 +1,9 @@
 package com.smart.chat.couple.application;
 
-import com.smart.chat.couple.infrastructure.persistence.CoupleComfortPO;
-import com.smart.chat.couple.infrastructure.persistence.CoupleComfortMapper;
-import com.smart.chat.couple.infrastructure.persistence.CoupleMoodPO;
-import com.smart.chat.couple.infrastructure.persistence.CoupleMoodMapper;
+import com.smart.chat.couple.domain.comfort.ComfortRepository;
+import com.smart.chat.couple.domain.comfort.ComfortRequest;
+import com.smart.chat.couple.domain.mood.Mood;
+import com.smart.chat.couple.domain.mood.MoodRepository;
 import com.smart.chat.couple.domain.space.CoupleSpace;
 import com.smart.chat.couple.domain.space.CoupleSpaceRepository;
 import com.smart.chat.sharedkernel.web.BusinessException;
@@ -31,7 +31,8 @@ import static org.mockito.Mockito.when;
 
 /**
  * 求抱抱（保留卡 `couple-comfort`）核心链路单测：发出/回应/情绪同步率/深夜陪伴兜底。
- * 断言锁的是「真的写了一行、真的推给了对的人」，不是返回值回显。
+ * 断言锁的是「真的存了一行、真的推给了对的人」，不是返回值回显。
+ * 假表建在端口这一层（insert/update 的分流见 ComfortRepositoryAdapterTest），PO 与 Mapper 不出现在用例里。
  */
 @ExtendWith(MockitoExtension.class)
 class CoupleComfortServiceTest {
@@ -40,16 +41,18 @@ class CoupleComfortServiceTest {
     private CoupleSpaceRepository spaceRepository;
 
     @Mock
-    private CoupleComfortMapper comfortMapper;
+    private ComfortRepository comfortRepository;
 
     @Mock
-    private CoupleMoodMapper moodMapper;
+    private MoodRepository moodRepository;
 
     @Mock
     private ImPushService push;
 
-    @InjectMocks
+    @org.mockito.InjectMocks
     private CoupleComfortService comfortService;
+
+    private final String today = LocalDate.now().toString();
 
     private CoupleSpace space() {
         return CoupleSpace.restore("s1", "alice", "bob", CoupleSpace.STATUS_ACTIVE, 0L, null, null, null, null, null, null, null);
@@ -62,15 +65,15 @@ class CoupleComfortServiceTest {
     @Test
     void askComfortCreatesTodayRowAndPushesPartner() {
         stubSpace("alice");
-        when(comfortMapper.find("s1", "alice", LocalDate.now().toString())).thenReturn(null);
-        when(comfortMapper.findBySpace("s1")).thenReturn(List.of());
+        when(comfortRepository.findBySpaceAndUserOn("s1", "alice", today)).thenReturn(Optional.empty());
+        when(comfortRepository.listBySpace("s1")).thenReturn(List.of());
 
         comfortService.askForComfort("alice", "SAD");
 
-        ArgumentCaptor<CoupleComfortPO> captor = ArgumentCaptor.forClass(CoupleComfortPO.class);
-        verify(comfortMapper).insert(captor.capture());
-        assertThat(captor.getValue().getFeeling()).isEqualTo("SAD");
-        assertThat(captor.getValue().getDay()).isEqualTo(LocalDate.now().toString());
+        ArgumentCaptor<ComfortRequest> captor = ArgumentCaptor.forClass(ComfortRequest.class);
+        verify(comfortRepository).save(captor.capture());
+        assertThat(captor.getValue().feeling()).isEqualTo("SAD");
+        assertThat(captor.getValue().day()).isEqualTo(today);
         verify(push).pushCoupleEvent(eq("comfort-sent"), eq("alice"), eq("bob"), anyString());
     }
 
@@ -85,7 +88,7 @@ class CoupleComfortServiceTest {
     @Test
     void handleComfortRequiresPendingFromPartner() {
         stubSpace("alice");
-        when(comfortMapper.find("s1", "bob", LocalDate.now().toString())).thenReturn(null);
+        when(comfortRepository.findBySpaceAndUserOn("s1", "bob", today)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> comfortService.handleComfort("alice", "抱抱"))
                 .isInstanceOf(BusinessException.class)
@@ -96,8 +99,8 @@ class CoupleComfortServiceTest {
     @Test
     void handleComfortMarksHandledAndNotifiesAsker() {
         stubSpace("alice");
-        CoupleComfortPO pending = CoupleComfortPO.of("s1", "bob", "WRONGED");
-        when(comfortMapper.find("s1", "bob", LocalDate.now().toString())).thenReturn(pending);
+        ComfortRequest pending = ComfortRequest.askOn("s1", "bob", today, "WRONGED");
+        when(comfortRepository.findBySpaceAndUserOn("s1", "bob", today)).thenReturn(Optional.of(pending));
 
         CoupleComfortService.ComfortVO handled = comfortService.handleComfort("alice", "你没错，先站你这边");
 
@@ -109,13 +112,13 @@ class CoupleComfortServiceTest {
     @Test
     void moodSyncCountsSharedDaysAndStreak() {
         stubSpace("alice");
-        String today = LocalDate.now().toString();
         String yesterday = LocalDate.now().minusDays(1).toString();
-        CoupleMoodPO myToday = CoupleMoodPO.of("s1", "alice", today, "HAPPY", null);
-        CoupleMoodPO partnerToday = CoupleMoodPO.of("s1", "bob", today, "HAPPY", null);
-        CoupleMoodPO myYesterday = CoupleMoodPO.of("s1", "alice", yesterday, "CALM", null);
-        CoupleMoodPO partnerOther = CoupleMoodPO.of("s1", "bob", yesterday, "SAD", null);
-        when(moodMapper.findBySpace("s1")).thenReturn(List.of(myToday, partnerToday, myYesterday, partnerOther));
+        List<Mood> moods = List.of(
+                mood("a1", "alice", today, "HAPPY"),
+                mood("b1", "bob", today, "HAPPY"),
+                mood("a2", "alice", yesterday, "CALM"),
+                mood("b2", "bob", yesterday, "SAD"));
+        when(moodRepository.listBySpace("s1")).thenReturn(moods);
 
         CoupleComfortService.MoodSyncVO vo = comfortService.moodSync("alice");
 
@@ -130,23 +133,25 @@ class CoupleComfortServiceTest {
     void nightCareSkipsHandledComfortButRemindsUntouchedSadness() {
         CoupleSpace space = space();
         when(spaceRepository.findAllActive()).thenReturn(List.of(space));
-        String today = LocalDate.now().toString();
-        CoupleMoodPO aliceSad = CoupleMoodPO.of("s1", "alice", today, "SAD", null);
-        CoupleMoodPO bobFine = CoupleMoodPO.of("s1", "bob", today, "HAPPY", null);
-        when(moodMapper.find("s1", "alice", today)).thenReturn(Optional.of(aliceSad));
-        when(moodMapper.find("s1", "bob", today)).thenReturn(Optional.of(bobFine));
-        CoupleComfortPO handled = CoupleComfortPO.of("s1", "alice", "SAD");
-        handled.setHandled(true);
-        when(comfortMapper.find("s1", "alice", today)).thenReturn(handled);
+        when(moodRepository.findBySpaceAndUserOn("s1", "alice", today))
+                .thenReturn(Optional.of(mood("a1", "alice", today, "SAD")));
+        when(moodRepository.findBySpaceAndUserOn("s1", "bob", today))
+                .thenReturn(Optional.of(mood("b1", "bob", today, "HAPPY")));
+        ComfortRequest handled = ComfortRequest.restore("c1", "alice", "SAD", "抱抱过了", 5L, true, "s1", today, 1L);
+        when(comfortRepository.findBySpaceAndUserOn("s1", "alice", today)).thenReturn(Optional.of(handled));
 
         comfortService.remindNightCare();
 
         verify(push, never()).pushCoupleEvent(any(), any(), any(), any());
 
         // 未被接住时提醒对方
-        CoupleComfortPO untouched = CoupleComfortPO.of("s1", "alice", "SAD");
-        when(comfortMapper.find("s1", "alice", today)).thenReturn(untouched);
+        ComfortRequest untouched = ComfortRequest.askOn("s1", "alice", today, "SAD");
+        when(comfortRepository.findBySpaceAndUserOn("s1", "alice", today)).thenReturn(Optional.of(untouched));
         comfortService.remindNightCare();
         verify(push).pushCoupleEvent(eq("night-care"), eq("system"), eq("bob"), anyString());
+    }
+
+    private Mood mood(String id, String username, String day, String moodKey) {
+        return Mood.restore(id, "s1", username, day, moodKey, null, 1L, null);
     }
 }
