@@ -7,6 +7,7 @@ import com.smart.chat.couple.infrastructure.persistence.CoupleMoodPO;
 import com.smart.chat.couple.infrastructure.persistence.CoupleMoodMapper;
 import com.smart.chat.couple.infrastructure.persistence.CoupleSpacePO;
 import com.smart.chat.couple.infrastructure.persistence.CoupleSpaceMapper;
+import com.smart.chat.couple.domain.comfort.ComfortRequest;
 import com.smart.chat.sharedkernel.web.BusinessException;
 import com.smart.chat.messaging.domain.CoupleEventPublisher;
 import org.springframework.stereotype.Service;
@@ -21,6 +22,8 @@ import java.util.Map;
  * 情绪价值设计：让「我需要安慰」可以被大声说出来、被立刻接住；
  * 让低落的夜晚永远有一句晚安兜底。
  */
+import static com.smart.chat.couple.application.DomainRules.guard;
+import static com.smart.chat.couple.application.DomainRules.rule;
 @Service
 public class CoupleComfortService {
 
@@ -72,9 +75,7 @@ public class CoupleComfortService {
 
     /** 求抱抱：一键告诉 TA「我现在很难过/委屈/累…」（每人每天一条，重复提交视为更新感受）。 */
     public ComfortBoardVO askForComfort(String me, String feeling) {
-        if (!CoupleComfortPO.FEELINGS.contains(feeling)) {
-            throw new BusinessException(400, "感受只能是 难过/委屈/累/焦虑/emo 哦");
-        }
+        guard(() -> ComfortRequest.ask(me, feeling));
         CoupleSpacePO space = requireSpace(me);
         String partner = space.partnerOf(me);
         String today = LocalDate.now().toString();
@@ -96,17 +97,13 @@ public class CoupleComfortService {
 
     /** TA 的安慰话术卡：按感受随机出 3 张，选一张送出去（也可以自己手写）。 */
     public List<String> comfortCards(String feeling) {
-        if (!CoupleComfortPO.FEELINGS.contains(feeling)) {
-            throw new BusinessException(400, "不认识这种感受哦");
-        }
+        guard(() -> ComfortRequest.requireKnown(feeling));
         return CoupleTalkBank.comfortWords(feeling, 3);
     }
 
     /** 回应 TA 的求抱抱：只有对方能回应，回应后求抱抱的人会收到抱抱与那句话。 */
     public ComfortVO handleComfort(String me, String note) {
-        if (note == null || note.isBlank() || note.length() > CoupleComfortPO.NOTE_MAX) {
-            throw new BusinessException(400, "写一句 " + CoupleComfortPO.NOTE_MAX + " 字以内的话，把抱抱送过去");
-        }
+        String words = rule(() -> ComfortRequest.requireNote(note));
         CoupleSpacePO space = requireSpace(me);
         String partner = space.partnerOf(me);
         String today = LocalDate.now().toString();

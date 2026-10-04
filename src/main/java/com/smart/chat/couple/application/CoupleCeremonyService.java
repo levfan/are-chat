@@ -6,6 +6,7 @@ import com.smart.chat.couple.infrastructure.persistence.CouplePointLedgerPO;
 import com.smart.chat.couple.infrastructure.persistence.CouplePointLedgerMapper;
 import com.smart.chat.couple.infrastructure.persistence.CoupleSpacePO;
 import com.smart.chat.couple.infrastructure.persistence.CoupleSpaceMapper;
+import com.smart.chat.couple.domain.coupon.WishCoupon;
 import com.smart.chat.sharedkernel.web.BusinessException;
 import com.smart.chat.messaging.domain.CoupleEventPublisher;
 import org.springframework.stereotype.Service;
@@ -23,6 +24,8 @@ import java.util.List;
  * 小日子史册、年度加冕、节日黄历全部下线；券的产出也从「保险柜满几个月掉券」
  * 改成纯积分购买（见 docs/couple-trim-ranking.md 第七节）。
  */
+import static com.smart.chat.couple.application.DomainRules.guard;
+import static com.smart.chat.couple.application.DomainRules.rule;
 @Service
 public class CoupleCeremonyService {
 
@@ -71,13 +74,9 @@ public class CoupleCeremonyService {
     /** 发一张愿望券（券面自拟，先扣发券人的积分）。 */
     public OverviewVO issueCoupon(String me, String title) {
         CoupleSpacePO space = requireSpace(me);
-        String text = requireText(title, COUPON_TITLE_MAX, "券面写点什么愿望吧");
-        // 积分唯一的花分出口：发券必须先有余额，否则「愿望」就成了空头支票
-        int balance = balance(space, me);
-        if (balance < COUPON_COST) {
-            throw new BusinessException(400, "发一张愿望券要 " + COUPON_COST + " 分，你只有 " + balance
-                    + " 分——先去好事簿记一笔 TA 为你做过的事吧");
-        }
+        // 券面规则、字数上限、余额闸门都在 WishCoupon 里；这里只管取余额和落库
+        WishCoupon wish = rule(() -> WishCoupon.grant(title, me, balance(space, me)));
+        String text = wish.title();
         couponMapper.insert(CoupleCeremonyCouponPO.of(space.getId(), text, me, ""));
         ledgerMapper.insert(CouplePointLedgerPO.of(space.getId(), me, CouplePointLedgerPO.TYPE_SPEND,
                 COUPON_SPEND_PREFIX + text, COUPON_COST));
@@ -92,12 +91,12 @@ public class CoupleCeremonyService {
         if (coupon == null || !coupon.getSpaceId().equals(space.getId())) {
             throw new BusinessException(404, "这张愿望券不存在");
         }
-        if (!coupon.isOpen()) {
-            throw new BusinessException(400, "这张券已经核销过了");
-        }
-        coupon.setStatus(CoupleCeremonyCouponPO.STATUS_USED);
-        coupon.setUsedBy(me);
-        coupon.setUsedAt(System.currentTimeMillis());
+        WishCoupon wish = WishCoupon.restore(coupon.getId(), coupon.getTitle(), coupon.getIssuer(),
+                coupon.getStatus(), coupon.getUsedBy(), coupon.getUsedAt());
+        guard(() -> wish.useBy(me, System.currentTimeMillis()));
+        coupon.setStatus(wish.status());
+        coupon.setUsedBy(wish.usedBy());
+        coupon.setUsedAt(wish.usedAt());
         couponMapper.updateById(coupon);
         push.pushCoupleEvent("ceremony-coupon-used", me, space.partnerOf(me), "愿望券被兑现了：" + coupon.getTitle());
         return overview(me);
