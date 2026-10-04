@@ -1,10 +1,10 @@
 package com.smart.chat.couple.application;
 
+import com.smart.chat.couple.domain.deed.Deed;
+import com.smart.chat.couple.domain.deed.DeedRepository;
+import com.smart.chat.couple.domain.points.PointEntry;
+import com.smart.chat.couple.domain.points.PointLedgerRepository;
 import com.smart.chat.couple.infrastructure.content.CoupleEchoBank;
-import com.smart.chat.couple.infrastructure.persistence.CoupleEchoDeedPO;
-import com.smart.chat.couple.infrastructure.persistence.CoupleEchoDeedMapper;
-import com.smart.chat.couple.infrastructure.persistence.CouplePointLedgerPO;
-import com.smart.chat.couple.infrastructure.persistence.CouplePointLedgerMapper;
 import com.smart.chat.couple.domain.space.CoupleSpace;
 import com.smart.chat.couple.domain.space.CoupleSpaceRepository;
 import com.smart.chat.sharedkernel.web.BusinessException;
@@ -13,6 +13,8 @@ import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
 import java.util.List;
+
+import static com.smart.chat.couple.application.DomainRules.rule;
 
 /**
  * 好事簿（保留卡 `couple-echo-deed`，原 F351/F352）：写下「TA 为我做的事」，
@@ -34,15 +36,15 @@ public class CoupleEchoService {
     static final String DEED_STAR_REASON_PREFIX = "好事簿被加星：";
 
     private final CoupleSpaceRepository spaceRepository;
-    private final CoupleEchoDeedMapper deedMapper;
-    private final CouplePointLedgerMapper ledgerMapper;
+    private final DeedRepository deedRepository;
+    private final PointLedgerRepository ledgerRepository;
     private final CoupleEventPublisher push;
 
-    public CoupleEchoService(CoupleSpaceRepository spaceRepository, CoupleEchoDeedMapper deedMapper,
-                             CouplePointLedgerMapper ledgerMapper, CoupleEventPublisher push) {
+    public CoupleEchoService(CoupleSpaceRepository spaceRepository, DeedRepository deedRepository,
+                             PointLedgerRepository ledgerRepository, CoupleEventPublisher push) {
         this.spaceRepository = spaceRepository;
-        this.deedMapper = deedMapper;
-        this.ledgerMapper = ledgerMapper;
+        this.deedRepository = deedRepository;
+        this.ledgerRepository = ledgerRepository;
         this.push = push;
     }
 
@@ -70,22 +72,15 @@ public class CoupleEchoService {
     public EchoVO addDeed(String me, String content, String day) {
         CoupleSpace space = requireSpace(me);
         LocalDate now = LocalDate.now();
-        String text = trim(content, "好事总得写一句");
-        if (text.length() > CoupleEchoDeedPO.CONTENT_MAX) {
-            throw new BusinessException(400, "一件好事最多 " + CoupleEchoDeedPO.CONTENT_MAX + " 字");
-        }
-        String d = day == null || day.isBlank() ? now.toString() : day.trim();
-        if (!d.matches("\\d{4}-\\d{2}-\\d{2}")) {
-            throw new BusinessException(400, "日期写成 yyyy-MM-dd");
-        }
-        if (deedMapper.findByDayContent(space.id(), me, d, text) != null) {
+        Deed deed = rule(() -> Deed.record(space.id(), me, content, day, now));
+        if (deedRepository.alreadyRecorded(space.id(), me, deed.day(), deed.content())) {
             throw new BusinessException(400, "这条已经记过了");
         }
-        deedMapper.insert(CoupleEchoDeedPO.of(space.id(), me, text, d));
+        deedRepository.save(deed);
         // 写的人是「被照顾的那个」，分要给做事的那个人
-        earn(space, space.partnerOf(me), DEED_REASON_PREFIX + text, DEED_POINTS);
+        earn(space, space.partnerOf(me), DEED_REASON_PREFIX + deed.content(), DEED_POINTS);
         push.pushCoupleEventBoth("echo-deed-added", me, space.userA(), space.userB(),
-                CoupleEchoBank.deedAddedLine(text));
+                CoupleEchoBank.deedAddedLine(deed.content()));
         return build(space, me, now);
     }
 
@@ -93,23 +88,19 @@ public class CoupleEchoService {
     public EchoVO starDeed(String me, String id) {
         CoupleSpace space = requireSpace(me);
         LocalDate now = LocalDate.now();
-        CoupleEchoDeedPO row = id == null || id.isBlank() ? null : deedMapper.selectById(id.trim());
-        if (row == null || !space.id().equals(row.getSpaceId())) {
-            throw new BusinessException(400, "这条不在好事簿里");
-        }
-        if (!row.getFromUser().equals(me)) {
-            throw new BusinessException(400, "只有记下这条的人能加星");
-        }
-        if (row.starredFlag()) {
+        Deed deed = deedRepository.findById(id == null || id.isBlank() ? "" : id.trim())
+                .filter(d -> space.id().equals(d.spaceId()))
+                .orElseThrow(() -> new BusinessException(400, "这条不在好事簿里"));
+        // 归属闸门与幂等都在 Deed.starBy 里：不是记录人抛原话，已经点过返回 false
+        boolean lit = rule(() -> deed.starBy(me));
+        if (!lit) {
             return build(space, me, now);
         }
-        row.setStarred(1);
-        row.setUpdatedAt(System.currentTimeMillis());
-        deedMapper.updateById(row);
-        earn(space, space.partnerOf(row.getFromUser()), DEED_STAR_REASON_PREFIX + row.getContent(),
+        deedRepository.save(deed);
+        earn(space, space.partnerOf(deed.fromUser()), DEED_STAR_REASON_PREFIX + deed.content(),
                 DEED_STAR_POINTS);
         push.pushCoupleEventBoth("echo-deed-starred", me, space.userA(), space.userB(),
-                CoupleEchoBank.deedStarredLine(row.getContent()));
+                CoupleEchoBank.deedStarredLine(deed.content()));
         return build(space, me, now);
     }
 
@@ -117,8 +108,8 @@ public class CoupleEchoService {
 
     private EchoVO build(CoupleSpace space, String me, LocalDate now) {
         String partner = space.partnerOf(me);
-        List<CoupleEchoDeedPO> mine = deedMapper.findByUser(space.id(), me);
-        List<CoupleEchoDeedPO> theirs = deedMapper.findByUser(space.id(), partner);
+        List<Deed> mine = deedRepository.listByRecorder(space.id(), me);
+        List<Deed> theirs = deedRepository.listByRecorder(space.id(), partner);
         return new EchoVO(now.toString(),
                 mine.stream().limit(DEED_PAGE).map(d -> toDeed(d, me)).toList(),
                 theirs.stream().limit(DEED_PAGE).map(d -> toDeed(d, me)).toList(),
@@ -127,25 +118,16 @@ public class CoupleEchoService {
 
     /** 记一笔赚分。归属人由调用点决定，重复计分的闸门在各写方法的早退里。 */
     private void earn(CoupleSpace space, String user, String item, int points) {
-        ledgerMapper.insert(CouplePointLedgerPO.of(space.id(), user,
-                CouplePointLedgerPO.TYPE_EARN, item, points));
+        ledgerRepository.append(PointEntry.earn(space.id(), user, item, points));
     }
 
-    private DeedVO toDeed(CoupleEchoDeedPO d, String me) {
-        return new DeedVO(d.getId(), d.getFromUser(), d.getFromUser().equals(me),
-                nz(d.getContent()), nz(d.getDay()), d.starredFlag(), d.getCreated() == null ? 0 : d.getCreated());
+    private DeedVO toDeed(Deed d, String me) {
+        return new DeedVO(d.id(), d.fromUser(), d.fromUser().equals(me),
+                nz(d.content()), nz(d.day()), d.starred(), d.created());
     }
 
     private String nz(String s) {
         return s == null ? "" : s;
-    }
-
-    private String trim(String s, String failMessage) {
-        String t = s == null ? "" : s.trim();
-        if (t.isEmpty()) {
-            throw new BusinessException(400, failMessage);
-        }
-        return t;
     }
 
     private CoupleSpace requireSpace(String me) {
