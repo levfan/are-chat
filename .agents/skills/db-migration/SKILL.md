@@ -19,6 +19,7 @@ whenToUse: 任务涉及数据库表结构变更（CREATE/ALTER/DROP TABLE、字�
 - 文件名：`V{版本号}__{描述}.sql`，中间是两个下划线（Flyway 风格）
 - 示例：`V1__init_table.sql`、`V2__change_user.sql`
 - 版本号规则：先扫描 `db/` 下已有 `V*.sql`，取最大版本号 +1；禁止重用、跳号，已入库的脚本内容不得再修改（发现写错，用新的版本号写修正脚本）
+- **草稿冻结**：还没 commit 的 V 脚本一旦被任何库执行过（本地 H2、远端联调库都算），内容同样就地冻结——再改就是校验和漂移，那批库下次启动 `Validate failed: checksum mismatch` 直接起不来（2026-10-05 V53 实测）。要改只有两条路：新增版本号写修正脚本，或把草稿库 `flyway_schema_history` 里那行删掉/repair 后重放。所以写 V 脚本要一次成型，先跑库后改内容前先想清楚有没有库吃过它
 - 描述：小写 snake_case 英文，见名知意（如 `add_friend_index`、`init_admin_user`）
 
 ## 脚本内容要求
