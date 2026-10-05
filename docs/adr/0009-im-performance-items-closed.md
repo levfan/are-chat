@@ -86,9 +86,10 @@ v7 记的那件事**主语已经不在仓库里**，实测（源码调用点计�
 | 决策 | 证据 |
 |---|---|
 | suggest 批量化 | `FriendServiceTest` 14 → **18** 用例 0 失败；messaging 契约面与 HEAD 逐条一致（路由 32、文案 73、事件 0，**0 消失 0 新增**）；变异证明见下 |
+| 真库差分测试（补证） | 批量取法与逐条查在 H2+Flyway 真表上逐候选比对：`FriendSuggestRelationQueryTest`，一片数据同时覆盖「只有对方那边存在的好友边」「ACCEPTED/REJECTED 的旧申请」「两方向同时挂待处理单」「无关候选」四种会翻车的情形，2 用例绿。变异证明：把批量侧 outgoing/incoming 两个来源对调，两条用例双双变红（`expected "pending-out" but was "available"`，MVN_EXIT=1）。这条按 SKILL.md 的「替换 SQL 口径必须有真库测试」补——mock 单测只会跟着新签名走 |
 | 变异证明 | 把循环改回逐候选查询后 `suggestNeverFallsBackToPerCandidateQueries` 转红：`NoInteractionsWanted ... found this interaction on mock 'friendRepository'`（`FriendService.java:188` 三次未验证调用），`Tests run: 1, Failures: 1, Errors: 0`，MVN_EXIT=1；**是断言失败不是编译失败**。还原后 18/18 绿 |
 | 死方法删除 | `mvn -o test -Dtest=FriendServiceTest,PrivateMessageRepositoryAdapterTest,FriendListBatchQueryTest,ArchitectureGuardTest` → 33 用例 0 失败，BUILD SUCCESS；守卫 6/6 仍绿 |
-| 全量回归 | `mvn -o clean test` 在隔离 worktree（`.worktrees/verify-*`，detached 到具体 commit）跑两遍：`e9961db` 与本页之外的并行会话 `6c2eeb1` 各一次，均为 **`Tests run: 568, Failures: 0, Errors: 0, Skipped: 0` + `BUILD SUCCESS`**（DDD 收口基线 563 → 本轮 +4 → 并行会话的日志用例 +1）。取隔离 worktree 而非主工作区，是因为同一时间有另一个会话在往 main 提交接口日志改动，主工作区的树不是任何一个 commit 的实况 |
+| 全量回归 | `mvn -o clean test` 在隔离 worktree（`.worktrees/verify-*`，detached 到具体 commit）跑两遍：`e9961db` 与本页之外的并行会话 `6c2eeb1` 各一次，均为 **`Tests run: 568, Failures: 0, Errors: 0, Skipped: 0` + `BUILD SUCCESS`**（DDD 收口基线 563 → 本轮 +4 → 并行会话的日志用例 +1）。取隔离 worktree 而非主工作区，是因为同一时间有另一个会话在往 main 提交接口日志改动，主工作区的树不是任何一个 commit 的实况。补上真库差分测试后在 `4ef60f3` 复测一轮：**`Tests run: 570`** + BUILD SUCCESS，同样是隔离 worktree 里跑的（主工作区当时被并行会话暂存了 131 个待删文件，编译不过，不是我的改动造成） |
 | `build()` 结案 | 本页第 2 节的调用点实测；不改代码，因此无回归风险 |
 | 分支删除 | `git branch -D ddd/cp2` → `Deleted branch ddd/cp2 (was 5f98b54)`；`git branch -vv` 只剩 main |
 

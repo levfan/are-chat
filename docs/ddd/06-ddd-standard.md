@@ -80,7 +80,7 @@
 | couple 全量收口 + 账本清空 | `mvn -o clean test` | **563 用例 0 失败 MVN_EXIT=0，BUILD SUCCESS** |
 | 账本清空后的变异证明 | 在 `CouplePinService` 注入不带 import 的 `Supplier<...persistence.CoupleUserPinPO>` | `persistenceTypesStayBehindRepositoryPorts` + `tacticalLedgerMatchesReality` 双双变红（报出 `内联引用 com.smart.chat.couple.infrastructure.persistence.CoupleUserPinPO`）；还原（`git diff` 为空）后 6/6 绿 |
 | 对外契约 | `node tools/ddd-contract.mjs <基线commit|WORK> <目录>` 两侧输出做集合 diff（全 `src/main/java`） | 路由 **137 种 0 消失 0 新增**；WS 事件 **44 种 0 消失 0 新增**；中文文案 1215→1220 种，差异逐条核过 |
-| 收口后的同日性能结案（ADR-0009） | `mvn -o test -Dtest=FriendServiceTest` / 隔离 worktree `mvn -o clean test` / `node tools/ddd-contract.mjs HEAD src/main/java/com/smart/chat/messaging` | 加好友联想 31 趟 → 常量 3 趟，`FriendServiceTest` 14→**18** 用例；变异证明该锁能变红（`NoInteractionsWanted`，MVN_EXIT=1）；messaging 契约面路由 32 / 文案 73 **0 消失 0 新增**；全仓基线 563 → **568**（`Tests run: 568, Failures: 0, Errors: 0` + BUILD SUCCESS，`6c2eeb1`） |
+| 收口后的同日性能结案（ADR-0009） | `mvn -o test -Dtest=FriendServiceTest` / 隔离 worktree `mvn -o clean test` / `node tools/ddd-contract.mjs HEAD src/main/java/com/smart/chat/messaging` | 加好友联想 31 趟 → 常量 3 趟，`FriendServiceTest` 14→**18** 用例；变异证明该锁能变红（`NoInteractionsWanted`，MVN_EXIT=1）；messaging 契约面路由 32 / 文案 73 **0 消失 0 新增**；另补真库差分测试 `FriendSuggestRelationQueryTest`（批量取法 vs 逐条查，H2+Flyway 真表，四种翻车情形），它对调 outgoing/incoming 也会变红；全仓基线 563 → **570**（`Tests run: 570, Failures: 0, Errors: 0` + BUILD SUCCESS，`4ef60f3`，隔离 worktree 实测） |
 
 ### 契约差异的完整交代（不做"差不多"）
 

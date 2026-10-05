@@ -16,7 +16,7 @@ whenToUse: are-chat 后端开工前加载；新增/删除模块、表、接口�
 - 鉴权：登录态在 HttpSession；`com.smart.chat.sharedkernel.web.Sessions.requireUser(session)` 取当前用户名
 - 统一返回：`ApiResponse.ok(data)` / 业务异常 `BusinessException(code, message)`
 - 构建：`mvn -q compile`；测试 `mvn test`（何时必跑见第六节）
-- 规模快照（2026-10-05 v8 第一批后）：couple 包 108 个文件 / 17 个情侣 Controller / 70 个情侣映射 / 22 张 `couple_*` 表（迁移链到 V52）/ 全仓 `mvn -o test` **568 用例**基线（2026-10-05 在 commit `6c2eeb1` 隔离 worktree 实测 `Tests run: 568, Failures: 0, Errors: 0, Skipped: 0` + BUILD SUCCESS；DDD 战术收口时是 563，其后 +4 来自加好友联想批量化、+1 来自接口日志用例）/ 44 个情侣 WS 事件 / 4 条定时任务。**注意**：本行只描述情侣空间，非情侣模块（auth/im/room/upload/system）的规模未变；逐端点与逐表清单见 `wiki/api.md`、`wiki/database.md`，裁剪决策见 `docs/couple-trim-ranking.md`，v8 新增功能的需求与取舍见 `docs/adr/0007-couple-v8-streak-question-wish.md`
+- 规模快照（2026-10-05 v8 第一批后）：couple 包 108 个文件 / 17 个情侣 Controller / 70 个情侣映射 / 22 张 `couple_*` 表（迁移链到 V52）/ 全仓 `mvn -o test` **570 用例**基线（2026-10-05 在 commit `4ef60f3` 隔离 worktree 实测 `Tests run: 570, Failures: 0, Errors: 0, Skipped: 0` + BUILD SUCCESS；DDD 战术收口时是 563，其后 +4 来自加好友联想批量化、+2 来自它的真库差分测试、+1 来自接口日志用例）/ 44 个情侣 WS 事件 / 4 条定时任务。**注意**：本行只描述情侣空间，非情侣模块（auth/im/room/upload/system）的规模未变；逐端点与逐表清单见 `wiki/api.md`、`wiki/database.md`，裁剪决策见 `docs/couple-trim-ranking.md`，v8 新增功能的需求与取舍见 `docs/adr/0007-couple-v8-streak-question-wish.md`
 
 ### 目录与关键文件
 
@@ -69,7 +69,7 @@ Service → ImPushService.pushCoupleEvent(Both) ─┬→ WS 帧 {type:'couple',
 ### 命令速查
 
 - 编译门禁：`mvn -q compile`（提交前必跑）
-- 全量测试：`mvn test`（**当前基线 568 用例**，2026-10-05 在 commit `6c2eeb1` 实测 `Tests run: 568, Failures: 0, Errors: 0, Skipped: 0` + `BUILD SUCCESS`；旧的 158/202/267/381/409/563 几个写法都是过时快照）；单类：`mvn test -Dtest=CoupleStreakServiceTest`
+- 全量测试：`mvn test`（**当前基线 570 用例**，2026-10-05 在 commit `4ef60f3` 实测 `Tests run: 570, Failures: 0, Errors: 0, Skipped: 0` + `BUILD SUCCESS`；旧的 158/202/267/381/409/563/568 几个写法都是过时快照）；单类：`mvn test -Dtest=CoupleStreakServiceTest`
 - 运行：`mvn spring-boot:run`（8080）；打包 `mvn -q -B package` 后按 Dockerfile/deploy 部署
 - 数表：`grep -c "^CREATE TABLE" src/main/resources/schema.sql`
 
@@ -148,7 +148,7 @@ Service → ImPushService.pushCoupleEvent(Both) ─┬→ WS 帧 {type:'couple',
 - 现有迁移：V1 couple 基础表 → … → V49 私聊消息与好友申请补二级索引 → **V50 系统裁剪第一批（drop 193 张已下线功能的表）** → **V51 裁剪第十六/十七轮（再 drop 85 张，情侣空间只留 10 张卡的 19 张表）** → **V52 v8 第一批（新建 `couple_bond_day` / `couple_question_answer` / `couple_wish` 三张，现役 22 张）**。V1-V49 建过的 297 张 `couple_*` 表里，278 张已被 V50+V51 drop，19 张留存 + V52 新建 3 张 = 现役全部情侣表。**已入库脚本内容一律不得再修改**：裁剪时没有重跑 V50 而是新增 V51，v8 也没有回头改 V51 而是新增 V52（改已入库脚本会让那些库在 Flyway 校验和上直接失败）
 - V52 的索引名统一 `uk_couple8_/idx_couple8_` 前缀（H2 索引名全库唯一，写之前先对全部 `db/V*.sql` 查重）。V52 **没有**给 `couple_space` 加「一用户一有效空间」的唯一约束：可空 `active_flag` + UK 在存量脏数据（同用户多行 ACTIVE）下会让迁移在启动期失败，这个失败模式在私有化部署不可接受，残留风险登记在 `docs/adr/0007` 第 12 条
 - 索引/唯一键名是**全库唯一**（H2 索引不随表隔离，重名报 42S11「Index already exists」）：新增 `uk_*/idx_*` 前先用脚本对全部 `db/V*.sql` 查重，模块前缀（如 `uk_body_*`）是最省事的办法
-- **`(from_user=? AND to_user=?) OR (to_user=? AND from_user=?)` 这种双向会话谓词吃不到索引**（硬性口径）：OR 两侧是不同的索引前缀，优化器只能全表扫，V49 加了 `idx_pm_from_to_created` / `idx_pm_to_from_created` 之后实测仍是 ~200ms/次。要按对端取「最后一条」「未读数」一律走 `PrivateMessageMapper.findLatestCreatedPerPeer`（两趟各方向 GROUP BY）与 `FriendMapper.selectUnreadCountsByPeer`（一趟 friend JOIN 聚合），别再回到 per-peer 循环。**同一族还有第二个案发现场**：`/api/friends/suggest` 曾在候选循环里对每个候选跑三条查询（一条边 + 两个方向的待处理单，10 个候选 = 31 趟），2026-10-05 改成按「我」三趟取全（`findAllByOwner` / `listOutgoing` / `listIncoming`）再在内存比对——凡是「列表 × 每条判关系/取最新」的接口都按这个手法写，并补一条 `verifyNoMoreInteractions` 用例锁住（现役两条：`listFriendsNeverFallsBackToPerPeerQueries`、`suggestNeverFallsBackToPerCandidateQueries`）。
+- **`(from_user=? AND to_user=?) OR (to_user=? AND from_user=?)` 这种双向会话谓词吃不到索引**（硬性口径）：OR 两侧是不同的索引前缀，优化器只能全表扫，V49 加了 `idx_pm_from_to_created` / `idx_pm_to_from_created` 之后实测仍是 ~200ms/次。要按对端取「最后一条」「未读数」一律走 `PrivateMessageMapper.findLatestCreatedPerPeer`（两趟各方向 GROUP BY）与 `FriendMapper.selectUnreadCountsByPeer`（一趟 friend JOIN 聚合），别再回到 per-peer 循环。**同一族还有第二个案发现场**：`/api/friends/suggest` 曾在候选循环里对每个候选跑三条查询（一条边 + 两个方向的待处理单，10 个候选 = 31 趟），2026-10-05 改成按「我」三趟取全（`findAllByOwner` / `listOutgoing` / `listIncoming`）再在内存比对——凡是「列表 × 每条判关系/取最新」的接口都按这个手法写，并补一条 `verifyNoMoreInteractions` 用例锁住（现役两条：`listFriendsNeverFallsBackToPerPeerQueries`、`suggestNeverFallsBackToPerCandidateQueries`），改了取数口径还要配一条**真库差分测试**（`FriendSuggestRelationQueryTest`：同一片 H2 数据上把新旧两套算法逐候选比对，单向好友边、非 PENDING 旧申请、双向同时挂单这三种情形只有真表能照出来）。
   另外：**手写 `@Select`/聚合 SQL 必须有真库测试**（`@SpringBootTest` 打 H2+Flyway），mock 单测只会把 stub 改成新签名然后一路绿灯，SQL 语法与语义错误只有打到真表才暴露。
 
 - **`Integer`/`Long` 位字段禁止配 `isXxx()` 布尔 helper**（硬性）：Lombok 已给字段生成 `getXxx()`，再手写 `isXxx()` 就是同一属性两个不同类型的 getter，MyBatis `Reflector` 会按方法枚举顺序**随机**抛 `ReflectionException: ambiguous type for property`——实测让 `GET /api/couple/world/world` 与 `GET /api/couple/legacy/vault` 整页 500（两家与朋友、传世系统两批 20 个功能对每个用户都不可用），而单测全用 mock 完全照不出来。位判断一律命名 `xxxFlag()`（`laughAFlag()`/`doneFlag()`…）；只有真 `private boolean` 字段才允许 `isXxx()`。回归保护见 `src/test/java/com/smart/chat/EntityReflectionGuardTest`——**必须逐字段 `reflector.getGetInvoker(name).invoke(instance)` 真读一遍属性**：歧义 getter 被 MyBatis 包成 `AmbiguousMethodInvoker`，只实例化实体（旧写法）从不触发取值，守卫会恒绿成假守卫；新增实体后跑它，并确认它真的能变红
