@@ -214,7 +214,6 @@ CREATE TABLE `couple_space` (
     `nick_b` varchar(30) DEFAULT NULL COMMENT 'user_b 的专属爱称（由对方设置）',
     `slogan` varchar(60) DEFAULT NULL COMMENT '我们的宣言：只有彼此懂的一句话（60 字内）',
     `theme` varchar(20) NOT NULL DEFAULT 'classic' COMMENT '空间主题：classic 经典粉 / cherry 樱花 / ocean 海盐 / forest 森绿 / night 星夜',
-    `stickers` varchar(200) DEFAULT NULL COMMENT '贴纸墙佩戴的贴纸 key（逗号分隔，最多 6 枚）',
     `created` bigint(20) NOT NULL COMMENT '建立时间（毫秒时间戳）',
     `dissolved_at` bigint(20) DEFAULT NULL COMMENT '解除时间（毫秒时间戳）',
     PRIMARY KEY (`id`),
@@ -252,36 +251,10 @@ CREATE TABLE `couple_invite` (
 
 -- smart_collections.couple_anniversary definition
 
-CREATE TABLE `couple_anniversary` (
-    `id` varchar(36) NOT NULL COMMENT '主键UUID',
-    `space_id` varchar(36) NOT NULL COMMENT '所属情侣空间ID，关联 couple_space.id',
-    `title` varchar(60) NOT NULL COMMENT '纪念日名称，如「领证纪念日」/「TA 的生日」',
-    `event_date` varchar(10) NOT NULL COMMENT '纪念日日期（yyyy-MM-dd）',
-    `yearly` tinyint(4) DEFAULT 1 COMMENT '是否每年重复：1 每年 / 0 仅当年',
-    `kind` varchar(20) NOT NULL DEFAULT 'NORMAL' COMMENT '日子类型：NORMAL 普通 / LOVE 恋爱 / FAMILY 家人 / FRIEND 朋友 / WORK 工作',
-    `calendar_type` varchar(10) NOT NULL DEFAULT 'SOLAR' COMMENT '历法：SOLAR 公历 / LUNAR 农历',
-    `lunar_md` varchar(5) NOT NULL DEFAULT '' COMMENT '农历月日 MMDD（LUNAR 时有效，闰月按正月计）',
-    `created_by` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin COMMENT '创建人用户名',
-    `created` bigint(20) NOT NULL COMMENT '创建时间（毫秒时间戳）',
-    PRIMARY KEY (`id`),
-    KEY `idx_couple_anniv_space` (`space_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='共同日历纪念日表：纪念日/生日/约会日，双方都能看到和编辑';
 
 
 -- smart_collections.couple_mood definition
 
-CREATE TABLE `couple_mood` (
-    `id` varchar(36) NOT NULL COMMENT '主键UUID',
-    `space_id` varchar(36) NOT NULL COMMENT '所属情侣空间ID，关联 couple_space.id',
-    `username` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin COMMENT '记录人用户名（区分大小写）',
-    `mood_day` varchar(10) NOT NULL COMMENT '心情日期（yyyy-MM-dd，按自然日去重）',
-    `mood` varchar(16) NOT NULL COMMENT '心情键：LOVE 恋爱中 / HAPPY 开心 / CALM 平静 / BUSY 好忙 / TIRED 累了 / SICK 生病 / SAD 难过 / ANGRY 生气',
-    `note` varchar(200) DEFAULT NULL COMMENT '一句话心情',
-    `created` bigint(20) NOT NULL COMMENT '创建时间（毫秒时间戳）',
-    `updated_at` bigint(20) DEFAULT NULL COMMENT '最近修改时间（毫秒时间戳）',
-    PRIMARY KEY (`id`),
-    UNIQUE KEY `uq_couple_mood` (`space_id`,`username`,`mood_day`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='情侣心情日记表：每天每人记录一条心情，双方互相可见，用于绘制双人心情曲线';
 
 
 -- smart_collections.couple_letter definition
@@ -298,30 +271,10 @@ CREATE TABLE `couple_mood` (
 
 -- smart_collections.couple_action definition
 
-CREATE TABLE `couple_action` (
-    `id` varchar(36) NOT NULL COMMENT '主键UUID',
-    `space_id` varchar(36) NOT NULL COMMENT '所属情侣空间ID，关联 couple_space.id',
-    `username` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '发送方用户名（区分大小写）',
-    `kind` varchar(16) NOT NULL COMMENT '动作类型：POKE 戳一戳 / HUG 抱抱 / KISS 亲亲 / PAT 捏捏脸 / NUZZLE 蹭蹭 / TICKLE 挠痒痒 / MISS 在想你',
-    `created` bigint(20) NOT NULL COMMENT '发送时间（毫秒时间戳）',
-    PRIMARY KEY (`id`),
-    KEY `idx_couple_action_space` (`space_id`,`created`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='情侣贴贴动作流水表：一键发送亲密小动作，对方实时收到推送，累计次数点亮贴贴里程碑';
 
 
 -- smart_collections.couple_mood_reaction definition
 
-CREATE TABLE `couple_mood_reaction` (
-    `id` varchar(36) NOT NULL COMMENT '主键UUID',
-    `space_id` varchar(36) NOT NULL COMMENT '所属情侣空间ID，关联 couple_space.id',
-    `mood_day` varchar(10) NOT NULL COMMENT '被回应的心情日期（yyyy-MM-dd）',
-    `from_user` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '回应人用户名（区分大小写）',
-    `reaction` varchar(16) NOT NULL COMMENT '回应类型：HUG 抱抱 / KISS 亲亲 / CHEER 加油 / PAT 摸摸头',
-    `created` bigint(20) NOT NULL COMMENT '回应时间（毫秒时间戳）',
-    `updated_at` bigint(20) DEFAULT NULL COMMENT '最近修改时间（毫秒时间戳）',
-    PRIMARY KEY (`id`),
-    UNIQUE KEY `uq_couple_mood_reaction` (`space_id`,`mood_day`,`from_user`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='情侣心情回应表：看到 TA 今天心情不好，贴一个抱抱/亲亲/加油，TA 会实时收到推送';
 
 
 -- smart_collections.couple_task definition
@@ -400,38 +353,10 @@ CREATE TABLE `couple_notify` (
 
 -- smart_collections.couple_scratch definition
 
-CREATE TABLE `couple_scratch` (
-    `id` varchar(36) NOT NULL COMMENT '主键UUID',
-    `space_id` varchar(36) NOT NULL COMMENT '情侣空间ID（关联 couple_space.id）',
-    `week_key` varchar(10) NOT NULL COMMENT '周标识（如 2026-W40），每周一张',
-    `from_user` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '送券人用户名（区分大小写）',
-    `owner` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '收券人用户名（刮券的人）',
-    `prize_kind` varchar(20) NOT NULL COMMENT '券类型（hug/breakfast/movie 等）',
-    `prize_text` varchar(100) NOT NULL COMMENT '券面内容（如 一个按规定动作的拥抱）',
-    `scratched` tinyint(1) NOT NULL DEFAULT 0 COMMENT '是否已刮开：0 未刮 1 已刮',
-    `scratched_at` bigint(20) DEFAULT NULL COMMENT '刮开时间（毫秒）',
-    `redeemed_at` bigint(20) DEFAULT NULL COMMENT '核销时间（空 = 券还没用）',
-    `created` bigint(20) NOT NULL COMMENT '时间（毫秒时间戳）',
-    PRIMARY KEY (`id`),
-    UNIQUE KEY `uk_scratch_week` (`space_id`,`week_key`,`owner`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='爱情刮刮乐表：每周一张来自 TA 的奖励券，刮开核销';
 
 
 -- smart_collections.couple_mystery_box definition
 
-CREATE TABLE `couple_mystery_box` (
-    `id` varchar(36) NOT NULL COMMENT '主键UUID',
-    `space_id` varchar(36) NOT NULL COMMENT '情侣空间ID（关联 couple_space.id）',
-    `from_user` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '装盒人用户名（区分大小写）',
-    `kind` varchar(10) NOT NULL COMMENT '盒子类型：whisper 悄悄话 / task 小任务',
-    `content` varchar(300) NOT NULL COMMENT '盒子里的话或任务',
-    `open_day` varchar(10) NOT NULL COMMENT '可拆日期（yyyy-MM-dd，最早明天）',
-    `opened` tinyint(1) NOT NULL DEFAULT 0 COMMENT '是否已拆开：0 未拆 1 已拆',
-    `opened_at` bigint(20) DEFAULT NULL COMMENT '拆开时间（毫秒）',
-    `created` bigint(20) NOT NULL COMMENT '时间（毫秒时间戳）',
-    PRIMARY KEY (`id`),
-    KEY `idx_mystery_box_space` (`space_id`,`open_day`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='恋爱盲盒表：延迟拆开的悄悄话/小任务，制造一天的小期待';
 
 
 -- smart_collections.couple_sweet_alarm definition
@@ -457,19 +382,6 @@ CREATE TABLE `couple_mystery_box` (
 
 -- smart_collections.couple_comfort definition
 
-CREATE TABLE `couple_comfort` (
-    `id` varchar(36) NOT NULL COMMENT '主键UUID',
-    `space_id` varchar(36) NOT NULL COMMENT '情侣空间ID（关联 couple_space.id）',
-    `from_user` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '求抱抱的人用户名（区分大小写）',
-    `day` varchar(10) NOT NULL COMMENT '日期（yyyy-MM-dd，每人每天一条，重复=修改）',
-    `feeling` varchar(20) NOT NULL COMMENT '此刻的感受（SAD 难过/WRONGED 委屈/TIRED 累/ANXIOUS 焦虑/EMO emo）',
-    `handled` tinyint(1) NOT NULL DEFAULT 0 COMMENT '对方是否已回应：0 等待 1 已回应',
-    `handled_note` varchar(100) DEFAULT NULL COMMENT 'TA 的回应（从话术卡选择或手写）',
-    `handled_at` bigint(20) DEFAULT NULL COMMENT '回应时间（毫秒）',
-    `created` bigint(20) NOT NULL COMMENT '时间（毫秒时间戳）',
-    PRIMARY KEY (`id`),
-    UNIQUE KEY `uk_comfort_day` (`space_id`,`day`,`from_user`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='求抱抱表：一键求助的温柔按钮，让「需要安慰」被大声说出来';
 
 
 -- smart_collections.couple_peace_review definition
@@ -713,17 +625,6 @@ CREATE TABLE `couple_comfort` (
 
 -- smart_collections.couple_point_ledger definition
 
-CREATE TABLE `couple_point_ledger` (
-    `id` varchar(36) NOT NULL COMMENT '主键UUID',
-    `space_id` varchar(36) NOT NULL COMMENT '情侣空间ID（关联 couple_space.id）',
-    `from_user` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '记账人用户名（区分大小写）',
-    `type` varchar(10) NOT NULL COMMENT '流水类型 EARN 赚 / SPEND 花',
-    `item` varchar(100) NOT NULL COMMENT '事项或兑换的奖励',
-    `points` int(11) NOT NULL DEFAULT 1 COMMENT '积分数（正整数）',
-    `created` bigint(20) NOT NULL COMMENT '时间（毫秒时间戳）',
-    PRIMARY KEY (`id`),
-    KEY `idx_point_ledger` (`space_id`, `created`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='家务积分流水表：家务不再是白干，爱也要有账本';
 
 
 -- smart_collections.couple_five_year_plan definition
@@ -749,30 +650,9 @@ CREATE TABLE `couple_point_ledger` (
 -- smart_collections.couple_dnd_setting definition
 
 -- smart_collections.couple_user_pin definition
-CREATE TABLE `couple_user_pin` (
-    `id` varchar(36) NOT NULL COMMENT '主键UUID',
-    `space_id` varchar(36) NOT NULL COMMENT '情侣空间ID（关联 couple_space.id）',
-    `from_user` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '归属用户名（区分大小写）',
-    `pins` varchar(500) NOT NULL DEFAULT '' COMMENT '功能卡键，逗号分隔，最多 6 个',
-    `updated_at` bigint(20) NOT NULL COMMENT '更新时间（毫秒）',
-    `created` bigint(20) NOT NULL COMMENT '时间（毫秒时间戳）',
-    PRIMARY KEY (`id`),
-    UNIQUE KEY `uk_space_user` (`space_id`, `from_user`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='F207 常用收藏表：把最常翻的卡片钉在手边';
 
 
 -- smart_collections.couple_dine_ticket definition
-CREATE TABLE `couple_dine_ticket` (
-    `id` varchar(36) NOT NULL COMMENT '主键UUID',
-    `space_id` varchar(36) NOT NULL COMMENT '情侣空间ID（关联 couple_space.id）',
-    `day` varchar(10) NOT NULL COMMENT '提名日 yyyy-MM-dd',
-    `from_user` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '提名用户名（区分大小写）',
-    `dish` varchar(60) NOT NULL COMMENT '菜名',
-    `reason` varchar(140) NOT NULL DEFAULT '' COMMENT '一句理由',
-    `created` bigint(20) NOT NULL COMMENT '时间（毫秒时间戳）',
-    PRIMARY KEY (`id`),
-    UNIQUE KEY `uk_ticket` (`space_id`, `day`, `from_user`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='F210 今晚饭票：每人每天提名一道菜';
 
 -- smart_collections.couple_dine_rate definition
 -- smart_collections.couple_dine_nogo definition
@@ -797,19 +677,6 @@ CREATE TABLE `couple_dine_ticket` (
 -- smart_collections.couple_ceremony_policy definition
 -- smart_collections.couple_ceremony_renew definition
 -- smart_collections.couple_ceremony_coupon definition
-CREATE TABLE `couple_ceremony_coupon` (
-    `id` varchar(36) NOT NULL COMMENT '主键UUID',
-    `space_id` varchar(36) NOT NULL COMMENT '情侣空间ID（关联 couple_space.id）',
-    `title` varchar(80) NOT NULL COMMENT '券面文字（自拟）',
-    `status` varchar(10) NOT NULL DEFAULT 'OPEN' COMMENT 'OPEN 待兑 / USED 已核销',
-    `ref` varchar(60) NOT NULL DEFAULT '' COMMENT '保险柜 payout 来源标记（policy-3 等；手动发为空）',
-    `issuer` varchar(50) NOT NULL COMMENT '发券人',
-    `used_by` varchar(50) NOT NULL DEFAULT '' COMMENT '核销人（未核销为空）',
-    `used_at` bigint(20) NOT NULL DEFAULT 0 COMMENT '核销时间（毫秒，未核销为 0）',
-    `created` bigint(20) NOT NULL COMMENT '时间（毫秒时间戳）',
-    PRIMARY KEY (`id`),
-    KEY `idx_coupon` (`space_id`, `status`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='F236 愿望券本：手动发/核销，保险柜满 3/6/12 月自动 payout';
 
 -- smart_collections.couple_ceremony_recap definition
 -- smart_collections.couple_board_role definition
@@ -836,20 +703,6 @@ CREATE TABLE `couple_ceremony_coupon` (
 -- smart_collections.couple_truce definition
 -- smart_collections.couple_name_day definition
 -- smart_collections.couple_spin_task definition
-CREATE TABLE `couple_spin_task` (
-    `id` varchar(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '主键UUID',
-    `space_id` varchar(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '情侣空间ID',
-    `week` varchar(10) NOT NULL COMMENT '周锚 yyyy-MM-dd（周一）',
-    `item` varchar(40) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '家务事项',
-    `assigned_user` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '轮到天选之人（区分大小写）',
-    `confirmed` tinyint(4) NOT NULL DEFAULT 0 COMMENT '1=双方认账（对方点认）',
-    `done` tinyint(4) NOT NULL DEFAULT 0 COMMENT '1=干完了',
-    `done_at` bigint(20) DEFAULT NULL COMMENT '完成时间',
-    `created` bigint(20) NOT NULL COMMENT '时间（毫秒时间戳）',
-    PRIMARY KEY (`id`),
-    UNIQUE KEY `uk_spin_item` (`space_id`, `week`, `item`),
-    KEY `idx_spin_space` (`space_id`, `week`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='F270 家务轮盘：一周一转，items 逐条落行';
 
 -- smart_collections.couple_shop_item definition
 -- smart_collections.couple_stock definition
@@ -929,18 +782,6 @@ CREATE TABLE `couple_spin_task` (
 -- smart_collections.couple_legacy_item definition
 -- smart_collections.couple_legacy_draw definition
 -- smart_collections.couple_echo_deed definition
-CREATE TABLE `couple_echo_deed` (
-    `id` varchar(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '主键UUID',
-    `space_id` varchar(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '情侣空间ID（关联 couple_space.id）',
-    `from_user` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '记录人：写下 TA 为自己做的一件事（区分大小写）',
-    `content` varchar(120) NOT NULL DEFAULT '' COMMENT '事情本身（≤80 字，宽度放宽）',
-    `day` varchar(10) NOT NULL COMMENT '发生日 yyyy-MM-dd',
-    `starred` tinyint(4) NOT NULL DEFAULT 0 COMMENT '1=记录人点过「这条救过我」（仅记录人本人，幂等）',
-    `created` bigint(20) NOT NULL COMMENT '时间（毫秒时间戳）',
-    `updated_at` bigint(20) NOT NULL COMMENT '更新时间（毫秒时间戳）',
-    PRIMARY KEY (`id`),
-    KEY `idx_echo_deed` (`space_id`, `from_user`, `day`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='F350 好事簿（单记录人模型）';
 
 -- smart_collections.couple_echo_juice definition
 -- smart_collections.couple_echo_refill_log definition
@@ -964,20 +805,6 @@ CREATE TABLE `couple_echo_deed` (
 -- F372 加班预报：今晚加班到几点，TA 可留一张「到家灯给你留着」卡
 
 -- smart_collections.couple_quest_overtime definition
-CREATE TABLE `couple_quest_overtime` (
-    `id` varchar(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '主键UUID',
-    `space_id` varchar(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '情侣空间ID（关联 couple_space.id）',
-    `day` varchar(10) NOT NULL COMMENT '预报日 yyyy-MM-dd',
-    `from_user` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '加班的人（区分大小写，每人每天一行）',
-    `until_hour` int(11) NOT NULL DEFAULT 20 COMMENT '预计忙到几点 13-23（服务层钳制）',
-    `note` varchar(120) NOT NULL DEFAULT '' COMMENT '一句说明（≤40 字，宽度放宽）',
-    `lamp` varchar(180) NOT NULL DEFAULT '' COMMENT '对方留的灯卡（≤60 字，宽度放宽，空=还没留）',
-    `lamp_by` varchar(50) DEFAULT NULL COMMENT '留灯的人（NULL=没留）',
-    `created` bigint(20) NOT NULL COMMENT '时间（毫秒时间戳）',
-    `updated_at` bigint(20) NOT NULL COMMENT '更新时间（毫秒时间戳）',
-    PRIMARY KEY (`id`),
-    UNIQUE KEY `uk_quest_overtime` (`space_id`, `day`, `from_user`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='F372 加班预报与留灯卡';
 
 -- F373 生病陪护单：TA 生病开单，喝水/吃药由陪护人代记，痊愈日关单庆典
 
@@ -1010,32 +837,10 @@ CREATE TABLE `couple_quest_overtime` (
 -- F382 安全词：双方各约一个暂停词
 
 -- smart_collections.couple_catch_safeword definition
-CREATE TABLE `couple_catch_safeword` (
-    `id` varchar(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '主键UUID',
-    `space_id` varchar(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '情侣空间ID（关联 couple_space.id）',
-    `from_user` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '约定这个词的人（区分大小写，每人一个）',
-    `word` varchar(80) NOT NULL COMMENT '安全词（≤20 字，宽度放宽）',
-    `note` varchar(240) NOT NULL DEFAULT '' COMMENT '用了之后希望怎样（≤60 字，宽度放宽）',
-    `created` bigint(20) NOT NULL COMMENT '时间（毫秒时间戳）',
-    `updated_at` bigint(20) NOT NULL COMMENT '更新时间（毫秒时间戳）',
-    PRIMARY KEY (`id`),
-    UNIQUE KEY `uk_catch_safeword` (`space_id`, `from_user`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='F382 安全词约定（每人一个）';
 
 -- F382 安全词使用记录：哪天用的+事后一句复盘（一天一人一次）
 
 -- smart_collections.couple_catch_safeword_use definition
-CREATE TABLE `couple_catch_safeword_use` (
-    `id` varchar(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '主键UUID',
-    `space_id` varchar(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '情侣空间ID（关联 couple_space.id）',
-    `day` varchar(10) NOT NULL COMMENT '使用日 yyyy-MM-dd',
-    `user_name` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '喊了暂停的人（区分大小写）',
-    `reflect` varchar(240) NOT NULL DEFAULT '' COMMENT '事后一句复盘（≤60 字，宽度放宽，可后补）',
-    `created` bigint(20) NOT NULL COMMENT '时间（毫秒时间戳）',
-    `updated_at` bigint(20) NOT NULL COMMENT '更新时间（毫秒时间戳）',
-    PRIMARY KEY (`id`),
-    UNIQUE KEY `uk_catch_use` (`space_id`, `day`, `user_name`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='F382 安全词使用记录（一天一人一次）';
 
 -- F383 敏感日历：给 TA 的敏感日提前标注+当天想被怎样对待，前 1 天提醒我
 
@@ -1079,18 +884,18 @@ CREATE TABLE `couple_catch_safeword_use` (
 -- smart_collections.couple_laugh_style definition
 
 
--- smart_collections.couple_bond_day definition（V52）
+-- smart_collections.couple_streak_day definition（V52 建为 couple_bond_day，V53 改名）
 
-CREATE TABLE `couple_bond_day` (
+CREATE TABLE `couple_streak_day` (
     `id` varchar(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '主键UUID',
     `space_id` varchar(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '所属情侣空间ID，关联 couple_space.id',
     `day` varchar(10) NOT NULL COMMENT '打卡日期（yyyy-MM-dd，自然日）',
-    `source` varchar(10) NOT NULL DEFAULT 'AUTO' COMMENT '确认方式：AUTO 双方当天都发过贴贴 / MAKEUP 补签',
+    `source` varchar(10) NOT NULL DEFAULT 'AUTO' COMMENT '确认方式：AUTO 双方当天都答完每日一问（或空间建立当天） / MAKEUP 补签',
     `operator_user` varchar(50) DEFAULT NULL COMMENT '补签操作人（AUTO 时为 NULL）',
     `created` bigint(20) NOT NULL COMMENT '确认时间（毫秒时间戳）',
     PRIMARY KEY (`id`),
-    UNIQUE KEY `uk_couple8_bond_day` (`space_id`,`day`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='贴贴打卡日表：一行=一天双方共同贴贴过（或补签），连续天数与解锁档位由本表的 day 集合算出';
+    UNIQUE KEY `uk_couple9_streak_day` (`space_id`,`day`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='互动打卡日表：一行=那一天双方共同活跃（都答完每日一问）或补签成功，连续天数与七档解锁由本表的 day 集合算出';
 
 
 -- smart_collections.couple_question_answer definition（V52）
