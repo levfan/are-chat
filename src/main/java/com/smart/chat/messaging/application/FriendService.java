@@ -21,6 +21,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 import static com.smart.chat.messaging.application.DomainRules.guard;
@@ -166,22 +167,38 @@ public class FriendService {
      * 关系值：available / friend / pending-out / pending-in
      */
     public List<UserSuggestion> suggest(String me, String keyword) {
+        List<AccountDirectory.Account> candidates = accounts.search(keyword, me, 10);
+        if (candidates.isEmpty()) {
+            return List.of();
+        }
+        // 关系判定按「我」一趟取全，再在内存里比对——原先每个候选三趟（一条边 + 两个方向的申请），
+        // 十个候选就是三十趟；改成常量三趟且口径逐条等价：
+        //   friend      ⇔ findAllByOwner(me) 的某条边正好指向该候选
+        //   pending-out ⇔ listOutgoing(me) 里存在 toUser 为该候选的待处理单
+        //   pending-in  ⇔ listIncoming(me) 里存在 fromUser 为该候选的待处理单
+        Set<String> friends = friendRepository.findAllByOwner(me).stream()
+                .map(Friend::friendUsername).collect(Collectors.toSet());
+        Set<String> pendingOut = requestRepository.listOutgoing(me).stream()
+                .map(FriendRequest::toUser).collect(Collectors.toSet());
+        Set<String> pendingIn = requestRepository.listIncoming(me).stream()
+                .map(FriendRequest::fromUser).collect(Collectors.toSet());
         List<UserSuggestion> result = new ArrayList<>();
-        for (AccountDirectory.Account candidate : accounts.search(keyword, me, 10)) {
+        for (AccountDirectory.Account candidate : candidates) {
             result.add(new UserSuggestion(candidate.username(), candidate.maskedPhone(),
-                    relation(me, candidate.username())));
+                    relationOf(candidate.username(), friends, pendingOut, pendingIn)));
         }
         return result;
     }
 
-    private String relation(String me, String name) {
-        if (friendRepository.findByOwnerAndFriend(me, name).isPresent()) {
+    /** 四态关系的优先级沿用改造前：已是好友 > 我发出的申请 > 等我处理的申请 > 可添加。 */
+    private static String relationOf(String name, Set<String> friends, Set<String> pendingOut, Set<String> pendingIn) {
+        if (friends.contains(name)) {
             return "friend";
         }
-        if (requestRepository.findPendingBetween(me, name).isPresent()) {
+        if (pendingOut.contains(name)) {
             return "pending-out";
         }
-        if (requestRepository.findPendingBetween(name, me).isPresent()) {
+        if (pendingIn.contains(name)) {
             return "pending-in";
         }
         return "available";

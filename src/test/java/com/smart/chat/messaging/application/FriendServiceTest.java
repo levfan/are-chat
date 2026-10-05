@@ -26,6 +26,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyCollection;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
@@ -33,6 +34,7 @@ import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
@@ -311,7 +313,7 @@ class FriendServiceTest {
 
         // 三个好友也只发批量查询：一旦有人把循环里的逐条查询加回来，这里就会红。
         // 改造前这条靠 verify(messageMapper, never()).findLatestBetween/countUnread 兜住，
-        // 收口后那两个逐条口径已经不在端口上，所以改成「只许有这两次批量取，多一次都算红」。
+        // 那两个逐条口径后来整个从 Mapper 删掉了，所以改成「只许有这两次批量取，多一次都算红」。
         verify(messageRepository).findLatestCreatedPerPeer("alice");
         verify(messageRepository).findMessagesAtCreated(eq("alice"), anyList(), anyCollection());
         verifyNoMoreInteractions(messageRepository);
@@ -347,5 +349,66 @@ class FriendServiceTest {
         assertThat(request.status()).isEqualTo(FriendRequest.STATUS_REJECTED);
         verify(requestRepository).save(request);
         verify(messageRepository, never()).save(any(PrivateMessage.class));
+    }
+
+    @Test
+    void suggestLabelsAllFourRelationsAndKeepsSearchOrder() {
+        when(accounts.search("bo", "alice", 10)).thenReturn(List.of(
+                new AccountDirectory.Account("bob", "波波", false, "138****0001"),
+                new AccountDirectory.Account("carol", "西西", false, "138****0002"),
+                new AccountDirectory.Account("dave", "小达", false, "138****0003"),
+                new AccountDirectory.Account("erin", "小艺", false, "138****0004")));
+        when(friendRepository.findAllByOwner("alice")).thenReturn(List.of(edge("alice", "bob")));
+        when(requestRepository.listOutgoing("alice")).thenReturn(List.of(offer("alice", "carol")));
+        when(requestRepository.listIncoming("alice")).thenReturn(List.of(offer("dave", "alice")));
+
+        List<FriendService.UserSuggestion> result = service.suggest("alice", "bo");
+
+        assertThat(result).extracting(FriendService.UserSuggestion::username)
+                .containsExactly("bob", "carol", "dave", "erin");
+        assertThat(result).extracting(FriendService.UserSuggestion::relation)
+                .containsExactly("friend", "pending-out", "pending-in", "available");
+        assertThat(result).extracting(FriendService.UserSuggestion::phone)
+                .containsExactly("138****0001", "138****0002", "138****0003", "138****0004");
+    }
+
+    @Test
+    void suggestKeepsFriendAheadOfPendingForTheSameCandidate() {
+        when(accounts.search(anyString(), anyString(), anyInt())).thenReturn(List.of(
+                new AccountDirectory.Account("bob", "波波", false, "138****0001")));
+        when(friendRepository.findAllByOwner("alice")).thenReturn(List.of(edge("alice", "bob")));
+        when(requestRepository.listOutgoing("alice")).thenReturn(List.of(offer("alice", "bob")));
+        when(requestRepository.listIncoming("alice")).thenReturn(List.of(offer("bob", "alice")));
+
+        // 双向都挂着待处理单时仍报「已是好友」——与改造前 relation() 的判断顺序一字不差
+        assertThat(service.suggest("alice", "bo")).extracting(FriendService.UserSuggestion::relation)
+                .containsExactly("friend");
+    }
+
+    @Test
+    void suggestNeverFallsBackToPerCandidateQueries() {
+        when(accounts.search(anyString(), anyString(), anyInt())).thenReturn(List.of(
+                new AccountDirectory.Account("bob", "波波", false, "138****0001"),
+                new AccountDirectory.Account("carol", "西西", false, "138****0002"),
+                new AccountDirectory.Account("dave", "小达", false, "138****0003")));
+        when(friendRepository.findAllByOwner("alice")).thenReturn(List.of());
+        when(requestRepository.listOutgoing("alice")).thenReturn(List.of());
+        when(requestRepository.listIncoming("alice")).thenReturn(List.of());
+
+        service.suggest("alice", "x");
+
+        // 三个候选也只有这三趟批量取；一旦有人把循环里的逐条查询（findByOwnerAndFriend /
+        // findPendingBetween）加回来，这里就会红——改造前是每人三趟，十个候选三十一趟。
+        verify(friendRepository).findAllByOwner("alice");
+        verify(requestRepository).listOutgoing("alice");
+        verify(requestRepository).listIncoming("alice");
+        verifyNoMoreInteractions(friendRepository, requestRepository);
+    }
+
+    @Test
+    void suggestWithNoCandidateTouchesNoRepository() {
+        // accounts.search 在 @BeforeEach 里默认打桩成空列表
+        assertThat(service.suggest("alice", "zzz")).isEmpty();
+        verifyNoInteractions(friendRepository, requestRepository);
     }
 }
