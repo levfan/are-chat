@@ -1,11 +1,11 @@
 package com.smart.chat.couple.application;
 
 import com.smart.chat.couple.domain.memory.RelationSummary;
-import com.smart.chat.couple.domain.streak.BondStreak;
+import com.smart.chat.couple.domain.streak.StreakDays;
 import com.smart.chat.couple.domain.streak.StreakTier;
 import com.smart.chat.couple.domain.wish.Wish;
-import com.smart.chat.couple.domain.streak.BondDayRepository;
-import com.smart.chat.couple.domain.streak.BondDay;
+import com.smart.chat.couple.domain.streak.StreakDayRepository;
+import com.smart.chat.couple.domain.streak.StreakDay;
 import com.smart.chat.couple.domain.question.QuestionAnswerRepository;
 import com.smart.chat.couple.domain.question.QuestionAnswer;
 import com.smart.chat.couple.domain.space.CoupleSpaceRepository;
@@ -49,16 +49,16 @@ public class CoupleMemoryService {
     }
 
     private final CoupleSpaceRepository spaceRepository;
-    private final BondDayRepository bondDayRepository;
+    private final StreakDayRepository streakDayRepository;
     private final QuestionAnswerRepository answerRepository;
     private final WishRepository wishRepository;
     private final CoupleService coupleService;
 
-    public CoupleMemoryService(CoupleSpaceRepository spaceRepository, BondDayRepository bondDayRepository,
+    public CoupleMemoryService(CoupleSpaceRepository spaceRepository, StreakDayRepository streakDayRepository,
                                QuestionAnswerRepository answerRepository, WishRepository wishRepository,
                                CoupleService coupleService) {
         this.spaceRepository = spaceRepository;
-        this.bondDayRepository = bondDayRepository;
+        this.streakDayRepository = streakDayRepository;
         this.answerRepository = answerRepository;
         this.wishRepository = wishRepository;
         this.coupleService = coupleService;
@@ -68,15 +68,15 @@ public class CoupleMemoryService {
 
     public MemoryVO memory(String me) {
         CoupleSpace space = requireSpace(me);
-        BondStreak streak = streakOf(space.id());
+        StreakDays streak = streakOf(space.id());
         if (streak.longestStreak() < REQUIRED_DAYS) {
-            throw new BusinessException(400, "这一页要连续贴满 " + REQUIRED_DAYS + " 天才打开，现在还差 "
+            throw new BusinessException(400, "这一页要连续打卡满 " + REQUIRED_DAYS + " 天才打开，现在还差 "
                     + (REQUIRED_DAYS - streak.longestStreak()) + " 天");
         }
 
-        List<BondDay> checkins = bondDayRepository.findBySpace(space.id());
+        List<StreakDay> checkins = streakDayRepository.findBySpace(space.id());
         int makeupDays = 0;
-        for (BondDay row : checkins) {
+        for (StreakDay row : checkins) {
             if (row.makeup()) {
                 makeupDays++;
             }
@@ -109,7 +109,7 @@ public class CoupleMemoryService {
 
     private List<TimelineItemVO> buildTimeline(CoupleSpace space,
                                                List<QuestionAnswer> answers, List<Wish> wishes,
-                                               BondStreak streak) {
+                                               StreakDays streak) {
         // 保留类事件（建立、解锁、答完的题、实现的愿望）一条都不能被截掉——
         // 截断如果按日期取前 80，100 天里最早的那几次解锁就正好消失在轴尾。
         List<TimelineItemVO> kept = new ArrayList<>();
@@ -141,7 +141,7 @@ public class CoupleMemoryService {
         // 填充类事件（把峰值推高的那些日子）从新的往旧补，补齐到上限为止
         List<TimelineItemVO> fillers = new ArrayList<>();
         for (String day : longestRuns(streak)) {
-            fillers.add(new TimelineItemVO(day, "streak", "连着贴满一段 🔥", "这一天的打卡把连续天数推到了新高"));
+            fillers.add(new TimelineItemVO(day, "streak", "连着打卡一段 🔥", "这一天的打卡把连续天数推到了新高"));
         }
         fillers.sort(Comparator.comparing(TimelineItemVO::day).reversed());
 
@@ -157,7 +157,7 @@ public class CoupleMemoryService {
     }
 
     /** 每次把历史最长推高的那一天——这些是真正的「里程碑日」，其它打卡不上轴。 */
-    private List<String> longestRuns(BondStreak streak) {
+    private List<String> longestRuns(StreakDays streak) {
         List<String> days = new ArrayList<>();
         List<String> sorted = new ArrayList<>(streak.dayStrings());
         sorted.sort(String::compareTo);
@@ -175,7 +175,7 @@ public class CoupleMemoryService {
         return days;
     }
 
-    private String latestUnlockLabel(BondStreak streak) {
+    private String latestUnlockLabel(StreakDays streak) {
         String label = null;
         for (StreakTier tier : StreakTier.values()) {
             if (streak.unlocked(tier.key())) {
@@ -207,12 +207,12 @@ public class CoupleMemoryService {
         return count >= 2;
     }
 
-    private BondStreak streakOf(String spaceId) {
+    private StreakDays streakOf(String spaceId) {
         List<String> days = new ArrayList<>();
-        for (BondDay row : bondDayRepository.findBySpace(spaceId)) {
+        for (StreakDay row : streakDayRepository.findBySpace(spaceId)) {
             days.add(row.day());
         }
-        return BondStreak.of(days, LocalDate.now());
+        return StreakDays.of(days, LocalDate.now());
     }
 
     private long daysTogether(CoupleSpace space) {

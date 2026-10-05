@@ -5,8 +5,8 @@ import java.util.List;
 /**
  * 每日一问题库：一个空间一天一题，按「空间 + 日期」稳定哈希选题，同一天双方看到的是同一道题。
  * <p>
- * 红线同 {@link CoupleRitualBank}：<b>只增不改顺序</b>——题号会写进 couple_question_answer 的
- * question_index，历史答案的题号必须永远指回同一道题。
+ * 红线：<b>只增不改顺序</b>——题号会写进 couple_question_answer 的 question_index，
+ * 历史答案的题号必须永远指回同一道题。
  * 题目按「今天」而不是「永远」来问：答起来不用想太久，双方也才有得聊。
  */
 public final class CoupleQuestionBank {
@@ -96,7 +96,20 @@ public final class CoupleQuestionBank {
 
     /** 当日题号：按空间 + 日期稳定，跨平台一致（用同一把 FNV-1a 哈希）。 */
     public static int indexOf(String spaceId, String day) {
-        return Math.floorMod(CoupleRitualBank.stableHash(spaceId + "|" + SALT + "|" + day), QUESTIONS.size());
+        return Math.floorMod(stableHash(spaceId + "|" + SALT + "|" + day), QUESTIONS.size());
+    }
+
+    /**
+     * 稳定字符串哈希（FNV-1a 32 位），跨平台一致。
+     * 题号已经写进库，这条算式改一个位就是把历史答案指向另一道题，动它等于改历史。
+     */
+    static int stableHash(String input) {
+        int hash = 0x811c9dc5;
+        for (int i = 0; i < input.length(); i++) {
+            hash ^= input.charAt(i);
+            hash *= 0x01000193;
+        }
+        return hash;
     }
 
     /** 按题号取题干。 */

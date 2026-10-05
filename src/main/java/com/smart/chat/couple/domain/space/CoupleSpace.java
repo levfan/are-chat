@@ -12,7 +12,7 @@ import java.util.UUID;
  * <ul>
  *   <li>userA/userB 永远是用户名（区分大小写）字典序小者为 A，全系统只在这一处规范化；</li>
  *   <li>一个空间只能从 ACTIVE 走到 DISSOLVED，且解散要落解散时刻；</li>
- *   <li>主题必须在白名单内，贴纸佩戴数不超过 {@link #STICKER_MAX}，爱称与宣言各有长度闸。</li>
+ *   <li>主题必须在白名单内，爱称与宣言各有长度闸。</li>
  * </ul>
  * 违规一律抛 {@link RuleViolation}，消息就是用户看到的那句原话（话术属于领域，见
  * {@code couple.domain.RuleViolation}）；与持久化模型（{@code CoupleSpacePO}）的换算只发生在
@@ -25,14 +25,10 @@ public final class CoupleSpace {
 
     /** F27 空间主题白名单 */
     public static final Set<String> THEMES = Set.of("classic", "cherry", "ocean", "forest", "night");
-    /** F28 贴纸墙佩戴上限 */
-    public static final int STICKER_MAX = 6;
     /** 专属爱称上限（F105） */
     public static final int NICK_MAX = 30;
     /** 空间宣言上限（F27） */
     public static final int SLOGAN_MAX = 60;
-    /** 一枚贴纸的 key 最长多少，超了就是前端传错了 */
-    public static final int STICKER_KEY_MAX = 30;
 
     private final String id;
     private final String userA;
@@ -44,11 +40,10 @@ public final class CoupleSpace {
     private String nickB;
     private String slogan;
     private String theme;
-    private String stickers;
     private Long dissolvedAt;
 
     private CoupleSpace(String id, String left, String right, String status, long created, String anniversary,
-                        String nickA, String nickB, String slogan, String theme, String stickers, Long dissolvedAt) {
+                        String nickA, String nickB, String slogan, String theme, Long dissolvedAt) {
         if (id == null || id.isBlank()) {
             throw new IllegalArgumentException("空间必须有 id");
         }
@@ -70,22 +65,21 @@ public final class CoupleSpace {
         this.nickB = swapped ? nickA : nickB;
         this.slogan = slogan;
         this.theme = theme;
-        this.stickers = stickers;
         this.dissolvedAt = dissolvedAt;
     }
 
     /** 新开空间：双方点头之后才存在 */
     public static CoupleSpace open(String left, String right, long at) {
         return new CoupleSpace(UUID.randomUUID().toString(), left, right, STATUS_ACTIVE, at,
-                null, null, null, null, "classic", null, null);
+                null, null, null, null, "classic", null);
     }
 
     /** 从存储还原（不做「是否将来日」这类业务判断，只保证结构合法） */
     public static CoupleSpace restore(String id, String userA, String userB, String status, long created,
                                       String anniversary, String nickA, String nickB, String slogan, String theme,
-                                      String stickers, Long dissolvedAt) {
+                                      Long dissolvedAt) {
         return new CoupleSpace(id, userA, userB, status, created, anniversary, nickA, nickB, slogan, theme,
-                stickers, dissolvedAt);
+                dissolvedAt);
     }
 
     // ===== 关系视角 =====
@@ -140,42 +134,22 @@ public final class CoupleSpace {
         this.anniversary = blankToNull(date);
     }
 
-    /** 宣言 + 主题 + 贴纸墙三件套：每一项的闸都在这里，任一传 null 表示该项不修改 */
-    public void decorate(String slogan, String theme, String stickers) {
+    /** 宣言 + 主题两件套：每一项的闸都在这里，任一传 null 表示该项不修改 */
+    public void decorate(String slogan, String theme) {
         requireActive("已解散的空间不能改装扮");
-        String newSlogan = slogan;
         if (slogan != null) {
             String text = slogan.trim();
             if (text.length() > SLOGAN_MAX) {
                 throw new RuleViolation("宣言最多 " + SLOGAN_MAX + " 字，留白也很美");
             }
-            newSlogan = text.isEmpty() ? null : text;
+            // 空串才是清除；null 表示这一项不动（原来 null 会顺手把宣言抹掉，与注释相反）
+            this.slogan = text.isEmpty() ? null : text;
         }
         if (theme != null && !THEMES.contains(theme)) {
             throw new RuleViolation("这个主题还没上架哦");
         }
-        String newStickers = stickers;
-        if (stickers != null) {
-            String normalized = stickers.trim();
-            if (!normalized.isEmpty()) {
-                String[] keys = normalized.split(",");
-                if (keys.length > STICKER_MAX) {
-                    throw new RuleViolation("贴纸墙最多佩戴 " + STICKER_MAX + " 枚");
-                }
-                for (String key : keys) {
-                    if (key.isBlank() || key.length() > STICKER_KEY_MAX) {
-                        throw new RuleViolation("贴纸选择有误，刷新后再试试");
-                    }
-                }
-            }
-            newStickers = normalized.isEmpty() ? null : normalized;
-        }
-        this.slogan = newSlogan;
         if (theme != null) {
             this.theme = theme;
-        }
-        if (stickers != null) {
-            this.stickers = newStickers;
         }
     }
 
@@ -225,10 +199,6 @@ public final class CoupleSpace {
 
     public String theme() {
         return theme;
-    }
-
-    public String stickers() {
-        return stickers;
     }
 
     public String nickA() {

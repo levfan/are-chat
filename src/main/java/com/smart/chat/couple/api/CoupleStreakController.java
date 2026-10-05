@@ -33,7 +33,7 @@ public class CoupleStreakController {
         return ApiResponse.ok(service.board(Sessions.requireUser(session)));
     }
 
-    /** 补一次签（花积分，只能补最近 7 天里的缺口）。 */
+    /** 补一次签（不花钱，但只认最近 7 天里的缺口，且每自然月最多 3 次）。 */
     @PostMapping("/makeup")
     public ApiResponse<CoupleStreakService.StreakBoardVO> makeup(@RequestBody MakeupRequest req,
                                                                  HttpSession session) {

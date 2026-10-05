@@ -1,7 +1,5 @@
 package com.smart.chat.couple.infrastructure.scheduler;
 
-import com.smart.chat.couple.infrastructure.persistence.CoupleAnniversaryPO;
-import com.smart.chat.couple.infrastructure.persistence.CoupleAnniversaryMapper;
 import com.smart.chat.couple.infrastructure.persistence.CoupleSpacePO;
 import com.smart.chat.couple.infrastructure.persistence.CoupleSpaceMapper;
 import com.smart.chat.messaging.domain.CoupleEventPublisher;
@@ -14,8 +12,11 @@ import java.time.LocalDate;
 import java.util.List;
 
 /**
- * 情侣空间定时提醒：09:30 纪念日倒数——扫描在一起纪念日与共同日历里的纪念日，
- * 在提前 7 天 / 1 天 / 当天推送给双方（每天只跑一次，天然按天去重）。
+ * 情侣空间定时提醒：09:30 「在一起」纪念日倒数——提前 7 天 / 1 天 / 当天各推一次给双方
+ * （每天只跑一次，天然按天去重）。
+ * <p>
+ * 2026-10-05 二轮裁剪删掉了共同日历（couple_anniversary），本任务只保留空间自身那一个日子：
+ * 倒数仍然按周年重复，因为它记的是「在一起的那一天」。
  */
 @Component
 public class CoupleReminderJob {
@@ -23,17 +24,14 @@ public class CoupleReminderJob {
     private static final Logger log = LoggerFactory.getLogger(CoupleReminderJob.class);
 
     private final CoupleSpaceMapper spaceMapper;
-    private final CoupleAnniversaryMapper anniversaryMapper;
     private final CoupleEventPublisher push;
 
-    public CoupleReminderJob(CoupleSpaceMapper spaceMapper, CoupleAnniversaryMapper anniversaryMapper,
-                             CoupleEventPublisher push) {
+    public CoupleReminderJob(CoupleSpaceMapper spaceMapper, CoupleEventPublisher push) {
         this.spaceMapper = spaceMapper;
-        this.anniversaryMapper = anniversaryMapper;
         this.push = push;
     }
 
-    /** 每天 09:30（Asia/Shanghai）检查纪念日倒数：提前 7 天 / 1 天 / 当天各提醒一次。 */
+    /** 每天 09:30（Asia/Shanghai）检查「在一起」纪念日倒数：提前 7 天 / 1 天 / 当天各提醒一次。 */
     @Scheduled(cron = "0 30 9 * * ?", zone = "Asia/Shanghai")
     public void remindAnniversaryCountdown() {
         String today = LocalDate.now().toString();
@@ -44,10 +42,6 @@ public class CoupleReminderJob {
             // 在一起纪念日（couple_space.anniversary，可空）
             if (space.getAnniversary() != null) {
                 reminded += remindCountdown(space, "我们在一起", space.getAnniversary(), true, now);
-            }
-            // 共同日历纪念日
-            for (CoupleAnniversaryPO row : anniversaryMapper.findBySpace(space.getId())) {
-                reminded += remindCountdown(space, row.getTitle(), row.getEventDate(), row.yearlyFlag(), now);
             }
         }
         if (reminded > 0) {

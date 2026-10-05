@@ -68,13 +68,12 @@ public class CoupleSpaceRepositoryAdapter implements CoupleSpaceRepository {
         po.setNickB(space.nickB());
         po.setSlogan(space.slogan());
         po.setTheme(space.theme());
-        po.setStickers(space.stickers());
         po.setDissolvedAt(space.dissolvedAt());
     }
 
     private static CoupleSpace toDomain(CoupleSpacePO po) {
         return CoupleSpace.restore(po.getId(), po.getUserA(), po.getUserB(), po.getStatus(),
                 po.getCreated() == null ? 0L : po.getCreated(), po.getAnniversary(),
-                po.getNickA(), po.getNickB(), po.getSlogan(), po.getTheme(), po.getStickers(), po.getDissolvedAt());
+                po.getNickA(), po.getNickB(), po.getSlogan(), po.getTheme(), po.getDissolvedAt());
     }
 }

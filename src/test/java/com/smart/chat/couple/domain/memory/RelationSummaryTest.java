@@ -20,9 +20,9 @@ class RelationSummaryTest {
         String text = RelationSummary.compose(facts(128, 96, 41, 3, 63, 4, "心有灵犀", "专属贴纸包"));
         assertThat(text)
                 .contains("在一起 128 天")
-                .contains("贴了 96 天")
+                .contains("打卡 96 天")
                 .contains("最长连着 41 天")
-                .contains("其中 3 天是花钱补回来")
+                .contains("其中 3 天是补签回来")
                 .contains("答完了 63 道每日一问")
                 .contains("实现了 4 个愿望")
                 .contains("「心有灵犀」")
@@ -34,7 +34,7 @@ class RelationSummaryTest {
         String text = RelationSummary.compose(facts(100, 0, 0, 0, 0, 0, null, null));
         assertThat(text).doesNotContain("答完了").doesNotContain("偷偷帮对方").doesNotContain("现在的你们是");
         assertThat(text).doesNotContain("，。").doesNotContain("，，");
-        assertThat(text).startsWith("在一起 100 天，你们一起贴了 0 天的卡。");
+        assertThat(text).startsWith("在一起 100 天，你们一起打卡 0 天。");
     }
 
     @Test

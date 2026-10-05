@@ -26,12 +26,12 @@ public final class RelationSummary {
 
         StringBuilder opening = new StringBuilder();
         opening.append("在一起 ").append(facts.daysTogether()).append(" 天，")
-                .append("你们一起贴了 ").append(facts.confirmedDays()).append(" 天的卡");
+                .append("你们一起打卡 ").append(facts.confirmedDays()).append(" 天");
         if (facts.longestStreak() > 0) {
             opening.append("，最长连着 ").append(facts.longestStreak()).append(" 天");
         }
         if (facts.makeupDays() > 0) {
-            opening.append("（其中 ").append(facts.makeupDays()).append(" 天是花钱补回来的 😉）");
+            opening.append("（其中 ").append(facts.makeupDays()).append(" 天是补签回来的 😉）");
         }
         sentences.add(opening.append("。").toString());
 
@@ -56,7 +56,7 @@ public final class RelationSummary {
         if (!tail.isEmpty()) {
             sentences.add(String.join("，", tail) + "。");
         }
-        sentences.add("往后的日子继续贴。");
+        sentences.add("往后的日子接着答、接着打卡。");
         return String.join("", sentences);
     }
 }

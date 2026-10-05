@@ -29,7 +29,7 @@ class CoupleV8TablesTest {
     private static final String DAY = "2026-10-05";
 
     @Autowired
-    private CoupleBondDayMapper bondDayMapper;
+    private CoupleStreakDayMapper streakDayMapper;
     @Autowired
     private CoupleQuestionAnswerMapper answerMapper;
     @Autowired
@@ -37,33 +37,33 @@ class CoupleV8TablesTest {
 
     @AfterEach
     void cleanUp() {
-        bondDayMapper.findBySpace(SPACE).forEach(row -> bondDayMapper.deleteById(row.getId()));
+        streakDayMapper.findBySpace(SPACE).forEach(row -> streakDayMapper.deleteById(row.getId()));
         answerMapper.findBySpace(SPACE).forEach(row -> answerMapper.deleteById(row.getId()));
         wishMapper.findBySpace(SPACE).forEach(row -> wishMapper.deleteById(row.getId()));
     }
 
     @Test
-    void bondDayRowsRoundTripAndCarryTheSourceColumn() {
-        bondDayMapper.insert(CoupleBondDayPO.of(SPACE, DAY, CoupleBondDayPO.SOURCE_AUTO, null));
-        bondDayMapper.insert(CoupleBondDayPO.of(SPACE, "2026-10-04", CoupleBondDayPO.SOURCE_MAKEUP, ALICE));
+    void streakDayRowsRoundTripAndCarryTheSourceColumn() {
+        streakDayMapper.insert(CoupleStreakDayPO.of(SPACE, DAY, CoupleStreakDayPO.SOURCE_AUTO, null));
+        streakDayMapper.insert(CoupleStreakDayPO.of(SPACE, "2026-10-04", CoupleStreakDayPO.SOURCE_MAKEUP, ALICE));
 
-        List<CoupleBondDayPO> rows = bondDayMapper.findBySpace(SPACE);
+        List<CoupleStreakDayPO> rows = streakDayMapper.findBySpace(SPACE);
         assertThat(rows).hasSize(2);
         // 默认查询按 day 升序，连续段算法依赖这个顺序
         assertThat(rows.get(0).getDay()).isEqualTo("2026-10-04");
         assertThat(rows.get(0).makeupFlag()).isTrue();
-        assertThat(rows.get(1).getSource()).isEqualTo(CoupleBondDayPO.SOURCE_AUTO);
-        assertThat(bondDayMapper.countMakeupBetween(SPACE, "2026-10-01", "2026-10-31")).isEqualTo(1);
+        assertThat(rows.get(1).getSource()).isEqualTo(CoupleStreakDayPO.SOURCE_AUTO);
+        assertThat(streakDayMapper.countMakeupBetween(SPACE, "2026-10-01", "2026-10-31")).isEqualTo(1);
     }
 
     @Test
-    void bondDayUniqueKeyBlocksADuplicateDay() {
-        bondDayMapper.insert(CoupleBondDayPO.of(SPACE, DAY, CoupleBondDayPO.SOURCE_AUTO, null));
+    void streakDayUniqueKeyBlocksADuplicateDay() {
+        streakDayMapper.insert(CoupleStreakDayPO.of(SPACE, DAY, CoupleStreakDayPO.SOURCE_AUTO, null));
 
-        assertThatThrownBy(() -> bondDayMapper.insert(
-                CoupleBondDayPO.of(SPACE, DAY, CoupleBondDayPO.SOURCE_MAKEUP, ALICE)))
+        assertThatThrownBy(() -> streakDayMapper.insert(
+                CoupleStreakDayPO.of(SPACE, DAY, CoupleStreakDayPO.SOURCE_MAKEUP, ALICE)))
                 .isInstanceOf(DuplicateKeyException.class);
-        assertThat(bondDayMapper.find(SPACE, DAY).getSource()).isEqualTo(CoupleBondDayPO.SOURCE_AUTO);
+        assertThat(streakDayMapper.find(SPACE, DAY).getSource()).isEqualTo(CoupleStreakDayPO.SOURCE_AUTO);
     }
 
     @Test

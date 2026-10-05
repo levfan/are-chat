@@ -42,6 +42,12 @@ class CoupleInviteAcceptTest {
     @Mock
     private CoupleSpaceRepository spaceRepository;
     @Mock
+    private CoupleStreakService streakService;
+    @Mock
+    private CoupleQuestionService questionService;
+    @Mock
+    private com.smart.chat.couple.domain.wish.WishRepository wishRepository;
+    @Mock
     private InviteRepository inviteRepository;
     @Mock
     private FriendshipChecker friendships;
@@ -66,7 +72,7 @@ class CoupleInviteAcceptTest {
 
     private CoupleSpace activeSpace(String a, String b) {
         return CoupleSpace.restore("s1", a, b, CoupleSpace.STATUS_ACTIVE, System.currentTimeMillis(),
-                null, null, null, null, null, null, null);
+                null, null, null, null, null, null);
     }
 
     private void stubNoSpaceForAnyone() {

@@ -1,7 +1,7 @@
 package com.smart.chat.couple.application;
 
-import com.smart.chat.couple.domain.streak.BondDayRepository;
-import com.smart.chat.couple.domain.streak.BondDay;
+import com.smart.chat.couple.domain.streak.StreakDayRepository;
+import com.smart.chat.couple.domain.streak.StreakDay;
 import com.smart.chat.couple.domain.question.QuestionAnswerRepository;
 import com.smart.chat.couple.domain.question.QuestionAnswer;
 import com.smart.chat.couple.domain.space.CoupleSpaceRepository;
@@ -39,7 +39,7 @@ class CoupleMemoryServiceTest {
     @Mock
     private CoupleSpaceRepository spaceRepository;
     @Mock
-    private BondDayRepository bondDayRepository;
+    private StreakDayRepository streakDayRepository;
     @Mock
     private QuestionAnswerRepository answerRepository;
     @Mock
@@ -51,15 +51,15 @@ class CoupleMemoryServiceTest {
     private CoupleMemoryService service;
 
     private CoupleSpace space() {
-        return CoupleSpace.restore(SPACE, "alice", "bob", CoupleSpace.STATUS_ACTIVE, LocalDate.of(2026, 6, 28).atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli(), "2026-06-28", null, null, null, null, null, null);
+        return CoupleSpace.restore(SPACE, "alice", "bob", CoupleSpace.STATUS_ACTIVE, LocalDate.of(2026, 6, 28).atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli(), "2026-06-28", null, null, null, null, null);
     }
 
     /** 从 endDay 往前数 n 天，铺成连续打卡日。 */
-    private List<BondDay> consecutive(int n, LocalDate endDay) {
-        List<BondDay> rows = new ArrayList<>();
+    private List<StreakDay> consecutive(int n, LocalDate endDay) {
+        List<StreakDay> rows = new ArrayList<>();
         for (int i = 0; i < n; i++) {
-            rows.add(BondDay.confirm(SPACE, endDay.minusDays(i).toString(),
-                    i == 3 ? BondDay.SOURCE_MAKEUP : BondDay.SOURCE_AUTO, null));
+            rows.add(StreakDay.confirm(SPACE, endDay.minusDays(i).toString(),
+                    i == 3 ? StreakDay.SOURCE_MAKEUP : StreakDay.SOURCE_AUTO, null));
         }
         return rows;
     }
@@ -69,18 +69,18 @@ class CoupleMemoryServiceTest {
         lenient().when(answerRepository.findBySpace(SPACE)).thenReturn(List.of());
         lenient().when(coupleService.intimacy(anyString())).thenReturn(new CoupleService.IntimacyVO(
                 1400, 7, "相守一生", "💍", null, 100,
-                new CoupleService.IntimacyBreakdown(100, 100, 10, 4, 2, 300)));
+                new CoupleService.IntimacyBreakdown(100, 100, 10, 4, 2)));
     }
 
     @Test
     void hiddenPageIsGatedOnTheServerNotJustTheFrontend() {
         when(spaceRepository.findActiveByMember("alice")).thenReturn(Optional.of(space()));
-        when(bondDayRepository.findBySpace(SPACE)).thenReturn(consecutive(90, LocalDate.now()));
+        when(streakDayRepository.findBySpace(SPACE)).thenReturn(consecutive(90, LocalDate.now()));
         stubEmptyWishesAndAnswers();
 
         assertThatThrownBy(() -> service.memory("alice"))
                 .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("连续贴满 100 天")
+                .hasMessageContaining("连续打卡满 100 天")
                 .hasMessageContaining("还差 10 天");
     }
 
@@ -94,14 +94,14 @@ class CoupleMemoryServiceTest {
     @Test
     void unlockedPageShowsEveryTierStampedWithItsRealDay() {
         when(spaceRepository.findActiveByMember("alice")).thenReturn(Optional.of(space()));
-        when(bondDayRepository.findBySpace(SPACE)).thenReturn(consecutive(100, LocalDate.now()));
+        when(streakDayRepository.findBySpace(SPACE)).thenReturn(consecutive(100, LocalDate.now()));
         stubEmptyWishesAndAnswers();
 
         CoupleMemoryService.MemoryVO vo = service.memory("alice");
 
         assertThat(vo.longestStreak()).isEqualTo(100);
         assertThat(vo.makeupDays()).isEqualTo(1);
-        assertThat(vo.summary()).contains("在一起 ").contains("贴了 100 天的卡").contains("「相守一生」");
+        assertThat(vo.summary()).contains("在一起 ").contains("打卡 100 天").contains("「相守一生」");
         // 七个档位都该有时间戳，且都是这一轮连续段里派生出来的真实日子
         List<CoupleMemoryService.TimelineItemVO> unlocks = vo.timeline().stream()
                 .filter(item -> "unlock".equals(item.kind())).toList();
@@ -115,7 +115,7 @@ class CoupleMemoryServiceTest {
     @Test
     void timelineOnlyCarriesEventsWithRealDates() {
         when(spaceRepository.findActiveByMember("alice")).thenReturn(Optional.of(space()));
-        when(bondDayRepository.findBySpace(SPACE)).thenReturn(consecutive(120, LocalDate.now()));
+        when(streakDayRepository.findBySpace(SPACE)).thenReturn(consecutive(120, LocalDate.now()));
         List<QuestionAnswer> answers = List.of(
                 QuestionAnswer.answer(SPACE, "2026-09-30", 1, "今天最开心的一件事是什么？", "alice", "见到你"),
                 QuestionAnswer.answer(SPACE, "2026-09-30", 1, "今天最开心的一件事是什么？", "bob", "吃到面了"),
@@ -127,7 +127,7 @@ class CoupleMemoryServiceTest {
         when(wishRepository.findBySpace(SPACE)).thenReturn(List.of(done));
         when(coupleService.intimacy(anyString())).thenReturn(new CoupleService.IntimacyVO(
                 1400, 7, "相守一生", "💍", null, 100,
-                new CoupleService.IntimacyBreakdown(120, 120, 10, 4, 2, 300)));
+                new CoupleService.IntimacyBreakdown(120, 120, 10, 4, 2)));
 
         CoupleMemoryService.MemoryVO vo = service.memory("alice");
 

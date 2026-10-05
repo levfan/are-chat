@@ -22,8 +22,6 @@ public class CoupleSpacePO {
     public static final java.util.Set<String> THEMES =
             java.util.Set.of("classic", "cherry", "ocean", "forest", "night");
 
-    /** F28 贴纸墙佩戴上限 */
-    public static final int STICKER_MAX = 6;
 
     @TableId(value = "id", type = IdType.INPUT)
     private String id;
@@ -45,7 +43,6 @@ public class CoupleSpacePO {
     /** F27 空间主题（classic/cherry/ocean/forest/night，默认 classic） */
     private String theme;
     /** F28 贴纸墙佩戴的贴纸 key（逗号分隔，最多 6 枚，可空） */
-    private String stickers;
     private Long created;
     private Long dissolvedAt;
 

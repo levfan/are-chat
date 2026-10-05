@@ -1,14 +1,10 @@
 package com.smart.chat.couple.application;
 
-import com.smart.chat.couple.domain.streak.StreakTier;
-import com.smart.chat.couple.domain.bond.ActionRepository;
-import com.smart.chat.couple.domain.bond.BondAction;
-import com.smart.chat.couple.domain.streak.BondDayRepository;
-import com.smart.chat.couple.domain.streak.BondDay;
-import com.smart.chat.couple.domain.points.PointLedgerRepository;
-import com.smart.chat.couple.domain.points.PointEntry;
-import com.smart.chat.couple.domain.space.CoupleSpaceRepository;
 import com.smart.chat.couple.domain.space.CoupleSpace;
+import com.smart.chat.couple.domain.space.CoupleSpaceRepository;
+import com.smart.chat.couple.domain.streak.StreakDay;
+import com.smart.chat.couple.domain.streak.StreakDayRepository;
+import com.smart.chat.couple.domain.streak.StreakTier;
 import com.smart.chat.messaging.domain.CoupleEventPublisher;
 import com.smart.chat.sharedkernel.web.BusinessException;
 import org.junit.jupiter.api.Test;
@@ -26,7 +22,6 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.eq;
@@ -37,8 +32,9 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
- * 连续互动打卡单测：锁的是「落没落行、推没推对事件、积分有没有真扣」，不是 VO 好不好看。
- * 补签的四条闸门都必须能变红，否则等于没有闸门。
+ * 连续互动打卡单测：锁的是「落没落行、推没推对事件」，不是 VO 好不好看。
+ * 补签的每条闸门都必须能变红，否则等于没有闸门；打卡一律不花钱
+ * （积分台账已随愿望券本一起在下线清单里删除，稀缺性只剩「7 天窗口 + 每月 3 次」两条守）。
  */
 @ExtendWith(MockitoExtension.class)
 class CoupleStreakServiceTest {
@@ -53,11 +49,7 @@ class CoupleStreakServiceTest {
     @Mock
     private CoupleSpaceRepository spaceRepository;
     @Mock
-    private BondDayRepository bondDayRepository;
-    @Mock
-    private ActionRepository actionRepository;
-    @Mock
-    private PointLedgerRepository ledgerRepository;
+    private StreakDayRepository streakDayRepository;
     @Mock
     private CoupleEventPublisher push;
 
@@ -66,88 +58,66 @@ class CoupleStreakServiceTest {
 
     /** 内存假表：断言落在真实副作用上。 */
     private final class Bag {
-        private final List<BondDay> days = new ArrayList<>();
-        private final List<BondAction> actions = new ArrayList<>();
-        private final List<PointEntry> ledger = new ArrayList<>();
+        private final List<StreakDay> days = new ArrayList<>();
 
         Bag stub() {
-            lenient().when(bondDayRepository.findBySpace(SPACE)).thenAnswer(inv -> List.copyOf(days));
-            lenient().when(bondDayRepository.find(eq(SPACE), anyString())).thenAnswer(inv -> days.stream()
+            lenient().when(streakDayRepository.findBySpace(SPACE)).thenAnswer(inv -> List.copyOf(days));
+            lenient().when(streakDayRepository.find(eq(SPACE), anyString())).thenAnswer(inv -> days.stream()
                     .filter(d -> d.day().equals(inv.getArgument(1))).findFirst());
             lenient().doAnswer(inv -> {
                 days.add(inv.getArgument(0));
                 return null;
-            }).when(bondDayRepository).append(any(BondDay.class));
-            lenient().when(bondDayRepository.countMakeupBetween(eq(SPACE), anyString(), anyString()))
-                    .thenAnswer(inv -> days.stream().filter(BondDay::makeup)
+            }).when(streakDayRepository).append(any(StreakDay.class));
+            lenient().when(streakDayRepository.countMakeupBetween(eq(SPACE), anyString(), anyString()))
+                    .thenAnswer(inv -> days.stream().filter(StreakDay::makeup)
                             .filter(d -> d.day().compareTo(inv.getArgument(1, String.class)) >= 0
                                     && d.day().compareTo(inv.getArgument(2, String.class)) <= 0).count());
-            lenient().when(actionRepository.listSentSince(eq(SPACE), anyLong())).thenAnswer(inv -> {
-                long from = inv.getArgument(1, Long.class);
-                return actions.stream().filter(a -> a.created() != null && a.created() >= from).toList();
-            });
-            lenient().when(ledgerRepository.findBySpace(SPACE)).thenAnswer(inv -> List.copyOf(ledger));
-            lenient().doAnswer(inv -> {
-                ledger.add(inv.getArgument(0));
-                return null;
-            }).when(ledgerRepository).append(any(PointEntry.class));
             return this;
         }
 
-        void stubSpace(CoupleSpace space) {
+        Bag stubSpace(CoupleSpace space) {
             lenient().when(spaceRepository.findActiveByMember(anyString())).thenReturn(Optional.of(space));
+            return this;
         }
 
         void checkin(String day, String source, String operator) {
-            days.add(BondDay.confirm(SPACE, day, source, operator));
-        }
-
-        void acted(String who, long at) {
-            actions.add(BondAction.restore("act-" + who + "-" + at, SPACE, who, BondAction.KIND_HUG, at));
-        }
-
-        void earned(String who, int points) {
-            ledger.add(PointEntry.earn(SPACE, who, "好事簿", points));
+            days.add(StreakDay.restore("x" + days.size(), SPACE, day, source, operator,
+                    System.currentTimeMillis()));
         }
 
         long autoRows() {
-            return days.stream().filter(d -> BondDay.SOURCE_AUTO.equals(d.source())).count();
+            return days.stream().filter(d -> StreakDay.SOURCE_AUTO.equals(d.source())).count();
         }
 
         long makeupRows() {
-            return days.stream().filter(BondDay::makeup).count();
-        }
-
-        long spendRows() {
-            return ledger.stream().filter(l -> "SPEND".equals(l.type())).count();
+            return days.stream().filter(StreakDay::makeup).count();
         }
     }
 
     /** 空间是 30 天前建立的：看板自愈补的第 1 天不会串进本轮的连续段。 */
     private CoupleSpace space() {
-        return CoupleSpace.restore(SPACE, "alice", "bob", CoupleSpace.STATUS_ACTIVE, LocalDate.now().minusDays(30).atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli(), null, null, null, null, null, null, null);
+        return CoupleSpace.restore(SPACE, "alice", "bob", CoupleSpace.STATUS_ACTIVE,
+                LocalDate.now().minusDays(30).atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli(),
+                null, null, null, null, "classic", null);
     }
 
     @Test
-    void oneSidedBondDoesNotCheckInToday() {
+    void alreadyCheckedInTodayIsNotWrittenTwice() {
         Bag bag = new Bag().stub();
-        bag.acted("alice", System.currentTimeMillis());
+        bag.checkin(TODAY, StreakDay.SOURCE_AUTO, null);
 
-        service.markTodayAfterAction(space(), "alice");
+        service.confirmBothAnswered(space(), "alice");
 
-        assertThat(bag.days).isEmpty();
+        assertThat(bag.days).hasSize(1);
         verify(push, never()).pushCoupleEventBoth(anyString(), anyString(), anyString(), anyString(), anyString());
     }
 
     @Test
-    void bothSidesBondingTodayChecksInExactlyOnce() {
+    void bothAnsweredChecksInExactlyOnce() {
         Bag bag = new Bag().stub();
-        long now = System.currentTimeMillis();
-        bag.acted("alice", now);
-        bag.acted("bob", now);
 
-        service.markTodayAfterAction(space(), "alice");
-        service.markTodayAfterAction(space(), "bob");
+        service.confirmBothAnswered(space(), "alice");
+        service.confirmBothAnswered(space(), "bob");
 
         assertThat(bag.autoRows()).isEqualTo(1);
         verify(push, times(1)).pushCoupleEventBoth(eq("streak-checkin"), eq("alice"), eq("alice"), eq("bob"),
@@ -157,13 +127,10 @@ class CoupleStreakServiceTest {
     @Test
     void crossingThreeConsecutiveDaysUnlocksTheBubbleOnce() {
         Bag bag = new Bag().stub();
-        bag.checkin(TWO_DAYS_AGO, BondDay.SOURCE_AUTO, null);
-        bag.checkin(YESTERDAY, BondDay.SOURCE_AUTO, null);
-        long now = System.currentTimeMillis();
-        bag.acted("alice", now);
-        bag.acted("bob", now);
+        bag.checkin(TWO_DAYS_AGO, StreakDay.SOURCE_AUTO, null);
+        bag.checkin(YESTERDAY, StreakDay.SOURCE_AUTO, null);
 
-        service.markTodayAfterAction(space(), "alice");
+        service.confirmBothAnswered(space(), "alice");
 
         verify(push).pushCoupleEventBoth(eq("streak-unlocked"), eq("alice"), eq("alice"), eq("bob"),
                 contains(StreakTier.BUBBLE.label()));
@@ -174,65 +141,50 @@ class CoupleStreakServiceTest {
     }
 
     @Test
-    void makeupSpendsPointsAndGluesTheRunBackTogether() {
+    void makeupGluesTheRunBackTogetherWithoutSpendingAnything() {
         Bag bag = new Bag().stub();
         bag.stubSpace(space());
-        bag.earned("alice", 30);
-        bag.checkin(TWO_DAYS_AGO, BondDay.SOURCE_AUTO, null);
-        bag.checkin(FOUR_DAYS_AGO, BondDay.SOURCE_AUTO, null);
+        bag.checkin(TWO_DAYS_AGO, StreakDay.SOURCE_AUTO, null);
+        bag.checkin(FOUR_DAYS_AGO, StreakDay.SOURCE_AUTO, null);
 
         CoupleStreakService.StreakBoardVO board = service.makeup("alice", THREE_DAYS_AGO);
 
         assertThat(bag.makeupRows()).isEqualTo(1);
-        assertThat(bag.spendRows()).isEqualTo(1);
-        PointEntry spend = bag.ledger.stream()
-                .filter(l -> "SPEND".equals(l.type())).findFirst().orElseThrow();
-        assertThat(spend.points()).isEqualTo(20);
-        assertThat(spend.item()).startsWith("补签 ");
-        assertThat(spend.fromUser()).isEqualTo("alice");
         assertThat(board.longestStreak()).isEqualTo(3);
-        verify(push).pushCoupleEventBoth(eq("streak-makeup"), eq("alice"), eq("alice"), eq("bob"), anyString());
+        verify(push).pushCoupleEventBoth(eq("streak-makeup"), eq("alice"), eq("alice"), eq("bob"),
+                contains("本月还能补 2 次"));
     }
 
     @Test
     void makeupGatesRejectAndWriteNothing() {
         Bag bag = new Bag().stub();
         bag.stubSpace(space());
-        bag.earned("alice", 100);
 
+        // 太久了（超出 7 天窗口）
         assertThatThrownBy(() -> service.makeup("alice", LocalDate.now().minusDays(10).toString()))
                 .isInstanceOf(BusinessException.class).hasMessageContaining("只能补最近 7 天");
+        // 今天不能补：两个人都答完每日一问就算打卡，不必补
         assertThatThrownBy(() -> service.makeup("alice", TODAY))
                 .isInstanceOf(BusinessException.class).hasMessageContaining("今天还不能补");
-        bag.checkin(YESTERDAY, BondDay.SOURCE_AUTO, null);
+        // 已经打过的日子
+        bag.checkin(YESTERDAY, StreakDay.SOURCE_AUTO, null);
         assertThatThrownBy(() -> service.makeup("alice", YESTERDAY))
                 .isInstanceOf(BusinessException.class).hasMessageContaining("已经打过卡");
+        // 日期格式
         assertThatThrownBy(() -> service.makeup("alice", "20261001"))
                 .isInstanceOf(BusinessException.class).hasMessageContaining("yyyy-MM-dd");
 
         assertThat(bag.days).hasSize(1);
-        assertThat(bag.spendRows()).isZero();
         verify(push, never()).pushCoupleEventBoth(anyString(), anyString(), anyString(), anyString(), anyString());
-    }
-
-    @Test
-    void makeupBlockedWhenBroke() {
-        Bag bag = new Bag().stub();
-        bag.stubSpace(space());
-
-        assertThatThrownBy(() -> service.makeup("alice", YESTERDAY))
-                .isInstanceOf(BusinessException.class).hasMessageContaining("先去好事簿");
-        assertThat(bag.spendRows()).isZero();
     }
 
     @Test
     void monthlyMakeupQuotaIsThree() {
         Bag bag = new Bag().stub();
         bag.stubSpace(space());
-        bag.earned("alice", 200);
-        bag.checkin(YESTERDAY, BondDay.SOURCE_MAKEUP, "alice");
-        bag.checkin(TWO_DAYS_AGO, BondDay.SOURCE_MAKEUP, "alice");
-        bag.checkin(THREE_DAYS_AGO, BondDay.SOURCE_MAKEUP, "alice");
+        bag.checkin(YESTERDAY, StreakDay.SOURCE_MAKEUP, "alice");
+        bag.checkin(TWO_DAYS_AGO, StreakDay.SOURCE_MAKEUP, "alice");
+        bag.checkin(THREE_DAYS_AGO, StreakDay.SOURCE_MAKEUP, "alice");
 
         assertThatThrownBy(() -> service.makeup("alice", FOUR_DAYS_AGO))
                 .isInstanceOf(BusinessException.class).hasMessageContaining("这个月已经补过 3 次");
@@ -240,12 +192,11 @@ class CoupleStreakServiceTest {
     }
 
     @Test
-    void boardExposesTiersStripAndMakeupAffordability() {
+    void boardExposesTiersStripAndMakeupAvailability() {
         Bag bag = new Bag().stub();
         bag.stubSpace(space());
-        bag.checkin(YESTERDAY, BondDay.SOURCE_AUTO, null);
-        bag.checkin(TWO_DAYS_AGO, BondDay.SOURCE_AUTO, null);
-        bag.earned("alice", 5);
+        bag.checkin(YESTERDAY, StreakDay.SOURCE_AUTO, null);
+        bag.checkin(TWO_DAYS_AGO, StreakDay.SOURCE_AUTO, null);
 
         CoupleStreakService.StreakBoardVO board = service.board("alice");
 
@@ -258,29 +209,29 @@ class CoupleStreakServiceTest {
         assertThat(board.daysToNext()).isEqualTo(1);
         assertThat(board.strip()).hasSize(21);
         assertThat(board.strip().get(board.strip().size() - 1).day()).isEqualTo(TODAY);
-        // 差一天就解锁气泡，但 5 分补不起 20 分的签，canMakeup 必须是 false
+        // 昨天打过、今天还没答完 → 不算断，也就不该放开补签
         assertThat(board.canMakeup()).isFalse();
+        assertThat(board.makeupLeftThisMonth()).isEqualTo(3);
+        assertThat(board.makeupWindowDays()).isEqualTo(7);
     }
 
     @Test
-    void boardCanMakeupWhenYesterdayMissedAndPointsEnough() {
+    void boardOpensMakeupWhenYesterdayIsMissing() {
         Bag bag = new Bag().stub();
         bag.stubSpace(space());
-        bag.checkin(TWO_DAYS_AGO, BondDay.SOURCE_AUTO, null);
-        bag.earned("alice", 40);
+        bag.checkin(TWO_DAYS_AGO, StreakDay.SOURCE_AUTO, null);
 
         CoupleStreakService.StreakBoardVO board = service.board("alice");
 
         assertThat(board.missedYesterday()).isTrue();
         assertThat(board.canMakeup()).isTrue();
-        assertThat(board.makeupLeftThisMonth()).isEqualTo(3);
     }
 
     @Test
-    void togetherDayOneIsCheckedInWithoutAnyBonding() {
+    void togetherDayOneIsCheckedInWithoutAnyAnswer() {
         Bag bag = new Bag().stub();
         CoupleSpace fresh = CoupleSpace.restore(SPACE, "alice", "bob", CoupleSpace.STATUS_ACTIVE,
-                System.currentTimeMillis(), null, null, null, null, null, null, null);
+                System.currentTimeMillis(), null, null, null, null, "classic", null);
         when(spaceRepository.findActiveByMember("alice")).thenReturn(Optional.of(fresh));
 
         CoupleStreakService.StreakBoardVO board = service.board("alice");

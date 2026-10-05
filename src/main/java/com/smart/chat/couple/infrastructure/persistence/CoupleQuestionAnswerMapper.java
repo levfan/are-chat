@@ -39,4 +39,9 @@ public interface CoupleQuestionAnswerMapper extends BaseMapperCompat<CoupleQuest
                 .eq(CoupleQuestionAnswerPO::getSpaceId, spaceId)
                 .orderByDesc(CoupleQuestionAnswerPO::getDay));
     }
+
+    /** 全库累计回答条数。 */
+    default long countAll() {
+        return selectCount(new LambdaQueryWrapper<CoupleQuestionAnswerPO>());
+    }
 }

@@ -18,4 +18,7 @@ public interface QuestionAnswerRepository {
 
     /** 新答则插入、改答则只回写答案与改动时刻 */
     void save(QuestionAnswer answer);
+
+    /** 全库累计回答条数（管理看板用） */
+    long countAll();
 }

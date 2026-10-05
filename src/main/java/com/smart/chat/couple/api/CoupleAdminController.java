@@ -1,7 +1,7 @@
 package com.smart.chat.couple.api;
 
-import com.smart.chat.couple.domain.bond.ActionRepository;
-import com.smart.chat.couple.domain.deed.DeedRepository;
+import com.smart.chat.couple.domain.question.QuestionAnswerRepository;
+import com.smart.chat.couple.domain.streak.StreakDayRepository;
 import com.smart.chat.couple.domain.space.CoupleSpace;
 import com.smart.chat.couple.domain.space.CoupleSpaceRepository;
 import com.smart.chat.identity.domain.AccountDirectory;
@@ -21,27 +21,29 @@ import java.util.List;
 
 /**
  * F45 管理看板：情侣空间运营总览（仅管理员）。
- * 统计项只保留仍在线的功能：贴贴动作与好事簿，其余随功能下线一并移除。
+ * 统计项只吃仍在线的功能：互动打卡天数与每日一问回答数（2026-10-05 二轮裁剪后
+ * 贴贴动作与好事簿已随功能下线，原来的两个计数换成这两个）。
  */
 @RestController
 @RequestMapping("/api/couple/admin")
 public class CoupleAdminController {
 
-    public record CoupleStatsVO(long activeSpaces, long dissolvedSpaces, long avgDays, long totalActions,
-                                long totalDeeds, long spacesCreatedThisMonth) {
+    public record CoupleStatsVO(long activeSpaces, long dissolvedSpaces, long avgDays, long totalCheckinDays,
+                                long totalAnswers, long spacesCreatedThisMonth) {
     }
 
     private final CoupleSpaceRepository spaceRepository;
-    private final ActionRepository actionRepository;
-    private final DeedRepository deedRepository;
+    private final StreakDayRepository streakDayRepository;
+    private final QuestionAnswerRepository answerRepository;
     private final AccountDirectory accounts;
 
     @SuppressWarnings("java:S107")
-    public CoupleAdminController(CoupleSpaceRepository spaceRepository, ActionRepository actionRepository,
-                                 DeedRepository deedRepository, AccountDirectory accounts) {
+    public CoupleAdminController(CoupleSpaceRepository spaceRepository,
+                                 StreakDayRepository streakDayRepository,
+                                 QuestionAnswerRepository answerRepository, AccountDirectory accounts) {
         this.spaceRepository = spaceRepository;
-        this.actionRepository = actionRepository;
-        this.deedRepository = deedRepository;
+        this.streakDayRepository = streakDayRepository;
+        this.answerRepository = answerRepository;
         this.accounts = accounts;
     }
 
@@ -77,6 +79,6 @@ public class CoupleAdminController {
                         .toLocalDate().toString().startsWith(monthPrefix))
                 .count();
         return ApiResponse.ok(new CoupleStatsVO(active, dissolved, avgDays,
-                actionRepository.countAll(), deedRepository.countAll(), createdThisMonth));
+                streakDayRepository.countAll(), answerRepository.countAll(), createdThisMonth));
     }
 }

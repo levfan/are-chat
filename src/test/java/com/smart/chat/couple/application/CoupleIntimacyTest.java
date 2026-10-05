@@ -1,29 +1,14 @@
 package com.smart.chat.couple.application;
 
-
-import com.smart.chat.couple.domain.bond.ActionRepository;
-import com.smart.chat.couple.domain.bond.BondAction;
-import com.smart.chat.couple.domain.anniversary.AnniversaryRepository;
-
-import com.smart.chat.couple.domain.safeword.SafewordUse;
-import com.smart.chat.couple.domain.safeword.SafewordUseRepository;
-import com.smart.chat.couple.domain.deed.Deed;
-import com.smart.chat.couple.domain.deed.DeedRepository;
 import com.smart.chat.couple.domain.invite.InviteRepository;
-
-import com.smart.chat.couple.domain.mood.Mood;
-import com.smart.chat.couple.domain.mood.MoodRepository;
-import com.smart.chat.couple.domain.points.PointEntry;
-import com.smart.chat.couple.domain.points.PointLedgerRepository;
-
-import com.smart.chat.couple.domain.quest.QuestOvertime;
-import com.smart.chat.couple.domain.quest.QuestOvertimeRepository;
 import com.smart.chat.couple.domain.space.CoupleSpace;
 import com.smart.chat.couple.domain.space.CoupleSpaceRepository;
-import com.smart.chat.identity.application.AppUserService;
-import com.smart.chat.messaging.infrastructure.persistence.FriendMapper;
-import com.smart.chat.messaging.infrastructure.transport.ImPushService;
-import com.smart.chat.messaging.infrastructure.persistence.UserProfileMapper;
+import com.smart.chat.couple.domain.streak.StreakDays;
+import com.smart.chat.couple.domain.wish.WishRepository;
+import com.smart.chat.identity.domain.AccountDirectory;
+import com.smart.chat.messaging.domain.CoupleEventPublisher;
+import com.smart.chat.messaging.domain.FriendshipChecker;
+import com.smart.chat.messaging.domain.PeerProfileReader;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -32,8 +17,6 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.time.LocalDate;
-import java.time.ZoneId;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
@@ -43,10 +26,11 @@ import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.when;
 
 /**
- * 心动值（`GET /api/couple/intimacy`）算式单测。
- * 裁剪后六个进账项必须全部来自保留的 10 张卡：心情、贴贴双向往来、好事簿、留灯、安全词复盘、台账赚分。
- * 这里把每一项的权重和「单向贴贴不算一天」这类判定锁死——它们没有独立表，只有读时算，
- * 改错了不会被任何写路径的测试发现。
+ * 心动值（{@code GET /api/couple/intimacy}）算式单测。
+ * <p>
+ * 二轮裁剪后五项供数必须全部来自现役功能：在一起天数、累计打卡天数、历史最长连续、
+ * 双方都答完每日一问的天数、已实现愿望数。这里锁的就是「取数口径接对了没有」——
+ * 权重与级差本身由 {@code IntimacyCalculatorTest} 锁，两分工不重叠。
  */
 @ExtendWith(MockitoExtension.class)
 class CoupleIntimacyTest {
@@ -56,130 +40,107 @@ class CoupleIntimacyTest {
     @Mock
     private InviteRepository inviteRepository;
     @Mock
-    private AnniversaryRepository anniversaryRepository;
+    private WishRepository wishRepository;
     @Mock
-    private MoodRepository moodRepository;
+    private CoupleStreakService streakService;
     @Mock
-    private ActionRepository actionRepository;
+    private CoupleQuestionService questionService;
     @Mock
-    private DeedRepository deedRepository;
+    private FriendshipChecker friendships;
     @Mock
-    private QuestOvertimeRepository overtimeRepository;
+    private PeerProfileReader profiles;
     @Mock
-    private SafewordUseRepository safewordUseRepository;
+    private AccountDirectory accounts;
     @Mock
-    private PointLedgerRepository ledgerRepository;
-    @Mock
-    private FriendMapper friendMapper;
-    @Mock
-    private UserProfileMapper profileMapper;
-    @Mock
-    private AppUserService userService;
-    @Mock
-    private ImPushService push;
+    private CoupleEventPublisher push;
 
     @InjectMocks
     private CoupleService service;
 
     private static final String DAY = LocalDate.now().toString();
 
+    /** 在一起 30 天的空间：纪念日固定在 29 天前，天数含当天。 */
+    private CoupleSpace space;
+
     @BeforeEach
     void setUp() {
-        CoupleSpace space = CoupleSpace.restore("s1", "alice", "bob", CoupleSpace.STATUS_ACTIVE, 0L, null, null, null, null, null, null, null);
+        space = CoupleSpace.restore("s1", "alice", "bob", CoupleSpace.STATUS_ACTIVE,
+                LocalDate.now().minusDays(29).atStartOfDay(java.time.ZoneId.systemDefault())
+                        .toInstant().toEpochMilli(),
+                LocalDate.now().minusDays(29).toString(), null, null, null, "classic", null);
         lenient().when(spaceRepository.findActiveByMember(any())).thenReturn(Optional.of(space));
-        lenient().when(moodRepository.listBySpace("s1")).thenReturn(List.of());
-        lenient().when(actionRepository.listBySpace("s1")).thenReturn(List.of());
-        lenient().when(deedRepository.findBySpace("s1")).thenReturn(List.of());
-        lenient().when(overtimeRepository.listBySpace("s1")).thenReturn(List.of());
-        lenient().when(safewordUseRepository.listBySpace("s1")).thenReturn(List.of());
-        lenient().when(ledgerRepository.findBySpace("s1")).thenReturn(List.of());
-        lenient().when(anniversaryRepository.findBySpace("s1")).thenReturn(List.of());
+        lenient().when(wishRepository.countFulfilled("s1")).thenReturn(0L);
+        lenient().when(questionService.bothAnsweredDays("s1")).thenReturn(0L);
+        lenient().when(streakService.streakOf("s1")).thenReturn(StreakDays.of(List.of(), LocalDate.now()));
     }
 
-    /** 毫秒时间戳按系统时区落到某天，用于造「同一天双方都贴过」的数据。 */
-    private long atOffsetDays(int back) {
-        return LocalDate.now().minusDays(back)
-                .atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli() + 3_600_000L;
+    private static String daysAgo(int back) {
+        return LocalDate.now().minusDays(back).toString();
     }
 
     @Test
-    void scoreWeightsComeOnlyFromRetainedCards() {
-        // 心情 3 条 ×1
-        List<Mood> moods = new ArrayList<>();
-        moods.add(Mood.restore("m1", "s1", "alice", DAY, "HAPPY", null, System.currentTimeMillis(), null));
-        moods.add(Mood.restore("m2", "s1", "alice", LocalDate.now().minusDays(1).toString(), "CALM", null,
-                System.currentTimeMillis(), null));
-        moods.add(Mood.restore("m3", "s1", "bob", DAY, "SAD", null, System.currentTimeMillis(), null));
-        when(moodRepository.listBySpace("s1")).thenReturn(moods);
-
-        // 贴贴双向往来 1 天 ×2：今天两人都贴了，昨天只有 alice 贴（单向不计）
-        List<BondAction> actions = new ArrayList<>();
-        actions.add(BondAction.restore("a1", "s1", "alice", "HUG", atOffsetDays(0)));
-        actions.add(BondAction.restore("a2", "s1", "bob", "POKE", atOffsetDays(0)));
-        actions.add(BondAction.restore("a3", "s1", "alice", "KISS", atOffsetDays(3)));
-        when(actionRepository.listBySpace("s1")).thenReturn(actions);
-
-        // 好事簿 2 条 ×2
-        when(deedRepository.findBySpace("s1")).thenReturn(List.of(
-                Deed.restore("d1", "s1", "alice", "接我下班", DAY, 0, System.currentTimeMillis(), null),
-                Deed.restore("d2", "s1", "bob", "帮我吹头", DAY, 0, System.currentTimeMillis(), null)));
-
-        // 留灯 1 次 ×3（另一行只预报了加班没留灯，不算）
-        QuestOvertime lit = QuestOvertime.restore("q1", "s1", DAY, "alice", 22, "赶年结", "灯给你留着", "bob",
-                System.currentTimeMillis(), null);
-        when(overtimeRepository.listBySpace("s1")).thenReturn(List.of(lit,
-                QuestOvertime.restore("q2", "s1", LocalDate.now().minusDays(1).toString(), "bob", 20, "", null, null,
-                        System.currentTimeMillis(), null)));
-
-        // 安全词复盘 1 次 ×2（另一次没补复盘，不算）
-        SafewordUse reflected = SafewordUse.restore("u1", DAY, "alice", "当时是怕被丢下");
-        when(safewordUseRepository.listBySpace("s1")).thenReturn(List.of(reflected,
-                SafewordUse.restore("u2", LocalDate.now().minusDays(1).toString(), "bob", null)));
-
-        // 台账赚分 ×1：SPEND 不参与进账
-        when(ledgerRepository.findBySpace("s1")).thenReturn(List.of(
-                PointEntry.earn("s1", "alice", "好事簿：接我下班", 9),
-                PointEntry.spend("s1", "alice", "发出愿望券：看一次海", 10)));
+    void scoreComesOnlyFromLiveFeatures() {
+        // 今天 + 昨天 + 前天连着，另有一天下在上个星期：累计 4 天、最长 3 天
+        when(streakService.streakOf("s1")).thenReturn(StreakDays.of(
+                List.of(DAY, daysAgo(1), daysAgo(2), daysAgo(6)), LocalDate.now()));
+        when(questionService.bothAnsweredDays("s1")).thenReturn(18L);
+        when(wishRepository.countFulfilled("s1")).thenReturn(3L);
 
         CoupleService.IntimacyVO vo = service.intimacy("alice");
         CoupleService.IntimacyBreakdown d = vo.breakdown();
 
-        assertThat(d.moodDays()).isEqualTo(3);
-        assertThat(d.bondDays()).isEqualTo(1);
-        assertThat(d.deedCount()).isEqualTo(2);
-        assertThat(d.lampCount()).isEqualTo(1);
-        assertThat(d.reflectCount()).isEqualTo(1);
-        assertThat(d.pointEarned()).isEqualTo(9);
-        // 3 + 1×2 + 2×2 + 1×3 + 1×2 + 9 = 23
-        assertThat(vo.score()).isEqualTo(23);
-        assertThat(vo.level()).isEqualTo(1);
-        assertThat(vo.title()).isEqualTo("怦然心动");
-        assertThat(vo.nextLevelAt()).isEqualTo(50);
-        assertThat(vo.levelProgress()).isEqualTo(46);
+        assertThat(d.daysTogether()).isEqualTo(30);
+        assertThat(d.checkinDays()).isEqualTo(4);
+        assertThat(d.longestStreak()).isEqualTo(3);
+        assertThat(d.answerDays()).isEqualTo(18);
+        assertThat(d.wishFulfilled()).isEqualTo(3);
+        // 30×1 + 4×2 + 3×3 + 18×3 + 3×5 = 30+8+9+54+15 = 116 → L2
+        assertThat(vo.score()).isEqualTo(116);
+        assertThat(vo.level()).isEqualTo(2);
+        assertThat(vo.title()).isEqualTo("心动初启");
+        assertThat(vo.nextLevelAt()).isEqualTo(150);
+        assertThat(vo.levelProgress()).isEqualTo(62);
     }
 
     @Test
-    void oneSidedBondDayDoesNotCount() {
-        List<BondAction> actions = new ArrayList<>();
-        actions.add(BondAction.restore("a1", "s1", "alice", "HUG", atOffsetDays(0)));
-        actions.add(BondAction.restore("a2", "s1", "alice", "POKE", atOffsetDays(1)));
-        when(actionRepository.listBySpace("s1")).thenReturn(actions);
+    void longestStreakCountsEvenAfterBreakSoLevelsNeverRollBack() {
+        // 断签后只剩今天一天：累计打卡 5 天、最长仍是历史的 3 天——等级不能因为断签往下掉
+        when(streakService.streakOf("s1")).thenReturn(StreakDays.of(
+                List.of(DAY, daysAgo(10), daysAgo(11), daysAgo(12), daysAgo(20)), LocalDate.now()));
+        when(questionService.bothAnsweredDays("s1")).thenReturn(5L);
 
         CoupleService.IntimacyVO vo = service.intimacy("alice");
 
-        // 两天都只有 alice 贴：双向天数必须是 0，否则心动值会靠一个人刷满
-        assertThat(vo.breakdown().bondDays()).isZero();
-        assertThat(vo.score()).isZero();
+        assertThat(vo.breakdown().checkinDays()).isEqualTo(5);
+        assertThat(vo.breakdown().longestStreak()).isEqualTo(3);
+        // 30 + 5×2 + 3×3 + 5×3 = 30+10+9+15 = 64 → 仍在 L2，没退回 L1
+        assertThat(vo.score()).isEqualTo(64);
+        assertThat(vo.level()).isEqualTo(2);
     }
 
     @Test
-    void levelLadderKeepsThePreTrimThresholds() {
-        when(ledgerRepository.findBySpace("s1")).thenReturn(List.of(
-                PointEntry.earn("s1", "alice", "凑数", 50)));
-        assertThat(service.intimacy("alice").level()).isEqualTo(2);
+    void oneSidedAnswerDayNeverReachesIntimacy() {
+        // 双方都答完的天数由 CoupleQuestionService 算（一人答完不算），这里锁的是心动值不自己另算一套
+        when(questionService.bothAnsweredDays("s1")).thenReturn(0L);
 
-        when(ledgerRepository.findBySpace("s1")).thenReturn(List.of(
-                PointEntry.earn("s1", "alice", "凑数", 1300)));
+        CoupleService.IntimacyVO vo = service.intimacy("alice");
+
+        assertThat(vo.breakdown().answerDays()).isZero();
+        // 只剩在一起天数：30×1 = 30 → L1
+        assertThat(vo.score()).isEqualTo(30);
+        assertThat(vo.level()).isEqualTo(1);
+    }
+
+    @Test
+    void ladderUsesTheRecalibratedThresholds() {
+        // 答题 20 天 + 天天打卡 20 天 + 最长 20 + 在一起 30 + 实现 0 → 30+40+60+60 = 190 → L3
+        when(streakService.streakOf("s1")).thenReturn(StreakDays.of(
+                java.util.stream.IntStream.range(0, 20).mapToObj(i -> daysAgo(i)).toList(), LocalDate.now()));
+        when(questionService.bothAnsweredDays("s1")).thenReturn(20L);
+        assertThat(service.intimacy("alice").level()).isEqualTo(3);
+
+        // 满级：把愿望数堆到 760 分以上，必须封顶且进度 100
+        when(wishRepository.countFulfilled("s1")).thenReturn(140L);
         CoupleService.IntimacyVO top = service.intimacy("alice");
         assertThat(top.level()).isEqualTo(7);
         assertThat(top.title()).isEqualTo("相守一生");

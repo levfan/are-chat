@@ -91,7 +91,7 @@ class CoupleWishServiceTest {
 
     private void stubSpace() {
         CoupleSpace space = CoupleSpace.restore(SPACE, "alice", "bob", CoupleSpace.STATUS_ACTIVE,
-                System.currentTimeMillis(), null, null, null, null, null, null, null);
+                System.currentTimeMillis(), null, null, null, null, null, null);
         lenient().when(spaceRepository.findActiveByMember(anyString())).thenReturn(Optional.of(space));
     }
 

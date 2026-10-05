@@ -40,7 +40,7 @@ class CoupleSpaceRepositoryAdapterTest {
         when(spaceMapper.selectById("s1")).thenReturn(existing);
 
         CoupleSpace space = CoupleSpace.restore("s1", "alice", "bob", CoupleSpace.STATUS_ACTIVE, 1L,
-                "2026-10-01", "宝宝", null, "宣言", "cherry", null, null);
+                "2026-10-01", "宝宝", null, "宣言", "cherry", null);
         repository.save(space);
 
         ArgumentCaptor<CoupleSpacePO> captor = ArgumentCaptor.forClass(CoupleSpacePO.class);
@@ -59,7 +59,7 @@ class CoupleSpaceRepositoryAdapterTest {
     void newSpaceIsInsertedWithBothMembersAndOwnership() {
         when(spaceMapper.selectById("s2")).thenReturn(null);
         CoupleSpace space = CoupleSpace.restore("s2", "alice", "bob", CoupleSpace.STATUS_ACTIVE, 123L,
-                null, null, null, null, "classic", null, null);
+                null, null, null, null, "classic", null);
 
         repository.save(space);
 

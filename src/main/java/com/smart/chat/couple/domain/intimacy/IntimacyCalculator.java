@@ -1,26 +1,30 @@
 package com.smart.chat.couple.domain.intimacy;
 
 /**
- * 心动值计算器：六项加权求和 + 七级恋爱阶梯定级。
+ * 心动值计算器：五项加权求和 + 七级恋爱阶梯定级。
  * <p>
  * 这是情侣空间最核心的一条产品规则，所以它 belongs 在领域层，而不是长在 {@code CoupleService} 的方法体里。
- * <b>权重与阈值是定死的口径，改任何一个数字都要先回答「会不会让某对情侣当场掉级」</b>：
- * 2026-10-04 裁剪时刻意不动阶梯阈值，就是为了避免「功能被裁了，等级跟着掉」这种观感。
- * 回归护栏是 {@code CoupleIntimacyTest}（锁权重、锁「单向贴贴不算一天」、锁 50/1300 两个边界）。
+ * <b>权重与阈值是定死的口径，改任何一个数字都要先回答「会不会让某对情侣当场掉级」</b>——
+ * 2026-10-05 二轮裁剪是例外：六项供数里有五项随功能下线归零，等级会永久卡在 L1，
+ * 保留公式等于保留一个不再动的数字，所以这次连同阈值一起重标（推导过程见
+ * {@code docs/adr/0010-couple-trim-to-v8-features.md} 第 3 条）。
+ * 回归护栏是 {@code CoupleIntimacyTest} 与 {@code IntimacyCalculatorTest}（锁权重、锁「单向答完不算一天」、锁级差边界）。
  */
 public final class IntimacyCalculator {
 
-    /** 六项权重：贴贴按「天」计，好事与复盘各 ×2，留灯最重 ×3，积分原值累加 */
-    public static final long WEIGHT_MOOD_DAYS = 1;
-    public static final long WEIGHT_BOND_DAYS = 2;
-    public static final long WEIGHT_DEED_COUNT = 2;
-    public static final long WEIGHT_LAMP_COUNT = 3;
-    public static final long WEIGHT_REFLECT_COUNT = 2;
-    public static final long WEIGHT_POINT_EARNED = 1;
+    /** 五项权重：在一起天数打底 ×1，打卡与最长连续各 ×2/×3，答完一题 ×3，实现一个愿望最重 ×5 */
+    public static final long WEIGHT_DAYS_TOGETHER = 1;
+    public static final long WEIGHT_CHECKIN_DAYS = 2;
+    public static final long WEIGHT_LONGEST_STREAK = 3;
+    public static final long WEIGHT_ANSWER_DAYS = 3;
+    public static final long WEIGHT_WISH_FULFILLED = 5;
 
-    /** 各级起点分：L1 怦然心动(0) → L2 心动初启(50) → L3 甜甜热恋(150) → L4 形影不离(300)
-     *  → L5 心有灵犀(500) → L6 相依相伴(800) → L7 相守一生(1300) */
-    private static final int[] THRESHOLDS = {0, 50, 150, 300, 500, 800, 1300};
+    /** 各级起点分：L1 怦然心动(0) → L2 心动初启(60) → L3 甜甜热恋(150) → L4 形影不离(260)
+     *  → L5 心有灵犀(400) → L6 相依相伴(560) → L7 相守一生(760)。
+     * 定标依据：满打满算在一起 30 天、天天答题的一对≈225 分（L3 中段），
+     * 100 天且实现过几个愿望的一对≈520 分（L6 门口），一年后稳定进 L7——
+     * 让「百日回顾」那天的等级有分量，又不至于三个月就封顶。 */
+    private static final int[] THRESHOLDS = {0, 60, 150, 260, 400, 560, 760};
     private static final String[] TITLES = {"", "怦然心动", "心动初启", "甜甜热恋", "形影不离", "心有灵犀", "相依相伴", "相守一生"};
     private static final String[] ICONS = {"", "✨", "💫", "🍬", "🧡", "💞", "🌷", "💍"};
     /** 满级 */
@@ -29,14 +33,13 @@ public final class IntimacyCalculator {
     private IntimacyCalculator() {
     }
 
-    /** 六项加权求和（先按 long 算完再收窄，避免中途溢出） */
+    /** 五项加权求和（先按 long 算完再收窄，避免中途溢出） */
     public static int scoreOf(IntimacySource source) {
-        long score = source.moodDays() * WEIGHT_MOOD_DAYS
-                + source.bondDays() * WEIGHT_BOND_DAYS
-                + source.deedCount() * WEIGHT_DEED_COUNT
-                + source.lampCount() * WEIGHT_LAMP_COUNT
-                + source.reflectCount() * WEIGHT_REFLECT_COUNT
-                + source.pointEarned() * WEIGHT_POINT_EARNED;
+        long score = source.daysTogether() * WEIGHT_DAYS_TOGETHER
+                + source.checkinDays() * WEIGHT_CHECKIN_DAYS
+                + source.longestStreak() * WEIGHT_LONGEST_STREAK
+                + source.answerDays() * WEIGHT_ANSWER_DAYS
+                + source.wishFulfilled() * WEIGHT_WISH_FULFILLED;
         return (int) score;
     }
 

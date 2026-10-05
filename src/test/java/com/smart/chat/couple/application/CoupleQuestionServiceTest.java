@@ -23,6 +23,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -44,6 +45,8 @@ class CoupleQuestionServiceTest {
     private QuestionAnswerRepository answerRepository;
     @Mock
     private CoupleEventPublisher push;
+    @Mock
+    private CoupleStreakService streakService;
 
     @InjectMocks
     private CoupleQuestionService service;
@@ -79,7 +82,7 @@ class CoupleQuestionServiceTest {
 
     private void stubSpace() {
         CoupleSpace space = CoupleSpace.restore(SPACE, "alice", "bob", CoupleSpace.STATUS_ACTIVE,
-                System.currentTimeMillis(), null, null, null, null, null, null, null);
+                System.currentTimeMillis(), null, null, null, null, null, null);
         lenient().when(spaceRepository.findActiveByMember(anyString())).thenReturn(Optional.of(space));
     }
 
@@ -160,6 +163,31 @@ class CoupleQuestionServiceTest {
         assertThat(list.items().get(0).partnerAnswer()).isEqualTo("TA 的答案");
         assertThat(list.answeredDays()).isEqualTo(1);
         assertThat(list.bothAnsweredDays()).isEqualTo(1);
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void bothAnsweredTriggersTheCheckInExactlyOnce() {
+        stubSpace();
+        Bag bag = new Bag().stub();
+        bag.answered("bob", "TA 先答了");
+
+        service.answer("alice", "我后答");
+        // 补齐之后再来一次（改写）：打卡只能由「今天还没有那一行」那侧去挡，这里锁调用发生
+        verify(streakService, times(1)).confirmBothAnswered(any(), eq("alice"));
+
+        service.answer("alice", "改一版");
+        assertThat(bag.rows.stream().filter(r -> r.username().equals("alice")).count()).isEqualTo(1);
+    }
+
+    @Test
+    void oneSidedAnswerNeverTriggersTheCheckIn() {
+        stubSpace();
+        new Bag().stub();
+
+        service.answer("alice", "只有我答了");
+
+        verify(streakService, never()).confirmBothAnswered(any(), anyString());
     }
 
     @Test

@@ -12,8 +12,12 @@ import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 import static com.smart.chat.couple.application.DomainRules.rule;
 
@@ -48,12 +52,14 @@ public class CoupleQuestionService {
 
     private final CoupleSpaceRepository spaceRepository;
     private final QuestionAnswerRepository answerRepository;
+    private final CoupleStreakService streakService;
     private final CoupleEventPublisher push;
 
     public CoupleQuestionService(CoupleSpaceRepository spaceRepository, QuestionAnswerRepository answerRepository,
-                                 CoupleEventPublisher push) {
+                                 CoupleStreakService streakService, CoupleEventPublisher push) {
         this.spaceRepository = spaceRepository;
         this.answerRepository = answerRepository;
+        this.streakService = streakService;
         this.push = push;
     }
 
@@ -135,6 +141,10 @@ public class CoupleQuestionService {
         push.pushCoupleEvent("question-answered", me, partner,
                 partnerAnswered ? "你们今天的每日一问都答完啦 💬 可以互看"
                         : "TA 答了今天的每日一问 💬 你也答一个就能互相看到");
+        // 答完就是打卡：连续互动打卡的 AUTO 行只有这一个触发点
+        if (partnerAnswered) {
+            streakService.confirmBothAnswered(space, me);
+        }
         return todayOf(space, me);
     }
 
@@ -161,6 +171,23 @@ public class CoupleQuestionService {
     /** 这个空间答过的总条数（百日回顾用）。 */
     public long answeredCount(String spaceId) {
         return answerRepository.findBySpace(spaceId).size();
+    }
+
+    /** 双方都答完的天数：心动值的供数之一，口径与「打卡一天」完全同源（一人一行才算答完）。 */
+    public long bothAnsweredDays(String spaceId) {
+        Set<String> both = new HashSet<>();
+        Map<String, Set<String>> who = new HashMap<>();
+        for (QuestionAnswer row : answerRepository.findBySpace(spaceId)) {
+            if (row.answerText() != null && !row.answerText().isBlank()) {
+                who.computeIfAbsent(row.day(), k -> new HashSet<>()).add(row.username());
+            }
+        }
+        for (Map.Entry<String, Set<String>> entry : who.entrySet()) {
+            if (entry.getValue().size() >= 2) {
+                both.add(entry.getKey());
+            }
+        }
+        return both.size();
     }
 
     /** 最近若干条问答（百日回顾的时间轴原料）。 */
