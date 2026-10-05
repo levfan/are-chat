@@ -19,9 +19,15 @@ import java.util.regex.Pattern;
  * 接口访问日志：{@code /api/**} 上每个请求打两行，用同一个 req id 串联。
  *
  * <pre>
- * [req 3] --> POST /api/couple/mood user=alice query=- body={"mood":"happy"}
- * [req 3] <-- POST /api/couple/mood user=alice 200 37ms 成功 body={"code":0,"message":"ok","data":{...}}
+ * → [BEGIN] 000003 POST /api/couple/mood | user=alice | query=- | body={"mood":"happy"}
+ * ✓ [SUCCESS] 000003 POST /api/couple/mood 200 37ms | user=alice | body={"mood":"happy"} | resp={"code":0,...}
+ * ⚠ [CLIENT_ERR] 000004 GET /api/auth/me 401 12ms | user=- | body=- | resp={"code":401,...}
+ * ✗ [SERVER_ERR] 000005 POST /api/couple/echo 500 203ms | user=alice | body={...} | resp={"code":500,...}
  * </pre>
+ *
+ * 完成行自带入参与响应，一行就能判读一次请求；进入行只在「请求还没走完」时才有独立价值
+ * （handler 卡死或进程中途挂掉，它是唯一留下过的入参证据），所以保留但不重复状态信息。
+ * 分级口径：{@code <400} 记 SUCCESS，{@code 400-499} 记 CLIENT_ERR，{@code >=500} 与逃逸异常记 SERVER_ERR。
  *
  * 为什么是 Filter 而不是 AOP 或 HandlerInterceptor：被 {@link LoginInterceptor} 拒掉的 401、
  * 路径不存在的 404、以及请求体不是合法 JSON（参数还没绑定就抛异常）这三类恰恰最需要看入参，
@@ -61,10 +67,10 @@ public class RequestLogFilter extends OncePerRequestFilter {
             return;
         }
         long start = System.nanoTime();
-        String id = Long.toString(COUNTER.incrementAndGet(), 36);
+        String id = String.format("%06x", COUNTER.incrementAndGet());
         String method = request.getMethod();
-        String path = request.getRequestURI();
-        String query = orDash(request.getQueryString());
+        String path = safeLogText(request.getRequestURI());
+        String query = safeLogText(orDash(request.getQueryString()));
 
         String contentType = request.getContentType();
         HttpServletRequest loggedRequest = request;
@@ -86,26 +92,35 @@ public class RequestLogFilter extends OncePerRequestFilter {
         } else {
             requestBody = describeRequestBody(contentType);
         }
-        String user = userOf(loggedRequest);
-        log.info("[req {}] --> {} {} user={} query={} body={}", id, method, safeLogText(path), user,
-                safeLogText(query), requestBody);
+
+        log.info("→ [BEGIN] {} {} {} | user={} | query={} | body={}", id, method, path,
+                userOf(loggedRequest), query, requestBody);
 
         LoggedResponse loggedResponse = new LoggedResponse(response, props.maxBodyChars());
         try {
             chain.doFilter(loggedRequest, loggedResponse);
         } catch (ServletException | IOException | RuntimeException e) {
             loggedResponse.flushWriter();
-            log.info("[req {}] <-- {} {} user={} {} {}ms 失败 异常={} body={}", id, method, safeLogText(path),
-                    userOf(loggedRequest), response.getStatus(), costMs(start),
-                    safeLogText(e.getClass().getSimpleName() + ": " + e.getMessage()),
-                    safeLogText(responseBodyOf(loggedResponse)));
+            // 逃逸出链路的异常一律按服务端问题定级：此刻容器状态码可能还是 200，不能拿它当判据
+            log.info("✗ [SERVER_ERR] {} {} {} {} {}ms | user={} | body={} | resp={} | 异常={}", id, method, path,
+                    response.getStatus(), costMs(start), userOf(loggedRequest), requestBody,
+                    safeLogText(responseBodyOf(loggedResponse)),
+                    safeLogText(e.getClass().getSimpleName() + ": " + e.getMessage()));
             throw e;
         }
         loggedResponse.flushWriter();
         int status = response.getStatus();
-        log.info("[req {}] <-- {} {} user={} {} {}ms {} body={}", id, method, safeLogText(path),
-                userOf(loggedRequest), status, costMs(start), status < 400 ? "成功" : "失败",
+        log.info("{} {} {} {} {} {}ms | user={} | body={} | resp={}", verdict(status), id, method, path,
+                status, costMs(start), userOf(loggedRequest), requestBody,
                 safeLogText(responseBodyOf(loggedResponse)));
+    }
+
+    /** 三档判读：<400 成功，4xx 是调用方用错（参数/归属/权限），5xx 是服务端自己的问题 */
+    private static String verdict(int status) {
+        if (status >= 500) {
+            return "✗ [SERVER_ERR]";
+        }
+        return status >= 400 ? "⚠ [CLIENT_ERR]" : "✓ [SUCCESS]";
     }
 
     /** 请求体这一栏：上传与非 JSON 只说明类型，GET 这类没有 Content-Type 的打 - */
