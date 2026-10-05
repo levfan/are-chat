@@ -67,13 +67,16 @@ arechat:
   im:
     send-limit-per-minute: 30
   # 接口访问日志：/api/** 每个请求打两行，进入=入参、完成=状态+耗时+成功/失败+响应体
-  # 同一请求的两行共用 [req N] 前缀，可直接 grep 串联；取舍理由见 docs/adr/0006
+  # 完成行自带 body=/resp= 与 ✓[SUCCESS]/⚠[CLIENT_ERR]/✗[SERVER_ERR] 分级，同一请求两行共用 6 位十六进制 id
   request-log:
     enabled: true
     # 单行正文最多记录多少字符，超出打截断标记；它同时是响应体旁路缓冲的字节上限（不支持不限，避免大响应整份进堆）
     max-body-chars: 4000
 
 logging:
+  # 控制台按 UTF-8 输出：接口日志行首的 ✓/⚠/✗ 在 Windows 默认 GBK 控制台上会退化成 ?，可读性就没了
+  charset:
+    console: UTF-8
   level:
     com.smart.chat: INFO
 management:

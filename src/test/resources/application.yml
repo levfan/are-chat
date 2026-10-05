@@ -50,5 +50,8 @@ arechat:
     send-limit-per-minute: 30
 
 logging:
+  # 与主配置一致：接口日志行首的 ✓/⚠/✗ 需要 UTF-8 控制台才不会被打成 ?
+  charset:
+    console: UTF-8
   level:
     com.smart.chat: INFO
