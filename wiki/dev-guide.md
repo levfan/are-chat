@@ -24,18 +24,22 @@
 
 ## 接口访问日志
 
-`/api/**` 上每个请求固定留两行日志，同 `[req N]` 前缀串起来（`bootstrap/config/RequestLogFilter`，装配与开关在 `RequestLogConfig` / `RequestLogProperties`，取舍理由见 [ADR-0006](../docs/adr/0006-request-log-filter.md)）：
+`/api/**` 上每个请求固定留两行日志，同 6 位十六进制 id 串起来（`bootstrap/config/RequestLogFilter`，装配与开关在 `RequestLogConfig` / `RequestLogProperties`，取舍理由见 [ADR-0006](../docs/adr/0006-request-log-filter.md)）：
 
 ```
-[req 4] --> POST /api/auth/login user=- query=- body={"account":"admin","password":"..."}
-[req 4] <-- POST /api/auth/login user=admin 200 36ms 成功 body={"code":0,"data":{...},"message":"ok"}
+→ [BEGIN] 000004 POST /api/auth/login | user=- | query=- | body={"account":"admin","password":"..."}
+✓ [SUCCESS] 000004 POST /api/auth/login 200 36ms | user=admin | body={"account":"admin","password":"..."} | resp={"code":0,"data":{...},"message":"ok"}
+⚠ [CLIENT_ERR] 000005 GET /api/auth/me 401 12ms | user=- | body=- | resp={"code":401,"data":null,"message":"还没有登录哦"}
+✗ [SERVER_ERR] 000006 POST /api/couple/echo 500 203ms | user=alice | body={"note":"..."} | resp={"code":500,...}
 ```
+
+完成行自带入参与响应，一行就能判读一次请求，不用回头翻 BEGIN；`grep '\[CLIENT_ERR\]'` / `grep '\[SERVER_ERR\]'` 直接捞出用错的和被服务端炸掉的。
 
 | 栏 | 口径 |
 |---|---|
-| 进入行 | 方法、路径、`user`（会话里的登录名，未登录 `-`）、`query`、请求体原文 |
-| 完成行 | 方法、路径、`user`、HTTP 状态、耗时、`成功`/`失败`、响应体原文 |
-| 成功/失败判据 | HTTP 状态 `<400` 记成功。全仓没有 Controller 直接 `return ApiResponse.error(...)`，业务失败一律经 `GlobalExceptionHandler` 落成 4xx/5xx，所以状态码不会把业务失败记成成功 |
+| 进入行 `→ [BEGIN]` | 方法、路径、`user`（会话里的登录名，未登录 `-`）、`query`、请求体原文 |
+| 完成行 `✓/⚠/✗` | 方法、路径、HTTP 状态、耗时、`user`、`body=`（请求体原文）、`resp=`（响应体原文）；异常逃逸时尾部追加 `异常=` |
+| 分级判据 | `<400` → `✓ [SUCCESS]`，`400-499` → `⚠ [CLIENT_ERR]`，`>=500` 与逃逸出链路的异常 → `✗ [SERVER_ERR]`。全仓没有 Controller 直接 `return ApiResponse.error(...)`，业务失败一律经 `GlobalExceptionHandler` 落成 4xx/5xx，所以状态码不会把业务失败记成成功 |
 | 开关 | `arechat.request-log.enabled`（缺省即开启，关掉要显式写 `false`） |
 | 正文上限 | `arechat.request-log.max-body-chars`（默认 4000 字符，超出打 `...(截断,共 N 字符)`；同时是响应体旁路缓冲的字节上限） |
 

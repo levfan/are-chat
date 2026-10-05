@@ -56,11 +56,11 @@ are-chat/                             # 单模块 Maven（无多 module），坐
 
 ```
 Vue 组件 → api/<域>Api → http.ts(get/postJson/putJson/delete，withCredentials)
-  → Filter RequestLogFilter(/api/*，进入行打方法/路径/user/query/入参原文)
+  → Filter RequestLogFilter(/api/*，进入行 → [BEGIN] 打方法/路径/user/query/入参原文)
   → LoginInterceptor(会话校验) → Controller(/api/**) → Sessions.requireUser → Service(requireSpace / partnerOf)
   → Repository 端口（domain 声明）→ *RepositoryAdapter → Mapper(BaseMapperCompat default 方法 + LambdaQueryWrapper) → MariaDB(生产)/H2(测试)
      ★ Service 与 Controller 都不许 import 本上下文的 *PO/*Mapper，守卫第 5 条会红
-  ← Filter 完成行打状态/耗时/成功或失败/响应体原文（口径与排除项见 docs/adr/0006）
+  ← Filter 完成行 `✓[SUCCESS] / ⚠[CLIENT_ERR] / ✗[SERVER_ERR]` + 状态/耗时/body=/resp=，一行读全一次请求（口径与排除项见 docs/adr/0006）
 Service → ImPushService.pushCoupleEvent(Both) ─┬→ WS 帧 {type:'couple', event, detail}
                                                 └→ couple_notify 落库（CoupleNotifyRecorder，F41 通知中心）
 前端 im store 收 WS → 派发 `arechat:couple` 自定义事件 → couple store handleCoupleEvent 按 event 刷新 + 通知铃铛

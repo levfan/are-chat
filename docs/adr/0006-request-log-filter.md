@@ -47,7 +47,30 @@
 - 止损手段：`arechat.request-log.enabled=false` 一个开关即可全关；日志不进 git（`uploads/`、控制台输出由部署侧的容器日志驱动管留存）。
 - 若将来要收紧，改动面很小：`RequestLogFilter.truncate()` 出口处按字段名替换即可，不必再动采集链路。
 
-### 5. 有意不覆盖的三类
+### 5. 完成行改为一行式判读（2026-10-05 用户提出可读性诉求后改版）
+
+初版两行长这样，判读要来回对照两行才能拼出一次请求的全貌：
+
+```
+[req 4] --> POST /api/auth/login user=- query=- body={...}
+[req 4] <-- POST /api/auth/login user=admin 200 36ms 成功 body={...}
+```
+
+现版把状态分级做成行首符号 + 标签，完成行自带 `body=` 与 `resp=`，一行读完整次请求：
+
+```
+→ [BEGIN] 000004 POST /api/auth/login | user=- | query=- | body={"account":"admin",...}
+✓ [SUCCESS] 000004 POST /api/auth/login 200 36ms | user=admin | body={"account":"admin",...} | resp={"code":0,...}
+⚠ [CLIENT_ERR] 000005 GET /api/auth/me 401 12ms | user=- | body=- | resp={"code":401,...}
+✗ [SERVER_ERR] 000006 POST /api/couple/echo 500 203ms | user=alice | body={...} | resp={"code":500,...}
+```
+
+- 分级三档：`<400` SUCCESS、`400-499` CLIENT_ERR、`>=500` 与逃逸出链路的异常 SERVER_ERR（异常那一档不看状态码——链路炸出来时容器状态码可能还是 200，拿它当判据会把服务端故障记成成功）。`grep '\[SERVER_ERR\]'` 一条命令捞出所有自己的故障，`[CLIENT_ERR]` 捞调用方用错的。
+- id 改为 6 位十六进制自增计数（`%06x`）：保持进程内唯一且时序可读，不用随机数（碰撞只会让串联失效，计数器没有这个问题）。
+- **进入行保留**：用户给的样例只有一行，但「进程挂掉/handler 卡死时唯一留下过的入参证据」这条价值只有 BEGIN 行能满足；完成行重复一次 `body=` 就足够自足，两行不冲突。`body=` 在两类行里是同一段文本，不额外读流。
+- 代价：完成行体积翻倍（入参重复一次）。换来的是单行可判读与可直接 grep 分级，符合这次诉求本身。
+
+### 6. 有意不覆盖的三类
 
 - **WebSocket `/ws/chat/{name}`**：`@ServerEndpoint` 由容器实例化，不走 Servlet 过滤链，本改造天然看不见。要做得在 `ChatEndpoint` 收发处各自埋点，是另一件事。
 - **二进制响应**：只打状态码与耗时，正文打 `<非 JSON 响应（image/png），不记录正文>`。
@@ -57,6 +80,6 @@
 
 ## 后果
 
-- 正面：137 个 REST 映射零改动获得统一留痕；两行共用 `[req N]` 前缀可直接 grep 串起来；成功/失败判据与容器状态码同源，不会自造一套。
+- 正面：137 个 REST 映射零改动获得统一留痕；完成行行首是 `✓/⚠/✗ + 分级标签`，一条 grep 就能把「调用方用错的」和「服务端自己炸的」分开捞出来，且同一请求的两行共用 6 位 id 可串联；成功/失败判据与容器状态码同源，不会自造一套。
 - 负面：每请求多两次包装对象与一次全量 JSON 读（≤1MB）；日志体积随列表类接口增长，靠 `max-body-chars`（默认 4000）与开关控制。
 - 可证伪性：六个变异各自打红对应测试（去掉 `flushWriter` → writer 路径变空正文；去掉透传 → 下载字节变 0；硬编码「成功」→ 400 记成成功；去掉重放包装 → 下游读不到请求体；去掉净化 → CRLF 劈出伪造行；去掉 1MB 上限 → 1MB 正文整条抄进日志），验证记录见 `docs/ddd/03-phase-plan.md` 同批台账与本次交付报告。
