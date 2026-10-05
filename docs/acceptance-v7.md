@@ -189,6 +189,7 @@
 ### 仍待用户拍板（v8 入口）
 
 - **性能**：联系人列表每好友 2 次查询（未读数 + 最后一条），要合并需 groupwise-max 或跨 `friend`/`private_message` 聚合 JOIN；以及缺陷账 19 记的同型问题——各批聚合 `build()` 里含重算项（如人生关卡的年度成就墙一次 9 个查询，27 个写接口全走这条路），治它要改契约（挪懒读）
+  - ✅ 结案（2026-10-05，ADR-0009）：前半已由 `8a91786` 治掉（`listFriends` 常量 5 趟）；同一缺陷族的 `GET /api/friends/suggest` 每候选 3 趟（10 候选 = 31 趟）是同项漏收的第二半，已改成常量 3 趟并加防退化用例；后半的「年度成就墙」经全仓实测**主语已不存在**（`成就墙`/`/wall` 0 命中，`CoupleQuestService.build()` 只剩 1 个调用点，世界/注意力/欢笑/传世四张卡已随 v8 裁剪），现存最重写路径 `CoupleStreakService#makeup` = 12 个调用点且为常量、不随数据量增长——判为不改契约，结案并留复核方法
 - **DDD 分层重构**：口径未定（A 维护性 / B 性能 / C 规范性 / D 接受成本先挑小域试点），未动任何结构代码
 - **待裁决的后端补口**：`VISIT_TIPS`/`RELATIVES_SAMPLE`、F374 加油卡与 F376 不说话卡的话术、F395 三句 Bank 话术（`turnedFunnyLine`/`guessTwinLine`/`guessDiffLine` 全仓零调用点）、`CatchVO.usedTodayMine`、`TodayVO` 系列 per-side 位是否补
 - **入口缺失**：`profileApi.friendsBirthdays`（已改批量，但仍无界面入口）、`coupleApi.relationshipOf`
@@ -202,6 +203,7 @@
   - 三条新 SQL 都有真库测试（`FriendListBatchQueryTest`，打 H2+Flyway 全量脚本，顺带证明 V49 在空库一路升到最新能跑）；单测另锁「三个好友也只发批量查询，逐条查询一旦被改回来就红」。真服务端点复算：`GET /api/friends` 200、21ms，`lastMessage` 预览字段完好。
 - 基线 611 → **615**（+3 真库 +1 单测）。
 - **待办（同项第二半）**：各批聚合 `build()` 的重算——实测 mapper 调用量 世界8 / 注意力9 / 回音壁10 / 欢笑9 / 传世9 / 聆听15 / 关卡14，其中关卡还额外含年度成就墙 9 次查询，即每个写接口约 23 次查询，而用户只是点了一下「加油」。治它要把重算子聚合挪出写响应（改契约 + 前端配合），需要定形态。
+  - ✅ 结案（2026-10-05，ADR-0009）：上面这串数字**是 v7 当时的快照，已不代表现役代码**——重测后 `关卡14 + 成就墙9` 那一项随功能裁剪一起下线（全仓 `成就墙`/`/wall` 0 命中，`CoupleQuestService.build()` 仅 1 个调用点），`世界/注意力/欢笑/传世` 四类在 `couple/application` 下已无对应类。现存按「公开方法 → 同类私有方法递归 → 仓储调用点」的最重值是 `CoupleStreakService#makeup` 的 12（含积分台账与补签日两次真写入），其余 Service 最重公开方法 4–9。**判据是是否随数据量增长**：常量趟数属于卡片载荷成本，不立案；出现按好友/按成员/按条数的循环才按 `8a91786` 的批量手法处理并补 `verifyNoMoreInteractions` 锁。裁决全文与复核方法见 `docs/adr/0009-im-performance-items-closed.md`
 
 ## 尚未完成（接续点）
 
