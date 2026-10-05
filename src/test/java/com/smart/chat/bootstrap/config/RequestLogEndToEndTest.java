@@ -104,11 +104,12 @@ class RequestLogEndToEndTest {
         List<String> lines = awaitLinesFor("/api/auth/me", 2);
         assertEquals(2, lines.size(), () -> "进入与完成各一行，实际=" + lines);
         String done = lines.get(1);
-        assertTrue(lines.get(0).contains("GET /api/auth/me user=- query=- body=-"), lines.get(0));
+        assertTrue(lines.get(0).startsWith("→ [BEGIN] "), lines.get(0));
+        assertTrue(lines.get(0).contains("GET /api/auth/me | user=- | query=- | body=-"), lines.get(0));
+        assertTrue(done.startsWith("⚠ [CLIENT_ERR] "), done);
         assertTrue(done.contains(" 401 "), done);
-        assertTrue(done.contains("失败"), done);
-        // 这一条就是采集时机的判据：时机判错会退化成「非 JSON 响应，不记录正文」
-        assertTrue(done.contains("\"message\":\"还没有登录哦\""), done);
+        // 这一条就是采集时机的判据：时机判错 resp 会退化成「非 JSON 响应，不记录正文」
+        assertTrue(done.contains("resp={\"code\":401") && done.contains("还没有登录哦"), done);
         assertTrue(done.matches(".*\\d+ms.*"), "要带上耗时：" + done);
     }
 
@@ -122,9 +123,10 @@ class RequestLogEndToEndTest {
 
         List<String> lines = awaitLinesFor("/api/persons", 2);
         assertEquals(2, lines.size(), () -> "被拦截器拒掉的请求也要留两行，实际=" + lines);
-        assertTrue(lines.get(0).contains("--> POST /api/persons"), lines.get(0));
-        assertTrue(lines.get(0).contains("{\"name\":\"探针\"}"), lines.get(0));
-        assertTrue(lines.get(1).contains("失败"), lines.get(1));
+        assertTrue(lines.get(0).startsWith("→ [BEGIN] "), lines.get(0));
+        assertTrue(lines.get(0).contains("POST /api/persons"), lines.get(0));
+        assertTrue(lines.get(0).contains("body={\"name\":\"探针\"}"), lines.get(0));
+        assertTrue(lines.get(1).startsWith("⚠ [CLIENT_ERR] "), lines.get(1));
         assertTrue(lines.get(1).contains("雁过拔毛"), lines.get(1));
     }
 
@@ -143,15 +145,16 @@ class RequestLogEndToEndTest {
         // 按用户拍定的口径：入参全量原样记录，不做脱敏
         assertTrue(lines.get(0).contains("body=" + body), lines.get(0));
         assertTrue(lines.get(0).contains("user=-"), lines.get(0));
-        assertTrue(lines.get(1).contains("失败"), lines.get(1));
-        assertTrue(lines.get(1).contains("\"code\":401"), lines.get(1));
+        assertTrue(lines.get(1).startsWith("⚠ [CLIENT_ERR] "), lines.get(1));
+        assertTrue(lines.get(1).contains("body=" + body), lines.get(1));
+        assertTrue(lines.get(1).contains("resp={\"code\":401"), lines.get(1));
 
         appender.list.clear();
         HttpResponse<String> health = get("/api/health");
         assertEquals(200, health.statusCode());
         List<String> healthLines = awaitLinesFor("/api/health", 2);
         assertEquals(2, healthLines.size(), () -> "实际=" + healthLines);
-        assertTrue(healthLines.get(1).contains("成功"), healthLines.get(1));
+        assertTrue(healthLines.get(1).startsWith("✓ [SUCCESS] "), healthLines.get(1));
     }
 
     /** 登录成功后的请求，两行都要带上用户名（这是排查「谁把接口打挂了」的主线索） */
@@ -172,6 +175,6 @@ class RequestLogEndToEndTest {
         assertEquals(2, lines.size(), () -> "实际=" + lines);
         assertTrue(lines.get(0).contains("user=admin"), lines.get(0));
         assertTrue(lines.get(1).contains("user=admin"), lines.get(1));
-        assertTrue(lines.get(1).contains("成功"), lines.get(1));
+        assertTrue(lines.get(1).startsWith("✓ [SUCCESS] "), lines.get(1));
     }
 }

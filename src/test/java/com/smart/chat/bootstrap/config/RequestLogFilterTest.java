@@ -92,7 +92,7 @@ class RequestLogFilterTest {
             downstreamSaw.set(req.getInputStream().readAllBytes());
             // 入参必须「进来就打」：处理器刚开始时，--> 这一行就该已经在日志里了
             entryLineAlreadyWrittenAtHandlerTime.set(
-                    lines().size() == 1 && lines().get(0).contains("-->"));
+                    lines().size() == 1 && lines().get(0).contains("[BEGIN]"));
             res.setContentType("application/json;charset=UTF-8");
             ServletOutputStream out = res.getOutputStream();
             // 分两块写，覆盖旁路拷贝的跨块拼接
@@ -109,16 +109,23 @@ class RequestLogFilterTest {
         assertEquals(2, lines.size(), () -> "两行才对得上，实际=" + lines);
         String entry = lines.get(0);
         String done = lines.get(1);
-        assertTrue(entry.contains("--> POST /api/couple/mood"), entry);
+        assertTrue(entry.startsWith("→ [BEGIN] "), entry);
+        assertTrue(entry.contains("POST /api/couple/mood"), entry);
         assertTrue(entry.contains("user=alice"), entry);
         assertTrue(entry.contains("query=day=20261005"), entry);
-        assertTrue(entry.contains("{\"mood\":\"开心\"}"), entry);
-        assertTrue(done.contains("<-- POST /api/couple/mood"), done);
+        assertTrue(entry.contains("body={\"mood\":\"开心\"}"), entry);
+        // 完成行一行自带入参和响应，不必回头翻 BEGIN
+        assertTrue(done.startsWith("✓ [SUCCESS] "), done);
+        assertTrue(done.contains("POST /api/couple/mood"), done);
         assertTrue(done.contains(" 200 "), done);
-        assertTrue(done.contains("成功"), done);
-        assertTrue(done.contains(responseBody), done);
-        assertEquals(entry.substring(0, entry.indexOf(']')), done.substring(0, done.indexOf(']')),
-                "两行要共用同一个 req id 才能 grep 串联");
+        assertTrue(done.contains("body={\"mood\":\"开心\"}"), done);
+        assertTrue(done.contains("resp=" + responseBody), done);
+        assertEquals(idOf(entry), idOf(done), "两行要共用同一个 id 才能 grep 串联");
+    }
+
+    /** 新格式里 id 是标签之后的第三个空格分隔词 */
+    private static String idOf(String line) {
+        return line.split(" ")[2];
     }
 
     @Test
@@ -139,10 +146,29 @@ class RequestLogFilterTest {
                 "getWriter 路径的正文必须被冲刷回客户端");
         List<String> lines = lines();
         assertEquals(2, lines.size());
+        assertTrue(lines.get(1).startsWith("⚠ [CLIENT_ERR] "), lines.get(1));
         assertTrue(lines.get(1).contains(" 400 "), lines.get(1));
-        assertTrue(lines.get(1).contains("失败"), lines.get(1));
-        assertFalse(lines.get(1).contains("成功"), lines.get(1));
-        assertTrue(lines.get(1).contains("积分不足，还差 3 分"), lines.get(1));
+        assertFalse(lines.get(1).contains("SUCCESS"), lines.get(1));
+        assertTrue(lines.get(1).contains("resp=" + body), lines.get(1));
+    }
+
+    @Test
+    void serverSideStatusIsClassifiedAsServerError() throws Exception {
+        MockHttpServletRequest request = jsonPost("/api/couple/pin", "{\"target\":\"mood\"}");
+        request.getSession().setAttribute(Sessions.SESSION_USER, "alice");
+
+        run(request, (req, res) -> {
+            HttpServletResponse http = (HttpServletResponse) res;
+            http.setStatus(500);
+            http.setContentType("application/json;charset=UTF-8");
+            http.getWriter().write("{\"code\":500,\"message\":\"服务器开小差了\"}");
+        });
+
+        List<String> lines = lines();
+        assertEquals(2, lines.size());
+        assertTrue(lines.get(1).startsWith("✗ [SERVER_ERR] "), lines.get(1));
+        assertTrue(lines.get(1).contains("user=alice"), lines.get(1));
+        assertTrue(lines.get(1).contains("body={\"target\":\"mood\"}"), lines.get(1));
     }
 
     @Test
@@ -170,7 +196,7 @@ class RequestLogFilterTest {
         assertTrue(lines.get(0).contains("user=-"), "未登录会话要打成 -");
         assertFalse(lines.get(0).chars().anyMatch(c -> c < 0x20),
                 "日志行不该出现控制字符——上传字节被抄进日志就是这个样子");
-        assertTrue(lines.get(1).contains("成功"), lines.get(1));
+        assertTrue(lines.get(1).startsWith("✓ [SUCCESS] "), lines.get(1));
     }
 
     @Test
@@ -240,8 +266,10 @@ class RequestLogFilterTest {
         assertEquals("刮卡服务炸了", thrown.getMessage(), "异常要继续往上抛，日志不能替容器吞掉它");
         List<String> lines = lines();
         assertEquals(2, lines.size());
-        assertTrue(lines.get(1).contains("失败"), lines.get(1));
+        // 逃逸异常按服务端问题定级，哪怕容器状态码这时还是 200
+        assertTrue(lines.get(1).startsWith("✗ [SERVER_ERR] "), lines.get(1));
         assertTrue(lines.get(1).contains("异常=IllegalStateException: 刮卡服务炸了"), lines.get(1));
+        assertTrue(lines.get(1).contains("body={\"card\":\"s1\"}"), lines.get(1));
     }
 
     @Test
