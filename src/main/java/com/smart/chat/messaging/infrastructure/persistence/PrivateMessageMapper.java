@@ -10,7 +10,6 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 
 @Mapper
 public interface PrivateMessageMapper extends BaseMapperCompat<PrivateMessagePO> {
@@ -32,15 +31,9 @@ public interface PrivateMessageMapper extends BaseMapperCompat<PrivateMessagePO>
         return selectList(wrapper);
     }
 
-    default Optional<PrivateMessagePO> findLatestBetween(String me, String peer) {
-        return Optional.ofNullable(selectOne(conversationWrapper(me, peer)
-                .orderByDesc(PrivateMessagePO::getCreated)
-                .last("LIMIT 1")));
-    }
-
     /**
      * 联系人列表专用：一次拿到「我与每个对端之间最后一条消息的时间点」。
-     * <p>原先是每人一次 {@link #findLatestBetween}——那条 SQL 的谓词是
+     * <p>取代的是「每人一次双向会话取最新一条」的逐条查——那条 SQL 的谓词是
      * {@code (from_user=me AND to_user=peer) OR (to_user=me AND from_user=peer)}，
      * OR 跨了两个不同索引前缀，优化器只能全表扫（V49 补索引后实测仍是 ~200ms/次），
      * N 个好友就是 N 次全表扫。改成两个方向各一次 GROUP BY（各自能吃下 V49 的复合索引），
@@ -91,13 +84,6 @@ public interface PrivateMessageMapper extends BaseMapperCompat<PrivateMessagePO>
                 .in(PrivateMessagePO::getFromUser, peers)
                 .in(PrivateMessagePO::getCreated, timestamps)));
         return out;
-    }
-
-    default long countUnread(String me, String peer, Long lastReadAt) {
-        return selectCount(conversationWrapper(me, peer)
-                .eq(PrivateMessagePO::getFromUser, peer)
-                .eq(PrivateMessagePO::getStatus, PrivateMessagePO.STATUS_SENT)
-                .gt(PrivateMessagePO::getCreated, lastReadAt == null ? 0L : lastReadAt));
     }
 
     /** 会话内关键字搜索（只搜未撤回），倒序取最近 50 条，调用方反转为正序。 */

@@ -10,7 +10,9 @@ import java.util.Optional;
  * <p>
  * 取数口径全部沿用改造前 Mapper 的那几条：<b>双向会话谓词吃不到索引</b>，所以联系人列表的
  * 「最后一条」必须走 {@link #findLatestCreatedPerPeer} + {@link #findMessagesAtCreated} 两趟批量，
- * 不许退回 {@code findLatestBetween} 的逐条查；方法名与 Mapper 保持一致就是为了这条口径可被 grep 复核。
+ * 不许退回逐好友的单行查（改造前那条 {@code findLatestBetween} 已随批量口径一并删除）。
+ * 这条口径由 {@code FriendServiceTest#listFriendsNeverFallsBackToPerPeerQueries} 守着：
+ * 端口上只留批量方法，把逐条查加回循环里就会让那条用例变红。
  */
 public interface PrivateMessageRepository {
 
