@@ -35,20 +35,22 @@
 | C2 | 债务账本与实测相等，不许过期挂账 | `ArchitectureGuardTest.tacticalLedgerMatchesReality`（账本 ≠ 实测违规集合就红，两个方向都拦） |
 | C3 | 行为等价可复核：路由、WS 事件名、VO 字段、对外文案 | `tools/ddd-contract.mjs`（随仓库入库）对基线 commit 与工作树各跑一次，逐条比 routes / events / strings 三个多重集；允许的差异只有「中文原话改成片段+常量拼接」，且必须贴证据说明拼出的整句一字不差 |
 
-## 二、完成度判定（2026-10-05 收口时实测）
+## 二、完成度判定（2026-10-05 收口时实测；同日情侣空间二轮裁剪后重测，见 ADR-0010）
 
-统计口径：`find src/main/java -name '*.java'` = 327 个主源文件、96 个测试文件；
-`@TableName` 实体 35 个，仓储端口 35 个，`*RepositoryAdapter` 35 个——**一张表一个端口一个适配器，无遗漏**。
+统计口径：`find src/main/java -name '*.java'` = 217 个主源文件、64 个测试文件；
+`@TableName` 实体 19 个，仓储端口 19 个，`*RepositoryAdapter` 19 个——**一张表一个端口一个适配器，无遗漏**。
+（这组数字在二轮裁剪中差点破功：`domain/chore/SpinTask*` 两个文件跟着 PO 与适配器一起失去了实现，
+端口 20 / 适配器 19 的差额就是它——靠上面这条等式当场抓到，删除后回到 19/19/19。）
 
 | 判据 | couple | messaging | identity | platform | filestorage |
 |---|---|---|---|---|---|
 | A1～A4 战略（边界/无环/只经端口/统一语言） | ✅ | ✅ | ✅ | ✅ | ✅ |
-| B1 四层 + 方向唯一 | ✅ domain 52 文件 | ✅ 24 | ✅ 15 | ✅ 8 | ✅ 8 |
-| B2 `*PO` 让名 | ✅ 22/22 | ✅ 7/7 | ✅ 3/3 | ✅ 2/2 | ✅ 1/1 |
-| B3 端口 + 适配器 | ✅ 22/22 | ✅ 7/7 | ✅ 3/3 | ✅ 2/2 | ✅ 1/1 |
+| B1 四层 + 方向唯一 | ✅ domain 20 文件 | ✅ 24 | ✅ 15 | ✅ 8 | ✅ 8 |
+| B2 `*PO` 让名 | ✅ 6/6 | ✅ 7/7 | ✅ 3/3 | ✅ 2/2 | ✅ 1/1 |
+| B3 端口 + 适配器 | ✅ 6/6 | ✅ 7/7 | ✅ 3/3 | ✅ 2/2 | ✅ 1/1 |
 | B4 PO 不外泄（api/application/domain） | ✅ 0 处 | ✅ 0 处 | ✅ 0 处 | ✅ 0 处 | ✅ 0 处 |
 | B5 不变式与话术在领域 | ✅ | ✅ | ✅ | ✅ | ✅ |
-| B6 Service 只编排 | ✅ 16 个 | ✅ 4 个 | ✅ 4 个 | ✅ 2 个 | ✅ 1 个 |
+| B6 Service 只编排 | ✅ 6 个 | ✅ 4 个 | ✅ 4 个 | ✅ 2 个 | ✅ 1 个 |
 | C1～C3 护栏 | ✅ 见第三节 | 同左（守卫是全仓一体的） | | | |
 
 `posBad=0` 那一列的判据是脚本算的：`grep "@TableName"` 命中的类名全部以 `PO` 结尾；
@@ -63,9 +65,9 @@
 |---|---|
 | 进程内领域事件总线（Spring `ApplicationEventPublisher`） | 事件语义由 `messaging.domain.CoupleEventPublisher` + WS 帧 + `couple_notify` 落库承担，有真实消费者；再叠一层会把"监听者跑在事务提交前还是提交后"变成隐藏语义，而推送时机是对外契约 |
 | 多模块 Maven / 微服务化 | 单模块 + 包级上下文是本仓既定选择（ADR-0001），本轮不动 |
-| CQRS / 读写模型分离 | 读路径经端口返回领域类型或标量计数；`CoupleService` 的心动值六项仍从原始流水重算，不引入投影表 |
+| CQRS / 读写模型分离 | 读路径经端口返回领域类型或标量计数；`CoupleService` 的心动值五项（二轮裁剪后；原六项）仍从原始流水重算，不引入投影表 |
 | 把 VO 搬到 `api` 层 | ADR-0008 第 5 条：VO 是用例输出投影，搬走只产生 17 Controller + 数十测试的类型改名 churn，对 JSON 契约零影响 |
-| 给 append-only 流水表编造行为方法 | 台账 `PointEntry`、打卡日 `BondDay`、通知 `NotifyEntry`、好事 `Deed` 之外的心情/动作等都是薄实体——只有校验过的工厂与访问器（`05` 第 2.2 条） |
+| 给 append-only 流水表编造行为方法 | 打卡日 `StreakDay`、通知 `NotifyEntry`、答题 `QuestionAnswer` 之外都是薄实体——只有校验过的工厂与访问器（`05` 第 2.2 条）。此列原含台账 `PointEntry`、`BondDay`、好事 `Deed`，三者随 2026-10-05 二轮裁剪下线（ADR-0010 第 1/3/5 条） |
 | 修掉 DDD 之外的技术债 | `AdminNotifyService.notifyNewRegistration` 无调用方、`CoupleCatchService` 为守字符串契约保留的死私有方法——都不属于"分层"，另案处理。**性能那条已从本表撤下**：原文写的「联系人列表 N+1」是过期口径（`8a91786` 已把 `listFriends` 改成常量 5 趟），同族的 `suggest` 每候选 3 趟已在收口后的同一天（2026-10-05）单独改掉，`build()` 重算项按调用点实测结案——三条裁决与证据见 `docs/adr/0009-im-performance-items-closed.md` |
 
 ## 三、实测台账
@@ -78,7 +80,7 @@
 | messaging 收口 | `mvn -o test`（分支 ddd/mess） | 345 用例，仅账本条目红；文案 0 新增 |
 | platform+filestorage 收口 | `mvn -o test`（分支 ddd/platfs） | 329 用例，仅账本条目红 |
 | couple 全量收口 + 账本清空 | `mvn -o clean test` | **563 用例 0 失败 MVN_EXIT=0，BUILD SUCCESS** |
-| 账本清空后的变异证明 | 在 `CouplePinService` 注入不带 import 的 `Supplier<...persistence.CoupleUserPinPO>` | `persistenceTypesStayBehindRepositoryPorts` + `tacticalLedgerMatchesReality` 双双变红（报出 `内联引用 com.smart.chat.couple.infrastructure.persistence.CoupleUserPinPO`）；还原（`git diff` 为空）后 6/6 绿 |
+| 账本清空后的变异证明 | 在 `CouplePinService` 注入不带 import 的 `Supplier<...persistence.CoupleUserPinPO>` | `persistenceTypesStayBehindRepositoryPorts` + `tacticalLedgerMatchesReality` 双双变红（报出 `内联引用 com.smart.chat.couple.infrastructure.persistence.CoupleUserPinPO`）；还原（`git diff` 为空）后 6/6 绿。（此类与 `couple_user_pin` 已在同日二轮裁剪中删除，本行是当时的过程证据，不是现役代码） |
 | 对外契约 | `node tools/ddd-contract.mjs <基线commit|WORK> <目录>` 两侧输出做集合 diff（全 `src/main/java`） | 路由 **137 种 0 消失 0 新增**；WS 事件 **44 种 0 消失 0 新增**；中文文案 1215→1220 种，差异逐条核过 |
 | 收口后的同日性能结案（ADR-0009） | `mvn -o test -Dtest=FriendServiceTest` / 隔离 worktree `mvn -o clean test` / `node tools/ddd-contract.mjs HEAD src/main/java/com/smart/chat/messaging` | 加好友联想 31 趟 → 常量 3 趟，`FriendServiceTest` 14→**18** 用例；变异证明该锁能变红（`NoInteractionsWanted`，MVN_EXIT=1）；messaging 契约面路由 32 / 文案 73 **0 消失 0 新增**；另补真库差分测试 `FriendSuggestRelationQueryTest`（批量取法 vs 逐条查，H2+Flyway 真表，四种翻车情形），它对调 outgoing/incoming 也会变红；全仓基线 563 → **570**（`Tests run: 570, Failures: 0, Errors: 0` + BUILD SUCCESS，`4ef60f3`，隔离 worktree 实测） |
 

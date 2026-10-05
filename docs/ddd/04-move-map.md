@@ -1,6 +1,9 @@
 # 04 · 逐文件搬迁表（脚本生成，判据 = 文件名后缀 + 显式归属表）
 
 > 由 `.tmp-audit/ddd-apply.mjs plan` 从源码现算，与执行器共用 `.tmp-audit/ddd-rules.mjs`——**不要手改本文件**，规则变了重新生成。
+> ⚠️ 本表是 **2026-10-05 DDD 搬迁那一刻的快照**，不是现役清单：同日之后的情侣空间二轮裁剪删掉了 `couple` 上下文
+> 16 张表及其 Controller/Service/端口/适配器（`couple/api` 13 → 7、`couple/application` 11 → 6，见
+> `docs/adr/0010-couple-trim-to-v8-features.md`）。现役文件数以 `src/main/java` 实测为准（`06-ddd-standard.md` 第二节）。
 > 现包 → 上下文：`auth`→`identity`、`im`+`room`→`messaging`、`couple`→`couple`、`system`+`notify`+`tools`→`platform`、`upload`→`filestorage`；
 > `BaseMapperCompat` 与 `ApiResponse`/`BusinessException`/`Sessions`/`GlobalExceptionHandler` 进 `sharedkernel`；10 个横切配置进 `bootstrap`。
 > `SmartChatApplication` 留在根包不动（`@SpringBootApplication`/`@ConfigurationPropertiesScan`/`@MapperScan` 都以 `com.smart.chat` 为扫描面，保持不变才让本轮是纯移动）。
