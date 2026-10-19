@@ -215,14 +215,14 @@ class FriendServiceTest {
         Friend row = edge("alice", "bob");
         when(friendRepository.find(row.id())).thenReturn(Optional.of(row));
 
-        service.updateFriend("alice", row.id(), "  老友  ", true, null, null, null);
+        service.updateFriend("alice", row.id(), "  老友  ", true, null, null);
 
         ArgumentCaptor<Friend> captor = ArgumentCaptor.forClass(Friend.class);
         verify(friendRepository).save(captor.capture());
         assertThat(captor.getValue().remark()).isEqualTo("老友");
         assertThat(captor.getValue().pinnedFlag()).isTrue();
 
-        assertThatThrownBy(() -> service.updateFriend("alice", row.id(), "x".repeat(33), null, null, null, null))
+        assertThatThrownBy(() -> service.updateFriend("alice", row.id(), "x".repeat(33), null, null, null))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("32");
     }
@@ -232,7 +232,7 @@ class FriendServiceTest {
         Friend row = edge("alice", "bob");
         when(friendRepository.find(row.id())).thenReturn(Optional.of(row));
 
-        service.updateFriend("alice", row.id(), null, null, true, null, null);
+        service.updateFriend("alice", row.id(), null, null, true, null);
 
         ArgumentCaptor<Friend> captor = ArgumentCaptor.forClass(Friend.class);
         verify(friendRepository).save(captor.capture());
@@ -241,23 +241,18 @@ class FriendServiceTest {
     }
 
     @Test
-    void updateFriendSetsTagAndBlocked() {
+    void updateFriendSetsBlocked() {
         Friend row = edge("alice", "bob");
         when(friendRepository.find(row.id())).thenReturn(Optional.of(row));
 
-        service.updateFriend("alice", row.id(), null, null, null, "  同事  ", true);
+        service.updateFriend("alice", row.id(), null, null, null, true);
 
         ArgumentCaptor<Friend> captor = ArgumentCaptor.forClass(Friend.class);
         verify(friendRepository).save(captor.capture());
-        assertThat(captor.getValue().tag()).isEqualTo("同事");
         assertThat(captor.getValue().blocked()).isEqualTo(1);
 
-        assertThatThrownBy(() -> service.updateFriend("alice", row.id(), null, null, null, "x".repeat(17), null))
-                .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("16");
-
         // 解除拉黑
-        service.updateFriend("alice", row.id(), null, null, null, null, false);
+        service.updateFriend("alice", row.id(), null, null, null, false);
         ArgumentCaptor<Friend> unblock = ArgumentCaptor.forClass(Friend.class);
         verify(friendRepository, org.mockito.Mockito.times(2)).save(unblock.capture());
         assertThat(unblock.getValue().blocked()).isZero();
@@ -267,7 +262,6 @@ class FriendServiceTest {
     void listFriendsSortsPinnedFirstAndCarriesUnreadAndPreview() {
         Friend pinned = edge("alice", "carol");
         pinned.changePinned(true);
-        pinned.changeTag("家人");
         Friend normal = edge("alice", "bob");
         normal.changeBlocked(true);
         when(friendRepository.findAllByOwner("alice")).thenReturn(List.of(normal, pinned));
@@ -290,7 +284,6 @@ class FriendServiceTest {
         assertThat(friends).hasSize(2);
         assertThat(friends.get(0).username()).isEqualTo("carol");
         assertThat(friends.get(0).pinned()).isTrue();
-        assertThat(friends.get(0).tag()).isEqualTo("家人");
         assertThat(friends.get(0).status()).isEqualTo("online");
         assertThat(friends.get(1).username()).isEqualTo("bob");
         assertThat(friends.get(1).unread()).isEqualTo(2);

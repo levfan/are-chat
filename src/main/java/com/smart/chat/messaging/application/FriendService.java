@@ -28,7 +28,7 @@ import static com.smart.chat.messaging.application.DomainRules.guard;
 import static com.smart.chat.messaging.application.DomainRules.rule;
 
 /**
- * 好友：申请（可附言）/同意/拒绝/删除/备注/分组标签/置顶/免打扰/拉黑/会话列表（含未读、最后一条消息、对方在线状态）。
+ * 好友：申请（可附言）/同意/拒绝/删除/备注/置顶/免打扰/拉黑/会话列表（含未读、最后一条消息、对方在线状态）。
  * <p>
  * 改造后这里只做四件事：取会话身份、经端口取聚合、调领域方法、把结果投影成 VO 或推 WS。
  * 关系与状态的裁决在 {@link Friend} / {@link FriendRequest} / {@link FriendshipGate} 里，
@@ -37,7 +37,7 @@ import static com.smart.chat.messaging.application.DomainRules.rule;
 @Service
 public class FriendService {
 
-    public record FriendVO(String id, String username, String nickname, String remark, String tag, boolean pinned,
+    public record FriendVO(String id, String username, String nickname, String remark, boolean pinned,
                            boolean muted, boolean blocked, boolean online, String status, Long lastSeenAt, long unread,
                            MessagePreview lastMessage) {
     }
@@ -99,7 +99,6 @@ public class FriendService {
             result.add(new FriendVO(row.id(), peer,
                     profile == null ? "" : profile.nickname(),
                     row.remark() == null ? "" : row.remark(),
-                    row.tag() == null ? "" : row.tag(),
                     row.pinnedFlag(), row.mutedFlag(), row.blockedFlag(),
                     push.isOnline(peer),
                     profile == null ? "online" : profile.presenceStatusForView(),
@@ -236,15 +235,12 @@ public class FriendService {
         return requestRepository.listOutgoing(me).stream().map(FriendRequestVO::of).toList();
     }
 
-    /** 拥有者对自己那条边的私设：备注/分组/置顶/免打扰/拉黑，请求里没传的字段一律不动。 */
+    /** 拥有者对自己那条边的私设：备注/置顶/免打扰/拉黑，请求里没传的字段一律不动。 */
     public void updateFriend(String me, String friendId, String remark, Boolean pinned, Boolean muted,
-                             String tag, Boolean blocked) {
+                             Boolean blocked) {
         Friend row = requireOwnFriend(me, friendId);
         if (remark != null) {
             guard(() -> row.changeRemark(remark));
-        }
-        if (tag != null) {
-            guard(() -> row.changeTag(tag));
         }
         if (blocked != null) {
             row.changeBlocked(blocked);

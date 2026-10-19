@@ -18,9 +18,6 @@ public interface PrivateMessageRepository {
 
     Optional<PrivateMessage> findById(String id);
 
-    /** 收藏夹/会话页的一次批量装配（原 selectBatchIds 口径，逐条查会退化成 N+1） */
-    List<PrivateMessage> listByIds(Collection<String> ids);
-
     /** 新消息插入；已有消息只回写聚合持有的列（read_flag 由 {@link #markIncomingRead} 负责） */
     void save(PrivateMessage message);
 
@@ -35,9 +32,6 @@ public interface PrivateMessageRepository {
 
     /** 会话内关键字搜索（只搜未撤回），倒序取最近 50 条 */
     List<PrivateMessage> searchConversation(String me, String peer, String keyword);
-
-    /** 81 全局消息搜索：我参与的全部会话里的未撤回文本 */
-    List<PrivateMessage> searchGlobal(String me, String keyword);
 
     /** 已读回执：把 from 发给 to 的未读消息全部标记已读（批量 UPDATE，不走 save） */
     void markIncomingRead(String from, String to);

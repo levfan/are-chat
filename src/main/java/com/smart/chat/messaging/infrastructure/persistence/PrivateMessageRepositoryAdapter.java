@@ -34,15 +34,6 @@ public class PrivateMessageRepositoryAdapter implements PrivateMessageRepository
     }
 
     @Override
-    public List<PrivateMessage> listByIds(Collection<String> ids) {
-        if (ids.isEmpty()) {
-            // 空集合会被拼成 IN ()，直接语法错（与 MessageStarMapper 的批量读法同口径）
-            return List.of();
-        }
-        return messageMapper.selectBatchIds(ids).stream().map(PrivateMessageRepositoryAdapter::toDomain).toList();
-    }
-
-    @Override
     public void save(PrivateMessage message) {
         PrivateMessagePO existing = messageMapper.selectById(message.id());
         if (existing == null) {
@@ -92,11 +83,6 @@ public class PrivateMessageRepositoryAdapter implements PrivateMessageRepository
     @Override
     public List<PrivateMessage> searchConversation(String me, String peer, String keyword) {
         return toDomainList(messageMapper.searchConversation(me, peer, keyword));
-    }
-
-    @Override
-    public List<PrivateMessage> searchGlobal(String me, String keyword) {
-        return toDomainList(messageMapper.searchGlobal(me, keyword));
     }
 
     @Override

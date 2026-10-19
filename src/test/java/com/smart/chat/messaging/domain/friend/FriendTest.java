@@ -6,7 +6,7 @@ import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-/** 好友边自己的规则：归属闸门、私设字段长度、拉黑位与建档默认值。 */
+/** 好友边自己的规则：归属闸门、备注长度、拉黑位与建档默认值。 */
 class FriendTest {
 
     @Test
@@ -17,7 +17,6 @@ class FriendTest {
         assertThat(edge.ownerUsername()).isEqualTo("alice");
         assertThat(edge.friendUsername()).isEqualTo("bob");
         assertThat(edge.remark()).isEmpty();
-        assertThat(edge.tag()).isNull();
         assertThat(edge.pinnedFlag()).isFalse();
         assertThat(edge.mutedFlag()).isFalse();
         assertThat(edge.blockedFlag()).isFalse();
@@ -36,20 +35,15 @@ class FriendTest {
     }
 
     @Test
-    void remarkAndTagHaveTheirOwnCeilings() {
+    void remarkHasItsOwnCeiling() {
         Friend edge = Friend.add("alice", "bob", 1L);
 
         edge.changeRemark("  老友  ");
-        edge.changeTag("  同事  ");
         assertThat(edge.remark()).isEqualTo("老友");
-        assertThat(edge.tag()).isEqualTo("同事");
 
         assertThatThrownBy(() -> edge.changeRemark("x".repeat(33)))
                 .isInstanceOf(RuleViolation.class)
                 .hasMessage("备注最长 32 个字");
-        assertThatThrownBy(() -> edge.changeTag("x".repeat(17)))
-                .isInstanceOf(RuleViolation.class)
-                .hasMessage("分组标签最长 16 个字");
     }
 
     @Test
@@ -76,7 +70,7 @@ class FriendTest {
 
     @Test
     void restoringKeepsLegacyNullsSoHistoricalRowsStillRead() {
-        Friend edge = Friend.restore("f1", "alice", "bob", null, null, null, null, null, null, 777L, null);
+        Friend edge = Friend.restore("f1", "alice", "bob", null, null, null, null, null, 777L, null);
 
         assertThat(edge.remark()).isNull();
         assertThat(edge.pinnedFlag()).isFalse();

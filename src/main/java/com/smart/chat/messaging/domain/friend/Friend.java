@@ -7,7 +7,7 @@ import java.util.UUID;
 /**
  * 好友关系的一条边：{@code owner} 这一侧的视角（同一对人是两行、两条边，见 CONTEXT.md「好友」）。
  * <p>
- * 这条聚合存在的理由是「边上的归属与私设」：备注/分组/置顶/免打扰/拉黑都只属于拥有者那一侧，
+ * 这条聚合存在的理由是「边上的归属与私设」：备注/置顶/免打扰/拉黑都只属于拥有者那一侧，
  * 对方的那条边一个字也不该被改动；删除必须成对（{@link FriendRepository#deletePair}），
  * 只删一边就会留下半条关系。这些裁决放在这里，而不是散在 Service 的 if 里。
  * <p>
@@ -18,7 +18,6 @@ import java.util.UUID;
 public final class Friend {
 
     public static final int REMARK_MAX = 32;
-    public static final int TAG_MAX = 16;
 
     private final String id;
     private final String ownerUsername;
@@ -26,19 +25,17 @@ public final class Friend {
     private final Long created;
     private final Long lastSeenAt;
     private String remark;
-    private String tag;
     private Boolean pinned;
     private Boolean muted;
     private Integer blocked;
     private Long lastReadAt;
 
-    private Friend(String id, String ownerUsername, String friendUsername, String remark, String tag,
+    private Friend(String id, String ownerUsername, String friendUsername, String remark,
                    Boolean pinned, Boolean muted, Integer blocked, Long lastReadAt, Long lastSeenAt, Long created) {
         this.id = id;
         this.ownerUsername = ownerUsername;
         this.friendUsername = friendUsername;
         this.remark = remark;
-        this.tag = tag;
         this.pinned = pinned;
         this.muted = muted;
         this.blocked = blocked;
@@ -52,15 +49,15 @@ public final class Friend {
      * 口径与改造前的 {@code FriendPO.of} 逐字一致，只是把取时间交给调用方，便于用例断言。
      */
     public static Friend add(String owner, String friend, long at) {
-        return new Friend(UUID.randomUUID().toString(), owner, friend, "", null,
+        return new Friend(UUID.randomUUID().toString(), owner, friend, "",
                 Boolean.FALSE, Boolean.FALSE, null, 0L, null, at);
     }
 
     /** 从存储重建：不校验，历史行里的空值必须读得出来。 */
-    public static Friend restore(String id, String ownerUsername, String friendUsername, String remark, String tag,
+    public static Friend restore(String id, String ownerUsername, String friendUsername, String remark,
                                  Boolean pinned, Boolean muted, Integer blocked, Long lastReadAt,
                                  Long lastSeenAt, Long created) {
-        return new Friend(id, ownerUsername, friendUsername, remark, tag, pinned, muted, blocked,
+        return new Friend(id, ownerUsername, friendUsername, remark, pinned, muted, blocked,
                 lastReadAt, lastSeenAt, created);
     }
 
@@ -78,15 +75,6 @@ public final class Friend {
             throw RuleViolation.of("备注最长 " + REMARK_MAX + " 个字");
         }
         this.remark = trimmed;
-    }
-
-    /** 改分组标签，最长 16 字。 */
-    public void changeTag(String tag) {
-        String trimmed = tag.trim();
-        if (trimmed.length() > TAG_MAX) {
-            throw RuleViolation.of("分组标签最长 " + TAG_MAX + " 个字");
-        }
-        this.tag = trimmed;
     }
 
     public void changePinned(boolean pinned) {
@@ -134,10 +122,6 @@ public final class Friend {
 
     public String remark() {
         return remark;
-    }
-
-    public String tag() {
-        return tag;
     }
 
     public Boolean pinned() {

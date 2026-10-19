@@ -8,12 +8,10 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -76,32 +74,6 @@ class PrivateMessageRepositoryAdapterTest {
         assertThat(po.getStatus()).isEqualTo(PrivateMessage.STATUS_SENT);
         assertThat(po.getCreated()).isEqualTo(900L);
         verify(messageMapper, never()).updateById(any(PrivateMessagePO.class));
-    }
-
-    @Test
-    void batchFetchSkipsTheQueryForEmptyEntries() {
-        // 空集合会被拼成 IN ()，直接语法错；端口必须自己拦下来
-        assertThat(repository.listByIds(List.of())).isEmpty();
-        verify(messageMapper, never()).selectBatchIds(any());
-    }
-
-    @Test
-    void batchFetchMapsRowsBackIntoMessages() {
-        PrivateMessagePO po = new PrivateMessagePO();
-        po.setId("m2");
-        po.setFromUser("bob");
-        po.setToUser("alice");
-        po.setContent("晚上吃什么");
-        po.setMsgType(PrivateMessage.TYPE_TEXT);
-        po.setStatus(PrivateMessage.STATUS_SENT);
-        po.setReadFlag(1);
-        when(messageMapper.selectBatchIds(anyCollection())).thenReturn(List.of(po));
-
-        PrivateMessage message = repository.listByIds(List.of("m2")).get(0);
-
-        assertThat(message.id()).isEqualTo("m2");
-        assertThat(message.readFlag()).isTrue();
-        assertThat(message.readFlagRaw()).isEqualTo(1);
     }
 
     @Test

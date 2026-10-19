@@ -87,7 +87,7 @@ class ProfileControllerTest {
     }
 
     private static Friend friendOf(String owner, String peer) {
-        return Friend.restore(owner + "-" + peer, owner, peer, "", null, false, false, null, 0L, null, 1L);
+        return Friend.restore(owner + "-" + peer, owner, peer, "", false, false, null, 0L, null, 1L);
     }
 
     @Test

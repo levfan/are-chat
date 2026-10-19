@@ -23,7 +23,7 @@ public class FriendController {
     public record ApplyRequest(String username, String message) {
     }
 
-    public record UpdateFriendRequest(String remark, Boolean pinned, Boolean muted, String tag, Boolean blocked) {
+    public record UpdateFriendRequest(String remark, Boolean pinned, Boolean muted, Boolean blocked) {
     }
 
     private final FriendService friendService;
@@ -75,7 +75,7 @@ public class FriendController {
     public ApiResponse<Void> update(@PathVariable String id, @RequestBody UpdateFriendRequest req,
                                     HttpSession session) {
         friendService.updateFriend(Sessions.requireUser(session), id,
-                req.remark(), req.pinned(), req.muted(), req.tag(), req.blocked());
+                req.remark(), req.pinned(), req.muted(), req.blocked());
         return ApiResponse.ok();
     }
 

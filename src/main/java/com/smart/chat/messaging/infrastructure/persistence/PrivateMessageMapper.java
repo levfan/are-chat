@@ -104,17 +104,6 @@ public interface PrivateMessageMapper extends BaseMapperCompat<PrivateMessagePO>
                 .set(PrivateMessagePO::getReadFlag, 1));
     }
 
-    /** 81 全局消息搜索：我参与的全部会话里按关键字搜未撤回文本，倒序取最近 50 条。 */
-    default List<PrivateMessagePO> searchGlobal(String me, String keyword) {
-        return selectList(new LambdaQueryWrapper<PrivateMessagePO>()
-                .and(w -> w.eq(PrivateMessagePO::getFromUser, me).or().eq(PrivateMessagePO::getToUser, me))
-                .eq(PrivateMessagePO::getStatus, PrivateMessagePO.STATUS_SENT)
-                .eq(PrivateMessagePO::getMsgType, PrivateMessagePO.TYPE_TEXT)
-                .like(PrivateMessagePO::getContent, keyword)
-                .orderByDesc(PrivateMessagePO::getCreated)
-                .last("LIMIT 50"));
-    }
-
     /** 85 清空聊天记录：删除双向会话全部消息，返回删除条数。 */
     default int deleteConversation(String me, String peer) {
         return delete(conversationWrapper(me, peer));

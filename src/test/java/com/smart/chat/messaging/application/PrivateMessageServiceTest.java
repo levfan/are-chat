@@ -9,8 +9,6 @@ import com.smart.chat.messaging.domain.pin.ConversationPin;
 import com.smart.chat.messaging.domain.pin.ConversationPinRepository;
 import com.smart.chat.messaging.domain.reaction.MessageReaction;
 import com.smart.chat.messaging.domain.reaction.MessageReactionRepository;
-import com.smart.chat.messaging.domain.star.MessageStar;
-import com.smart.chat.messaging.domain.star.MessageStarRepository;
 import com.smart.chat.messaging.infrastructure.transport.ImPushService;
 import com.smart.chat.identity.domain.AccountDirectory;
 import com.smart.chat.sharedkernel.web.BusinessException;
@@ -27,7 +25,6 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
@@ -49,9 +46,6 @@ class PrivateMessageServiceTest {
 
     @Mock
     private MessageReactionRepository reactionRepository;
-
-    @Mock
-    private MessageStarRepository starRepository;
 
     @Mock
     private ImPushService push;
@@ -198,15 +192,12 @@ class PrivateMessageServiceTest {
                 .thenReturn(List.of(later, earlier));
         when(reactionRepository.listByMsgIds(any())).thenReturn(
                 List.of(MessageReaction.add(earlier.id(), "bob", "👍", NOW)));
-        when(starRepository.listByUsernameAndMsgIds(eq("alice"), any())).thenReturn(
-                List.of(MessageStar.add("alice", earlier.id(), NOW)));
 
         List<PrivateMessageService.MessageVO> history = service.history("alice", "bob", null, 20);
 
         assertThat(history).extracting(PrivateMessageService.MessageVO::content).containsExactly("第一条", "第二条");
         PrivateMessageService.MessageVO first = history.get(0);
         assertThat(first.read()).isTrue();
-        assertThat(first.starred()).isTrue();
         assertThat(first.reactions()).hasSize(1);
         assertThat(first.reactions().get(0).username()).isEqualTo("bob");
         assertThat(history.get(1).read()).isFalse();
@@ -337,7 +328,6 @@ class PrivateMessageServiceTest {
         when(messageRepository.searchConversation("alice", "bob", "火锅"))
                 .thenReturn(List.of(newer, older));
         lenient().when(reactionRepository.listByMsgIds(any())).thenReturn(List.of());
-        lenient().when(starRepository.listByUsernameAndMsgIds(eq("alice"), any())).thenReturn(List.of());
 
         List<PrivateMessageService.MessageVO> hits = service.search("alice", "bob", "火锅");
 
@@ -391,47 +381,6 @@ class PrivateMessageServiceTest {
         assertThatThrownBy(() -> service.toggleReaction("alice", message.id(), "🐱"))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("不支持的表情");
-    }
-
-    @Test
-    void toggleStarAndListStars() {
-        PrivateMessage message = text("bob", "alice", "这句要收藏");
-        when(messageRepository.findById(message.id())).thenReturn(Optional.of(message));
-        when(starRepository.findByUsernameAndMsgId("alice", message.id())).thenReturn(Optional.empty());
-
-        assertThat(service.toggleStar("alice", message.id())).isTrue();
-        verify(starRepository).save(any(MessageStar.class));
-
-        when(starRepository.findByUsernameAndMsgId("alice", message.id()))
-                .thenReturn(Optional.of(MessageStar.add("alice", message.id(), NOW)));
-        assertThat(service.toggleStar("alice", message.id())).isFalse();
-
-        MessageStar star = MessageStar.add("alice", message.id(), NOW);
-        when(starRepository.listByUsername("alice")).thenReturn(List.of(star));
-        // 收藏夹一次批量取消息：原先每条收藏 selectById 一次（N+1），改成一趟批量
-        when(messageRepository.listByIds(List.of(message.id()))).thenReturn(List.of(message));
-
-        List<PrivateMessageService.StarVO> stars = service.listStars("alice");
-        assertThat(stars).hasSize(1);
-        assertThat(stars.get(0).peer()).isEqualTo("bob");
-        assertThat(stars.get(0).content()).isEqualTo("这句要收藏");
-        verify(messageRepository).listByIds(List.of(message.id()));
-    }
-
-    @Test
-    void listStarsSkipsDeletedMessagesWithoutPerStarQuery() {
-        PrivateMessage alive = text("bob", "alice", "还在的");
-        when(starRepository.listByUsername("alice")).thenReturn(List.of(
-                MessageStar.add("alice", alive.id(), NOW), MessageStar.add("alice", "已删除的消息", NOW)));
-        when(messageRepository.listByIds(any())).thenReturn(List.of(alive));
-
-        List<PrivateMessageService.StarVO> stars = service.listStars("alice");
-
-        // 收藏指向已删消息时静默跳过，且全程只有 1 次批量查询
-        assertThat(stars).hasSize(1);
-        assertThat(stars.get(0).content()).isEqualTo("还在的");
-        verify(messageRepository, never()).findById(anyString());
-        verify(messageRepository).listByIds(any());
     }
 
     @Test

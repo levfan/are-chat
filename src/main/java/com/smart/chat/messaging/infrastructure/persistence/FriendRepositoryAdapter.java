@@ -50,7 +50,6 @@ public class FriendRepositoryAdapter implements FriendRepository {
             po.setOwnerUsername(friend.ownerUsername());
             po.setFriendUsername(friend.friendUsername());
             po.setRemark(friend.remark());
-            po.setTag(friend.tag());
             po.setPinned(friend.pinned());
             po.setMuted(friend.muted());
             po.setBlocked(friend.blocked());
@@ -67,7 +66,6 @@ public class FriendRepositoryAdapter implements FriendRepository {
     /** 聚合负责维护的列；owner/friend/created 是边的身份、last_seen_at 归批量刷新，这里一律不碰 */
     private static void applyOwnedFields(FriendPO po, Friend friend) {
         po.setRemark(friend.remark());
-        po.setTag(friend.tag());
         po.setPinned(friend.pinned());
         po.setMuted(friend.muted());
         po.setBlocked(friend.blocked());
@@ -102,7 +100,7 @@ public class FriendRepositoryAdapter implements FriendRepository {
     }
 
     private static Friend toDomain(FriendPO po) {
-        return Friend.restore(po.getId(), po.getOwnerUsername(), po.getFriendUsername(), po.getRemark(), po.getTag(),
+        return Friend.restore(po.getId(), po.getOwnerUsername(), po.getFriendUsername(), po.getRemark(),
                 po.getPinned(), po.getMuted(), po.getBlocked(), po.getLastReadAt(), po.getLastSeenAt(),
                 po.getCreated());
     }

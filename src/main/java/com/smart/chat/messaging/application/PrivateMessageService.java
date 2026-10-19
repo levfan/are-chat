@@ -11,8 +11,6 @@ import com.smart.chat.messaging.domain.pin.ConversationPin;
 import com.smart.chat.messaging.domain.pin.ConversationPinRepository;
 import com.smart.chat.messaging.domain.reaction.MessageReaction;
 import com.smart.chat.messaging.domain.reaction.MessageReactionRepository;
-import com.smart.chat.messaging.domain.star.MessageStar;
-import com.smart.chat.messaging.domain.star.MessageStarRepository;
 import com.smart.chat.messaging.infrastructure.throttle.MessageRateLimiter;
 import com.smart.chat.messaging.infrastructure.transport.ImPushService;
 import com.smart.chat.identity.domain.AccountDirectory;
@@ -26,15 +24,14 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
-import java.util.function.Function;
 import java.util.stream.Collectors;
 
 import static com.smart.chat.messaging.application.DomainRules.guard;
 import static com.smart.chat.messaging.application.DomainRules.rule;
 
 /**
- * 点对点私聊：发送（落库 + 在线推送）、历史/搜索（装配回应/收藏/已读状态）、
- * 表情回应、收藏、编辑、已读回执、撤回；拉黑双向拦截。
+ * 点对点私聊：发送（落库 + 在线推送）、历史/搜索（装配回应/已读状态）、
+ * 表情回应、编辑、已读回执、撤回；拉黑双向拦截。
  * 新增：82 文件消息、84 会话内置顶、85 清空聊天记录、86 敏感词过滤、87 发送限流、95 附件面板。
  * <p>
  * 改造后这里不再摸 Mapper：取数一律经 {@code domain} 的仓储端口，
@@ -50,21 +47,13 @@ public class PrivateMessageService {
     /** 82 文件消息：content 为 JSON（name/size/url），url 必须是站内下载地址 */
     public static final String TYPE_FILE = PrivateMessage.TYPE_FILE;
 
-    /** 会话消息视图：在消息之上装配回应列表 / 收藏 / 已读回执 / 编辑标记。 */
+    /** 会话消息视图：在消息之上装配回应列表 / 已读回执 / 编辑标记。 */
     public record MessageVO(String id, String fromUser, String toUser, String content, String msgType,
-                            String status, String replyToId, boolean read, boolean edited, boolean starred,
+                            String status, String replyToId, boolean read, boolean edited,
                             List<ReactionVO> reactions, Long created) {
     }
 
     public record ReactionVO(String username, String emoji) {
-    }
-
-    /** 收藏夹条目：peer 为消息的另一方。 */
-    public record StarVO(String msgId, String peer, String content, String msgType, String status, Long created) {
-    }
-
-    /** 81 全局搜索命中：peer 为会话另一方，便于前端跳转 */
-    public record GlobalSearchHitVO(String id, String peer, String content, String fromUser, Long created) {
     }
 
     public record PinVO(String msgId, String createdBy) {
@@ -86,7 +75,6 @@ public class PrivateMessageService {
     private final PrivateMessageRepository messageRepository;
     private final FriendRepository friendRepository;
     private final MessageReactionRepository reactionRepository;
-    private final MessageStarRepository starRepository;
     private final ImPushService push;
     /** 合法用户目录：手机号注册产生的账号 */
     private final AccountDirectory accounts;
@@ -98,13 +86,12 @@ public class PrivateMessageService {
     private final ConversationPinRepository pinRepository;
 
     public PrivateMessageService(PrivateMessageRepository messageRepository, FriendRepository friendRepository,
-                                 MessageReactionRepository reactionRepository, MessageStarRepository starRepository,
+                                 MessageReactionRepository reactionRepository,
                                  ImPushService push, AccountDirectory accounts, ModerationService moderation,
                                  MessageRateLimiter rateLimiter, ConversationPinRepository pinRepository) {
         this.messageRepository = messageRepository;
         this.friendRepository = friendRepository;
         this.reactionRepository = reactionRepository;
-        this.starRepository = starRepository;
         this.push = push;
         this.accounts = accounts;
         this.moderation = moderation;
@@ -189,7 +176,7 @@ public class PrivateMessageService {
         return toVOs(page.stream().sorted(Comparator.comparing(PrivateMessage::created)).toList(), me);
     }
 
-    /** 一次性装配：回应列表、我的收藏、我发消息的已读状态、编辑标记。 */
+    /** 一次性装配：回应列表、我发消息的已读状态、编辑标记。 */
     private List<MessageVO> toVOs(List<PrivateMessage> rows, String me) {
         if (rows.isEmpty()) {
             return List.of();
@@ -198,14 +185,11 @@ public class PrivateMessageService {
         Map<String, List<ReactionVO>> reactionMap = reactionRepository.listByMsgIds(ids).stream()
                 .collect(Collectors.groupingBy(MessageReaction::msgId,
                         Collectors.mapping(r -> new ReactionVO(r.username(), r.emoji()), Collectors.toList())));
-        Set<String> starredIds = starRepository.listByUsernameAndMsgIds(me, ids).stream()
-                .map(MessageStar::msgId)
-                .collect(Collectors.toSet());
         List<MessageVO> result = new ArrayList<>(rows.size());
         for (PrivateMessage m : rows) {
             boolean read = m.sentBy(me) && m.readFlag();
             result.add(new MessageVO(m.id(), m.fromUser(), m.toUser(), m.content(), m.msgType(),
-                    m.status(), m.replyToId(), read, m.editedFlag(), starredIds.contains(m.id()),
+                    m.status(), m.replyToId(), read, m.editedFlag(),
                     reactionMap.getOrDefault(m.id(), List.of()), m.created()));
         }
         return result;
@@ -254,37 +238,6 @@ public class PrivateMessageService {
         return added;
     }
 
-    // ---------- 收藏 ----------
-
-    public boolean toggleStar(String me, String msgId) {
-        requireParticipantMessage(me, msgId);
-        Optional<MessageStar> existing = starRepository.findByUsernameAndMsgId(me, msgId);
-        if (existing.isPresent()) {
-            starRepository.deleteById(existing.get().id());
-            return false;
-        }
-        starRepository.save(MessageStar.add(me, msgId, System.currentTimeMillis()));
-        return true;
-    }
-
-    /** 收藏夹：按收藏时间倒序，peer 为消息另一方。 */
-    public List<StarVO> listStars(String me) {
-        List<MessageStar> stars = starRepository.listByUsername(me);
-        if (stars.isEmpty()) {
-            return List.of();
-        }
-        Map<String, PrivateMessage> messages = messageRepository
-                .listByIds(stars.stream().map(MessageStar::msgId).distinct().toList()).stream()
-                .collect(Collectors.toMap(PrivateMessage::id, Function.identity()));
-        return stars.stream()
-                .filter(s -> messages.containsKey(s.msgId()))
-                .map(s -> {
-                    PrivateMessage m = messages.get(s.msgId());
-                    return new StarVO(m.id(), m.peerOf(me), m.content(), m.msgType(), m.status(), m.created());
-                })
-                .toList();
-    }
-
     // ---------- 编辑 ----------
 
     /** 2 分钟内可编辑自己发出的文本消息。 */
@@ -305,19 +258,6 @@ public class PrivateMessageService {
         PrivateMessage message = requireMessage(msgId);
         guard(() -> message.requireParticipant(me));
         return message;
-    }
-
-    // ---------- 81 全局消息搜索 ----------
-
-    /** 跨会话搜索我参与的全部文本消息（未撤回，最近 50 条，按时间倒序） */
-    public List<GlobalSearchHitVO> searchGlobal(String me, String keyword) {
-        String q = keyword == null ? "" : keyword.trim();
-        if (q.isEmpty()) {
-            throw new BusinessException(400, "搜索关键字不能为空");
-        }
-        return messageRepository.searchGlobal(me, q).stream()
-                .map(m -> new GlobalSearchHitVO(m.id(), m.peerOf(me), m.content(), m.fromUser(), m.created()))
-                .toList();
     }
 
     // ---------- 84 会话内置顶消息 ----------

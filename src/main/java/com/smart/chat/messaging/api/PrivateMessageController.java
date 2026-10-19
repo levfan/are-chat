@@ -86,21 +86,7 @@ public class PrivateMessageController {
         return ApiResponse.ok();
     }
 
-    /** 收藏/取消收藏 toggle。 */
-    @PostMapping("/{id}/star")
-    public ApiResponse<Void> star(@PathVariable String id, HttpSession session) {
-        messageService.toggleStar(Sessions.requireUser(session), id);
-        return ApiResponse.ok();
-    }
-
-    // ---------- 新增：81 全局搜索 / 84 置顶 / 85 清空 / 95 附件 ----------
-
-    /** 81 全局消息搜索：我参与的全部会话（未撤回文本，最近 50 条） */
-    @GetMapping("/search/global")
-    public ApiResponse<List<PrivateMessageService.GlobalSearchHitVO>> searchGlobal(@RequestParam String q,
-                                                                                   HttpSession session) {
-        return ApiResponse.ok(messageService.searchGlobal(Sessions.requireUser(session), q));
-    }
+    // ---------- 84 置顶 / 85 清空 ----------
 
     /** 84 置顶当前会话消息 */
     @PostMapping("/{peer}/pin")
