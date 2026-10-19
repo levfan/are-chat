@@ -1,15 +1,15 @@
 # REST 接口总表
 
 > 本页回答：全部 Controller 的端点清单（方法 + 路径 + 请求体 + 响应字段 + 错误码）。路径省略类前缀 `/api`；couple 系前缀见各节标题。
-> **当前口径（2026-10-20 三张卡裁剪后实测）**：全仓 **17 个 Controller / 81 个端点**（逐条读各 `*Controller.java` 的 `@GetMapping/@PostMapping/@PutMapping/@DeleteMapping`，类上 `@RequestMapping` 是基址）。
-> 分上下文：identity 16、messaging 32、platform 6、filestorage 2、couple 25。其中 **couple 侧 6 个 Controller / 25 个端点**——2026-10-05 按 `docs/adr/0010-couple-trim-to-v8-features.md` 从 70 收缩到 26，随后再下线百日隐藏页收缩到 25。
-> 更正一处旧口径：非 couple 侧是 **11 个 Controller**（不是旧文档写的 10）——`/api/admin` 基址同时由 identity 的 `AdminController` 与 platform 的 `AnnouncementAdminController` 两个类贡献。
+> **当前口径（2026-10-20 删除通知中心/运营看板/消息收藏/全局搜索后实测）**：全仓 **14 个 Controller / 70 个端点**（逐条读各 `*Controller.java` 的 `@GetMapping/@PostMapping/@PutMapping/@DeleteMapping`，类上 `@RequestMapping` 是基址；`GlobalExceptionHandler` 不是 Controller，不计入）。
+> 分上下文：identity 15、messaging 25、platform 6、filestorage 2、couple 22。其中 **couple 侧 4 个 Controller / 22 个端点**——2026-10-05 按 `docs/adr/0010-couple-trim-to-v8-features.md` 从 70 收缩到 26，随后再下线百日隐藏页收缩到 25，2026-10-20 再删除通知中心（2）与运营看板（1）后为 22。
+> 非 couple 侧是 **10 个 Controller**（identity 2 + messaging 4 + platform 3 + filestorage 1）。
 
 来源：`src/main/java` 各 `*Controller.java` 的映射注解与 javadoc；响应字段取自对应 Service 内嵌的 `public record XxxVO(...)`。返回统一 `ApiResponse{code,message,data}`；除 `/api/auth/**` 与 `/api/health` 外均需登录会话。业务失败抛 `BusinessException(code, 中文原话)`，`code` 同时作为 HTTP 状态码。可空性按字段类型判断：`Long`/`Integer`/包装类型可为 `null`，`long`/`int`/`boolean` 不为 `null`。
 
 ## 非 couple 接口
 
-> 本节端点逐条与源码注解核对过，方法/路径与现役一致（identity 16 + messaging 32 + platform 6 + filestorage 2 = 56）。
+> 本节端点逐条与源码注解核对过，方法/路径与现役一致（identity 15 + messaging 25 + platform 6 + filestorage 2 = 48）。
 
 ### `AuthController` `/auth`
 - POST `/sms-code` 注册验证码（演示回显 devCode）｜ POST `/register` 提交注册审批申请
@@ -19,7 +19,6 @@
 ### `AdminController` `/admin`（identity · 仅管理员）
 - GET `/applications` 审批列表 ｜ POST `/applications/{id}/approve` `/reject` 通过/驳回
 - GET `/pending-count` 待办数 ｜ GET `/users` 用户列表 ｜ POST `/users/{username}/status` 启/停 ｜ POST `/users/{username}/reset-password` 重置密码
-- GET `/audit` 审计日志
 
 ### `AnnouncementAdminController` `/admin`（platform · 仅管理员）
 - POST `/announcements` 发布公告 ｜ POST `/announcements/{id}/close` 关闭 ｜ GET `/announcements` 列表
@@ -30,9 +29,9 @@
 - PUT `/{id}` 改备注 ｜ DELETE `/{id}` 删除好友
 
 ### `PrivateMessageController` `/messages`
-- GET `/{peer}` 会话历史 ｜ GET `/{peer}/search` 会话内搜索 ｜ GET `/search/global` 全局搜索
+- GET `/{peer}` 会话历史 ｜ GET `/{peer}/search` 会话内搜索
 - POST `/{peer}` 发送（`type` 认 text/image/poke/file；card 与 location 已下线，落到 `PrivateMessage.requireWellFormed` 直接拒「名片与位置分享已下线」，历史行仍按原类型读出） ｜ POST `/{peer}/read` 已读 ｜ POST `/{id}/recall` 撤回 ｜ PUT `/{id}` 2 分钟内编辑
-- POST `/{id}/reactions` 表情回应 toggle ｜ POST `/{id}/star` 收藏 toggle
+- POST `/{id}/reactions` 表情回应 toggle
 - POST/DELETE/GET `/{peer}/pin` 置顶/取消/查询 ｜ DELETE `/{peer}` 清空会话
 
 ### `ProfileController` `/profile`
@@ -40,19 +39,19 @@
 
 ### 其他
 - `PresenceController` GET `/presence/online` 在线名单
-- `StarsController` GET `/stars` 收藏消息聚合
 - `AnnouncementController` GET `/announcements/current` 生效公告 ｜ POST `/announcements/{id}/read` 已读
 - `HealthController` GET `/health` 健康检查（免登录）
 - `FileController` POST `/files`（multipart）上传 ｜ GET `/files/{id}/download` 下载
 - WS：`/ws/chat/{name}` 聊天室与推送通道（非 REST，见 [architecture.md](architecture.md)）
 
-## couple 接口（现役 6 个 Controller / 25 个端点）
+## couple 接口（现役 4 个 Controller / 22 个端点）
 
 > 逐端点写明：方法、路径、请求体字段、响应 record 逐字段（含可空性）、错误码与中文原话。
 > 原 10 张历史卡的 Controller（贴贴 `CoupleBondController`、求抱抱 `CoupleCareController`、安全词 `CoupleCatchController`、
 > 愿望券 `CoupleCeremonyController`、饭桌 `CoupleDiningController`、家务 `CoupleFactoryController`、加班 `CoupleQuestController`、
 > 好事簿 `CoupleEchoController`、惊喜 `CoupleSurpriseController`、收藏 `CouplePinController`）已随 ADR-0010 全部下线；
 > 百日隐藏页 `CoupleMemoryController` 与其 `/page` 端点也在随后一轮下线；
+> 通知中心 `CoupleNotifyController`（2 个端点）与 F45 运营看板 `CoupleAdminController`（1 个端点）在 2026-10-20 删除；
 > `CoupleController` 上的 `/moods`、`/anniversaries`（复数 CRUD）也一并删除。详见 [couple-space.md](couple-space.md)。
 
 ### `CoupleController` `/api/couple`（地基：建立 + 空间本体 + 心动值 · 10 个）
@@ -132,14 +131,3 @@
     - 错误：404「这条愿望不在你们的清单里」／400「只有记这条愿望的人能改它」／400「补充说明最多 200 个字」。**不推事件**。
 22. `POST /remove` body `WishIdRequest{ String id }` → `WishBoardVO`（仅记录人可删，已实现删不掉）
     - 错误：404「这条愿望不在你们的清单里」／400「已经实现的愿望要留在记录里，删不掉咯」／400「只有记这条愿望的人能删掉它」。**不推事件**。
-
-### `CoupleNotifyController` `/api/couple/notify`（通知中心 · 2 个）
-
-23. `GET ``（基址 `/api/couple/notify`） → `NotifyListVO(List<NotifyVO> items, long unread)`
-    - `items` 最近通知（`NotifyVO(String id, String event, String actor, String detail, boolean read, Long created)`；`actor` 可为 `system`=定时任务；`created` 可空）｜`unread` 未读条数。**不需已建空间**（邀请到达时对方离线也靠这里补看）。
-24. `POST /notify/read-all` → `Void`（全部标记已读）。
-
-### `CoupleAdminController` `/api/couple/admin`（运营看板 · 1 个）
-
-25. `GET /stats`（基址 `/api/couple/admin`） → `CoupleStatsVO(long activeSpaces, long dissolvedSpaces, long avgDays, long totalCheckinDays, long totalAnswers, long spacesCreatedThisMonth)`（record 定义在 Controller 内，字段全 `long` 非空）
-    - `totalCheckinDays` 来自 `couple_streak_day`、`totalAnswers` 来自 `couple_question_answer`（裁剪后统计项不再读贴贴/好事簿）。错误：403「仅管理员可查看运营看板」。

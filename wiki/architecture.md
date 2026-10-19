@@ -52,7 +52,7 @@
 - 端点：`messaging/infrastructure/transport/ChatEndpoint` `@ServerEndpoint("/ws/chat/{name}")`（昵称 URL 编码）；`messaging/infrastructure/transport/ChatSessionRegistry` 维护 username→session 在线表；`messaging/infrastructure/transport/ChatWebSocketBridge` 做 Spring Bean 与端点间的桥接。
 - 推送门面：`messaging/infrastructure/transport/ImPushService` —— `push(username, payload)` / `pushAll` / `pushToUsers` / `isOnline(username)`；payload 均为带 `type` 字段的 record（dm/typing/recall/friend/reaction/edit/read/pin/announcement/admin 等）。
 - **情侣事件**：`pushCoupleEvent(event, actor, toUser, detail)` 推单人、`pushCoupleEventBoth(...)` 推双方，payload `type=couple`；前端（are-chat-web）把 `arechat:couple` 自定义事件按 event 名分发到 `stores/couple.ts` 刷新对应面板——**新增事件名必须前后端同步注册**。
-- **落库通知中心（F41）**：每次情侣推送同时向 `couple_notify` 表落一条，离线用户上线后可补看。挂接方式：`couple/CoupleNotifyRecorder` 启动时经 `ImPushService.setNotifySink` 注册，保持 im 包不反向依赖 couple 包。
+- **情侣事件只推 WS，不落库**：F41 通知中心与 `couple_notify` 读写代码（`CoupleNotifyRecorder`/`NotifySink*`）已于 2026-10-20 删除；表保留未删，离线用户不再有补看副本。
 - 情侣空间事件名现役 **15 个**（实测 `grep -rhoE 'pushCoupleEvent(Both)?\("[a-z-]+"' src/main/java | sort -u`），按前缀族分四组（口径见 `CONTEXT.md`「事件命名口径」）：建立与地基 `invite`/`invite-accepted`/`invite-rejected`/`dissolved`/`anniversary-updated`/`anniversary-reminder`/`space-themed`/`pet-name-changed`（爱称的写入口在 `PUT /profile`，推送按改了什么分流，见 ADR-0010 第 12 条）；连续互动打卡 `streak-checkin`/`streak-unlocked`/`streak-makeup`；每日一问 `question-daily`/`question-answered`；愿望清单 `wish-added`/`wish-fulfilled`。命名规则为小写连字符、动词/过去分词结尾。**刻意不存在** `wish-prepared`/`wish-unprepared`（偷偷标记不推事件是产品规则）。原 `bond-*`/`mood-*`/`comfort-*`/`catch-*`/`dine-*`/`factory-*`/`quest-*`/`ceremony-*`/`echo-*`/`scratch-*`/`box-*` 等事件族已随功能卡于 2026-10-05 二轮裁剪（ADR-0010）下线，从 44 种收缩到 15 种。全列见 are-chat-web/wiki/ws-events.md。
 
 ## Flyway 迁移策略

@@ -11,15 +11,15 @@
 「这四项及其赖以成立的地基还活不活」，取舍、连带改造与被删清单的唯一依据是 **`docs/adr/0010-couple-trim-to-v8-features.md`**；
 最后又按「用不上的功能也裁掉」下线了百日隐藏回顾与心动时刻，只留三张卡。
 
-现役规模（实测自源码与 `schema.sql`）：**54 个 java 文件 / 6 个 Controller / 25 个端点 / 6 张 `couple_*` 表 / 15 个 WS 事件 / 2 条定时任务**。
-按 ADR-0010 与随后一轮已下线、**不再存在**的功能（一句话点名即可，别当现役去找）：心情日记、贴贴宫格、求抱抱、安全词与暂停复盘、
-今晚饭桌、家务轮盘、加班预报与留灯、愿望券本、好事簿、刮刮乐与盲盒、共同日历（倒数日清单）、积分台账、卡片收藏与功能搜索、百日隐藏回顾、心动时刻。
+现役规模（实测自源码与 `schema.sql`）：**45 个 java 文件 / 4 个 Controller / 22 个端点 / 6 张 `couple_*` 表（`couple_notify` 已无代码）/ 15 个 WS 事件 / 2 条定时任务**。
+按 ADR-0010 与随后几轮已下线、**不再存在**的功能（一句话点名即可，别当现役去找）：心情日记、贴贴宫格、求抱抱、安全词与暂停复盘、
+今晚饭桌、家务轮盘、加班预报与留灯、愿望券本、好事簿、刮刮乐与盲盒、共同日历（倒数日清单）、积分台账、卡片收藏与功能搜索、百日隐藏回顾、心动时刻、通知中心、运营看板。
 其中三处曾是别的功能算数的根据，已按 ADR-0010 重新改挂：**打卡触发源**改挂每日一问（原挂贴贴）、**补签稀缺性**改由次数守（原扣积分台账）、
 **心动值供数**整体换成现役五项（原六项的表全部消失）。
 
 ## 现役的三张功能卡 + 地基
 
-三张卡各有自己的 Controller/Service；地基（邀请建立、空间本体、心动值、通知中心、运营看板）不是卡，删不得。
+三张卡各有自己的 Controller/Service；地基（邀请建立、空间本体、心动值）不是卡，删不得。
 
 | 卡（`?card=` 深链 key） | Controller（前缀） | Service | 表 |
 |---|---|---|---|
@@ -27,11 +27,9 @@
 | 连续互动打卡 `couple-streak` | `CoupleStreakController` `/api/couple/streak` | `CoupleStreakService` | `couple_streak_day` |
 | 愿望清单 `couple-wish` | `CoupleWishController` `/api/couple/wish` | `CoupleWishService` | `couple_wish` |
 | 地基（建立/本体/心动值） | `CoupleController` `/api/couple` | `CoupleService` | `couple_space`, `couple_invite` |
-| 通知中心（F41） | `CoupleNotifyController` `/api/couple/notify` | `CoupleNotifyService` | `couple_notify` |
-| 运营看板（F45，仅管理员） | `CoupleAdminController` `/api/couple/admin` | （直连端口，无独立 Service） | 读 `couple_space` / `couple_streak_day` / `couple_question_answer` |
 
-> `CoupleAdminController.stats` 的两个计数在二轮裁剪后从「贴贴动作数 / 好事簿条数」换成 `totalCheckinDays`（`couple_streak_day`）与
-> `totalAnswers`（`couple_question_answer`）；原来描述的 `CouplePinController`（收藏卡 + 功能搜索）已随 ADR-0010 第 7 条整体删除，
+> `CoupleNotifyController`（F41 通知中心，2 个端点）与 `CoupleAdminController`（F45 运营看板，1 个端点）已在 2026-10-20 删除；
+> `couple_notify` 表保留未删但已无读写代码。`CouplePinController`（收藏卡 + 功能搜索）随 ADR-0010 第 7 条删除，
 > 百日隐藏页的 `CoupleMemoryController` / `CoupleMemoryService` / `RelationSummary` 也在随后一轮下线。
 
 ## 1 · 邀请建立（状态机）
@@ -42,7 +40,7 @@
 - **前置闸门**（全在 `CoupleService.invite()`，400/409）：未选人「想邀请谁？请先选择一位好友」；对自己「不能和自己建立情侣空间哦」；查无此人「查无此人：对方还没注册或已注销」；非好友「只能邀请自己的好友，先去通讯录加个好友吧」；已在别的空间 409「你已经在情侣空间里啦…」「对方已经在别的情侣空间里了」；同两人已有待处理单 409「你们之间已有待处理的情侣邀请…」。
 - **未建空间**一律 `requireSpace(me)` 抛 **404「还没有建立情侣空间，先邀请一位好友吧」**，不由前端兜。
 - **解除**：`POST /api/couple/dissolve`（本人）或注销级联 `purgeUser()`，历史数据保留但不再互可见，事件 `dissolved`。
-- **可见性地基**：每条情侣事件都经 `CoupleNotifyRecorder` 落一份 `couple_notify`，是「对方不在线也能看见邀请」的唯一通道——通知中心算地基不算功能（ADR-0010 第 1 条）。
+- **推送可见性**：情侣事件只经 WS 推给在线端；F41 通知中心已删除，`couple_notify` 不再落库，离线用户上线后看不到历史提醒（ADR-0010 第 1 条的通知中心部分已作废）。
 
 ## 2 · 空间本体（宣言 / 主题 / 爱称 / 在一起的日子）
 

@@ -1,10 +1,10 @@
 # 数据库
 
-> 本页回答：全库数据约定、V1→V53 Flyway 迁移时间线、现役 19 张表的逐表清单、随 ADR-0010 下线的 16 张 `couple_*` 表。
+> 本页回答：全库数据约定、V1→V53 Flyway 迁移时间线、schema 中的 19 张表（其中 2 张已无代码）的逐表清单、随 ADR-0010 下线的 16 张 `couple_*` 表。
 
 结构事实源：真正被运行时执行的是 `src/main/resources/db/V*.sql`（Flyway 增量脚本，**V1→V53 共 53 个**）；`src/main/resources/schema.sql` 是**全量结构文档、不再被执行**（`spring.sql.init.mode=never`）。生产 MariaDB 10.11 与测试 H2（MODE=MySQL）跑同一批 V 脚本。
 
-**当前规模（实测 `grep -c "^CREATE TABLE" src/main/resources/schema.sql` = 19）**：全库 **19 张表 = 6 张 `couple_*` + 13 张非情侣表**。其中 couple 侧在 2026-10-04 裁剪（V50/V51）后为 19 张、2026-10-05 v8 第一批（V52）加到 22 张、**同日二轮裁剪（V53）删到 6 张**（`docs/adr/0010-couple-trim-to-v8-features.md` 第 1/9 条）。13 张非情侣表自 V2 基线以来未受这两轮情侣裁剪影响。
+**当前规模（实测 `grep -c "^CREATE TABLE" src/main/resources/schema.sql` = 19）**：schema 里 **19 张表 = 6 张 `couple_*` + 13 张非情侣表**；`couple_notify` 与 `message_star` 已无读写代码，按「不破坏性删表」原则保留。其中 couple 侧在 2026-10-04 裁剪（V50/V51）后为 19 张、2026-10-05 v8 第一批（V52）加到 22 张、**同日二轮裁剪（V53）删到 6 张**（`docs/adr/0010-couple-trim-to-v8-features.md` 第 1/9 条）。13 张非情侣表自 V2 基线以来未受这两轮情侣裁剪影响。
 
 ## 数据约定（硬性）
 
@@ -29,7 +29,7 @@
 |---|---|---|
 | V1 | 情侣空间基础 | couple_space, couple_invite, couple_promise, couple_checkin, couple_answer, couple_item, couple_anniversary |
 | V2 | 存量业务表基线（空库一次性建全；老库重放自动跳过） | admin_audit, announcement, announcement_read, app_user, conversation_pin, friend, friend_request, message_reaction, message_star, private_message, registration_application, uploaded_file, user_profile |
-| V3–V14 | 早期各功能域 + 基础设施 | 新建 `couple_notify`（V13，现役）以及信箱/条约/城市/心愿基金/任务卡/默契/和好/夸夸/生理期/胶囊/倒数/共同生活/第一次清单/一问互评等一批早期表，另含心情日记、贴贴动作、心情回应等功能域表（**除 couple_notify 外均已下线**）；`couple_space` 加列 slogan/theme/stickers（stickers 由 V53 删）、`private_message` 加列 heart_at（历史列，心动时刻已下线，保留不写）、`user_profile` 加列 birthday（现役） |
+| V3–V14 | 早期各功能域 + 基础设施 | 新建 `couple_notify`（V13，2026-10-20 后已无代码、表保留）以及信箱/条约/城市/心愿基金/任务卡/默契/和好/夸夸/生理期/胶囊/倒数/共同生活/第一次清单/一问互评等一批早期表，另含心情日记、贴贴动作、心情回应等功能域表（**除保留的空表 couple_notify 外均已下线**）；`couple_space` 加列 slogan/theme/stickers（stickers 由 V53 删）、`private_message` 加列 heart_at（历史列，心动时刻已下线，保留不写）、`user_profile` 加列 birthday（现役） |
 | V15–V48 | 各批功能域（惊喜/接住/养成/回忆/沟通/异地/安全感/游戏/陪伴/成长/文字/默契/经营/博物馆/收藏/饭桌/作息/仪式/公司/关卡/回音/注意力/欢笑…） | 每批 7–11 张 `couple_*` 表；其中收藏卡、饭票、愿望券、家务轮盘、好事簿、加班留灯、安全词等功能域表曾在 2026-10-04 进入保留名单，**但已于 V50/V51/V53 全部 drop**（无一进入现役） |
 | V49 | 私聊与好友申请补二级索引 | `private_message` 双向会话复合索引 `idx_pm_from_to_created`/`idx_pm_to_from_created` + `friend_request` 收件/查重索引（非 couple 域，保留） |
 | V50 | 系统裁剪第一批（2026-10-04） | drop 193 张已下线功能的表 |
@@ -40,7 +40,7 @@
 > **索引/唯一键名全库唯一**（H2 索引不随表隔离，重名报 42S11「Index already exists」）：V52 用 `uk_couple8_` 前缀、V53 新增 `uk_couple9_streak_day`，写入前均对全部 `db/V*.sql` 查过重。
 > **已入库脚本一律不得再修改**：每轮裁剪都新增脚本（V51 不改 V50、V53 不改 V52），因为回改会让打过该版本的库在 Flyway 校验和上失败。
 
-## 现役表清单（19 张，实测自 schema.sql 的 CREATE TABLE）
+## schema 表清单（19 张，实测自 schema.sql 的 CREATE TABLE）
 
 ### identity — 账号与准入（3 张）
 
@@ -54,11 +54,11 @@
 
 | 表 | 用途 | 关键字段 | 唯一键 / 索引 |
 |---|---|---|---|
-| `friend` | 双向好友关系（双向各存一行，owner 视角） | `owner_username`/`friend_username`、`remark`/`tag`、`pinned`/`muted`/`blocked`、`last_read_at` | `uq_friend_pair(owner_username,friend_username)` |
+| `friend` | 双向好友关系（双向各存一行，owner 视角） | `owner_username`/`friend_username`、`remark`/`tag`（历史列，代码已不再读写）、`pinned`/`muted`/`blocked`、`last_read_at` | `uq_friend_pair(owner_username,friend_username)` |
 | `friend_request` | 好友申请 | `from_user`/`to_user`、`message`、`status` PENDING/ACCEPTED/REJECTED | `idx_fr_to_user_status`、`idx_fr_from_to` |
 | `private_message` | 点对点私信（text/image/poke/system/file；card/location 是已下线的历史类型，库里旧行照读，新的发送被领域拒掉） | `from_user`/`to_user`、`msg_type`、`status` SENT/RECALLED、`reply_to_id`、`read_flag`、`heart_at`（心动时刻已下线，列保留不写） | PK `id`；`idx_pm_from_to_created`、`idx_pm_to_from_created` |
 | `message_reaction` | 消息表情回应（toggle） | `msg_id`/`username`/`emoji` | `uq_reaction(msg_id,username,emoji)` |
-| `message_star` | 消息收藏（个人视角） | `username`/`msg_id` | `uq_star(username,msg_id)` |
+| `message_star` | 消息收藏（个人视角；2026-10-20 入口与代码已删，表保留未删） | `username`/`msg_id` | `uq_star(username,msg_id)` |
 | `conversation_pin` | 会话置顶消息（每双人会话一条，双方共享） | `user_a`/`user_b`（字典序）、`msg_id`、`created_by` | `uq_conv_pin(user_a,user_b)` |
 | `user_profile` | 用户资料（与 `app_user` 一一对应） | PK 为 `username`；`nickname`/`signature`/`avatar`/`presence_status`/`birthday` | PK `username` |
 
@@ -81,7 +81,7 @@
 |---|---|---|---|
 | `couple_space` | 空间本体（唯一容器） | `user_a`/`user_b`（`utf8mb4_bin`，字典序小者为 A）、`status` ACTIVE/DISSOLVED、`anniversary`(yyyy-MM-dd)、`slogan`(≤60)、`theme`(classic/cherry/ocean/forest/night)、`nick_a`/`nick_b`(≤30)、`created`/`dissolved_at`；`city_a`/`city_b` 列为历史遗留（异地功能已下线，列仍在） | PK `id`；`idx_couple_space_a(user_a)`、`idx_couple_space_b(user_b)`。**有意不加**「一用户一有效空间」唯一约束（ADR-0007 第 12 条 / ADR-0010 第 11 条） |
 | `couple_invite` | 建立空间的邀请单 | `from_user`/`to_user`、`message`(≤100)、`status` PENDING/ACCEPTED/REJECTED/CANCELED、`updated_at` | PK `id`；`idx_couple_invite_to(to_user,status)` |
-| `couple_notify` | 通知中心（每条情侣 WS 事件的落库副本，离线补看） | `username`、`event`（现役 15 个事件名）、`actor`（`system`=定时任务）、`detail`、`read_flag` | PK `id`；`idx_couple_notify_user(username,created)`。`event` 字段不做白名单 |
+| `couple_notify` | 通知中心落库副本（2026-10-20 读写代码已删，表保留未删；不再有新行） | `username`、`event`（历史 15 个事件名）、`actor`（`system`=定时任务）、`detail`、`read_flag` | PK `id`；`idx_couple_notify_user(username,created)`。`event` 字段不做白名单 |
 | `couple_streak_day` | 连续互动打卡日（原 `couple_bond_day`，V53 改名） | `space_id`、`day`(yyyy-MM-dd)、`source` AUTO/MAKEUP、`operator_user`、`created`；连续天数与六档解锁由本表 day 集合**读时算**，无缓存列 | `uk_couple9_streak_day(space_id,day)` |
 | `couple_question_answer` | 每日一问回答（同时是打卡触发源） | `space_id`、`day`、`question_index`（按 space+day 稳定哈希，落快照）、`question`(≤200)、`username`、`answer`(≤300)、`created`/`updated_at`；「双方都答过才互看」是读时判定，库里不存可见位 | `uk_couple8_question_day_user(space_id,day,username)` |
 | `couple_wish` | 愿望清单 | `space_id`、`owner_user`（想要的人）、`creator_user`（记录的人，可不同）、`title`(≤80)、`note`(≤200)、`status` OPEN/PREPARED/FULFILLED、`prepared_by`/`prepared_at`（对被许愿人保密）、`fulfilled_at` | `uk_couple8_wish_title(space_id,owner_user,title)` |

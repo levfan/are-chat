@@ -16,7 +16,7 @@ whenToUse: are-chat 后端开工前加载；新增/删除模块、表、接口�
 - 鉴权：登录态在 HttpSession；`com.smart.chat.sharedkernel.web.Sessions.requireUser(session)` 取当前用户名
 - 统一返回：`ApiResponse.ok(data)` / 业务异常 `BusinessException(code, message)`
 - 构建：`mvn -q compile`；测试 `mvn test`（何时必跑见第六节）
-- 规模快照（2026-10-20 删掉百日回顾与心动时刻后实测）：couple 包 54 个文件 / 6 个情侣 Controller / 25 个情侣端点 / 6 张 `couple_*` 表（迁移链到 V53）/ 15 个情侣 WS 事件 / 2 条定时任务（全仓就这 2 条）/ 全仓 `mvn -o test` **402 用例**基线（`Tests run: 402, Failures: 0, Errors: 0, Skipped: 0` + `BUILD SUCCESS`）。全仓主源文件 214 个、测试文件 62 个、`@TableName` 实体 19 个 = 端口 19 = 适配器 19。**注意**：情侣空间现在只剩三张卡（每日一问 / 连续互动打卡 / 愿望清单）加地基；逐端点与逐表清单见 `wiki/api.md`、`wiki/database.md`，去留判据与连带改造见 `docs/adr/0010-couple-trim-to-v8-features.md`（**它优先于** `docs/couple-trim-ranking.md` 那份 2026-10-04 的排名），功能本身的需求见 `docs/adr/0007-couple-v8-streak-question-wish.md`
+- 规模快照（2026-10-20 删除情侣通知中心与运营看板后实测）：couple 包 45 个文件 / 4 个情侣 Controller / 22 个情侣端点 / 6 张 `couple_*` 表（迁移链到 V53；其中 `couple_notify` 表保留但已无代码）/ 15 个情侣 WS 事件 / 2 条定时任务（全仓就这 2 条）/ 全仓 `mvn -o test` **395 用例**基线（`Tests run: 395, Failures: 0, Errors: 0, Skipped: 0` + `BUILD SUCCESS`）。全仓主源文件 197 个、测试文件 62 个、`@TableName` 实体 17 个 = 端口 17 = 适配器 17。**注意**：情侣空间现在只剩三张卡（每日一问 / 连续互动打卡 / 愿望清单）加地基；逐端点与逐表清单见 `wiki/api.md`、`wiki/database.md`，去留判据与连带改造见 `docs/adr/0010-couple-trim-to-v8-features.md`（**它优先于** `docs/couple-trim-ranking.md` 那份 2026-10-04 的排名），功能本身的需求见 `docs/adr/0007-couple-v8-streak-question-wish.md`
 
 ### 目录与关键文件
 
@@ -62,15 +62,14 @@ Vue 组件 → api/<域>Api → http.ts(get/postJson/putJson/delete，withCreden
   → Repository 端口（domain 声明）→ *RepositoryAdapter → Mapper(BaseMapperCompat default 方法 + LambdaQueryWrapper) → MariaDB(生产)/H2(测试)
      ★ Service 与 Controller 都不许 import 本上下文的 *PO/*Mapper，守卫第 5 条会红
   ← Filter 完成行 `✓[SUCCESS] / ⚠[CLIENT_ERR] / ✗[SERVER_ERR]` + 状态/耗时/body=/resp=，一行读全一次请求（口径与排除项见 docs/adr/0006）
-Service → ImPushService.pushCoupleEvent(Both) ─┬→ WS 帧 {type:'couple', event, detail}
-                                                └→ couple_notify 落库（CoupleNotifyRecorder，F41 通知中心）
-前端 im store 收 WS → 派发 `arechat:couple` 自定义事件 → couple store handleCoupleEvent 按 event 刷新 + 通知铃铛
+Service → ImPushService.pushCoupleEvent(Both) → WS 帧 {type:'couple', event, detail}
+前端 im store 收 WS → 派发 `arechat:couple` 自定义事件 → couple store handleCoupleEvent 按 event 刷新
 ```
 
 ### 命令速查
 
 - 编译门禁：`mvn -q compile`（提交前必跑）
-- 全量测试：`mvn test`（**当前基线 402 用例**，2026-10-20 实测 `Tests run: 402, Failures: 0, Errors: 0, Skipped: 0` + `BUILD SUCCESS`；旧的 158/202/267/381/404/409/563/568/570 几个写法都是过时快照）；单类：`mvn test -Dtest=CoupleStreakServiceTest`
+- 全量测试：`mvn test`（**当前基线 395 用例**，2026-10-20 实测 `Tests run: 395, Failures: 0, Errors: 0, Skipped: 0` + `BUILD SUCCESS`；旧的 158/202/267/381/402/404/409/563/568/570 几个写法都是过时快照）；单类：`mvn test -Dtest=CoupleStreakServiceTest`
 - 运行：`mvn spring-boot:run`（8080）；打包 `mvn -q -B package` 后按 Dockerfile/deploy 部署
 - 数表：`grep -c "^CREATE TABLE" src/main/resources/schema.sql`
 
@@ -80,8 +79,8 @@ Service → ImPushService.pushCoupleEvent(Both) ─┬→ WS 帧 {type:'couple',
 
 | 上下文 | 域分类 | 由旧包合成 | 现状 |
 |---|---|---|---|
-| `couple` | **核心域** | couple | api(6 Controller / 25 端点) / application(5 Service) / **domain 19 文件**：6 张表逐张有聚合或薄实体 + 6 个 `*Repository` 端口（space/invite/notify/question/streak/wish，另有 intimacy 一个纯领域包）/ infrastructure(persistence 6 PO+6 Mapper+6 适配器共 18 文件、content 1 库、scheduler 2 Job、notify、account)。**战术改造已收口**（2026-10-05）：Service 一律经端口取数，业务判定与话术在领域。**2026-10-05 二轮裁剪 + 2026-10-20 百日回顾下线**：三张卡之外的 16 张表、10 个 Controller、10 个 Service、13 个领域包、54 个 persistence 文件、7 个内容库、2 个 Job 一并下线（`docs/adr/0010-couple-trim-to-v8-features.md`） |
-| `messaging` | 支撑域 | im + room（合并后那条 im/room 互依赖自然消失） | domain 24 文件：7 个发布语言端口（CoupleEventPublisher / PresenceReader / AnnouncementBroadcaster / PeerProfileReader / FriendshipChecker / OutboundNotifySink / NotifySinkRegistry）+ 7 张表的聚合与端口（`friend.Friend`/`FriendRequest`/`FriendshipGate`、`conversation.PrivateMessage`、`pin.Conversation`+`ConversationPin`、`profile.UserProfile`、`reaction.MessageReaction`、`star.MessageStar`），实体一律 `*PO`，transport 归 infrastructure。**已收口** |
+| `couple` | **核心域** | couple | api(4 Controller / 22 端点) / application(4 Service) / **domain 17 文件**：5 张活表逐张有聚合或薄实体 + 5 个 `*Repository` 端口（space/invite/question/streak/wish，另有 intimacy 纯领域包与 `RuleViolation`）/ infrastructure(persistence 5 PO+5 Mapper+5 适配器共 15 文件、content 1 库、scheduler 2 Job、account)。**战术改造已收口**（2026-10-05）：Service 一律经端口取数，业务判定与话术在领域。**2026-10-05 二轮裁剪 + 2026-10-20 后续两批裁剪**：三张卡之外的 16 张表、12 个 Controller、11 个 Service、13 个领域包、54 个 persistence 文件、7 个内容库、2 个 Job 一并下线；通知中心（`CoupleNotifyRecorder`/`NotifySink*`/`couple_notify` 代码）与 F45 运营看板（`CoupleAdminController`）也在 2026-10-20 删除（表保留未删）。取舍见 `docs/adr/0010-couple-trim-to-v8-features.md` |
+| `messaging` | 支撑域 | im + room（合并后那条 im/room 互依赖自然消失） | domain 20 文件：5 个发布语言端口（`CoupleEventPublisher` / `PresenceReader` / `AnnouncementBroadcaster` / `PeerProfileReader` / `FriendshipChecker`）+ 6 张活表的聚合与端口（`friend.Friend`/`FriendRequest`/`FriendshipGate`、`conversation.PrivateMessage`、`pin.Conversation`+`ConversationPin`、`profile.UserProfile`、`reaction.MessageReaction`），实体一律 `*PO`，transport 归 infrastructure。**已收口**；消息收藏（`MessageStar`）与通知落库端口已在 2026-10-20 删除，`message_star` 表保留未删 |
 | `identity` | 通用域 | auth | **零出向上下文依赖**的纯上游；**战术改造已收口**（2026-10-05）：`domain` 有 `account.Account` 聚合（格式规则在无状态策略 `account.AccountRules`：手机号/用户名/昵称/密码，文案原话照搬）、`registration.RegistrationApplication` 状态机（PENDING→APPROVED/REJECTED 单向，重复处理 409「该申请已处理过（X）」，拒绝原因按 varchar(200) 截断）、`audit.AdminAudit` 薄流水实体、`verification.SmsCode` 验证码规则（重发 60s / 5 分钟 / 试错 5 次）、`RuleViolation`（带对外状态码）；仓储端口 `AccountRepository`/`RegistrationApplicationRepository`/`AdminAuditRepository` 各配一个 `*RepositoryAdapter`（更新只回写聚合纳管的列，app_user 的 `signature`/`presence_status` 由 user_profile 那边负责）；`application` 只剩编排 + `DomainRules` 翻译器，**不再 import 本上下文 persistence**；实体是 `AppUserPO`/`RegistrationApplicationPO`/`AdminAuditPO`，表名列名未动。另有 AccountDirectory（别人问账号只用它，含 Account 最小视图）与 AccountCascade / ProfileProvisioner / WelcomeMessenger / AdminAlerter / AdminNotifyChannel 五个「我需要别人配合」的端口 |
 | `platform` | 通用域 | system + notify + tools | 公告管理端点已从 identity 归位到 `AnnouncementAdminController`，路由 `/api/admin/announcements*` 一字未改。**已收口**（2026-10-05）：`domain/announcement/Announcement` 发布/关闭单向状态机 + 同一时刻只一条生效、`AnnouncementRead` 薄流水、`domain/notify` 渠道配置端口，2 个端口 2 个适配器，实体 `AnnouncementPO`/`AnnouncementReadPO` |
 | `filestorage` | 通用域 | upload | **已收口**（2026-10-05）：`domain/file/` 有 `UploadedFile` 实体 + `FileNaming`（名字清洗）/`UploadAdmission`（扩展名黑名单，现役口径）/`StoragePath`（内容寻址与防目录穿越）三个策略对象 + `UploadedFileRepository` 端口；`DuplicateKeyException` 由适配器翻成领域事实 `ContentAlreadyStored`，Spring 异常不外泄；实体 `UploadedFilePO` |
@@ -90,11 +89,11 @@ Service → ImPushService.pushCoupleEvent(Both) ─┬→ WS 帧 {type:'couple',
 
 `SmartChatApplication` 留在根包，`@MapperScan(basePackages = "com.smart.chat")` 与 `@ConfigurationPropertiesScan` 的扫描面没变，所以搬包不影响运行时装配。**新功能照 `docs/ddd/02-layering.md` 的归属判据落层，不要退回旧的平铺写法。**
 
-推送机制（重要）：`ImPushService.pushCoupleEvent(event, actor, toUser, detail)` 给单人推 WS 事件（type=couple），`pushCoupleEventBoth(...)` 推双方；每次情侣事件推送同时落库 `couple_notify`（F41 通知中心，`CoupleNotifyRecorder` 启动时经 `ImPushService.setNotifySink` 挂接，im 包不反向依赖 couple 包）；`isOnline(username)` 查在线。
+推送机制（重要）：`ImPushService.pushCoupleEvent(event, actor, toUser, detail)` 给单人推 WS 事件（type=couple），`pushCoupleEventBoth(...)` 推双方；只推 WS 帧，不再落库（F41 通知中心与 `couple_notify` 读写代码已于 2026-10-20 删除，表保留未删）；`isOnline(username)` 查在线。
 
 ## 三、情侣空间模块全景（couple 包）
 
-**现役口径（2026-10-20 百日回顾下线后）**：三张功能卡 + 地基；54 个 java 文件 / 6 个 Controller / 25 个端点 / 6 张 couple_* 表 / 15 个 WS 事件。
+**现役口径（2026-10-20 删除通知中心与运营看板后）**：三张功能卡 + 地基；45 个 java 文件 / 4 个 Controller / 22 个端点 / 6 张 couple_* 表（`couple_notify` 已无代码）/ 15 个 WS 事件。
 去留判据是「这三张卡及其赖以成立的地基」，**不再是** `docs/couple-trim-ranking.md` 那份五维打分——那份文档的结论已被
 `docs/adr/0010-couple-trim-to-v8-features.md` 取代，只在历史语境下可读。
 
@@ -114,10 +113,8 @@ Service → ImPushService.pushCoupleEvent(Both) ─┬→ WS 帧 {type:'couple',
 外加 `CoupleService.accept()` 里的 `streakService.confirmCreationDay(space)`（建空间当天算第 1 天）。
 原触发源「双方当天都发过贴贴」随贴贴卡一并删除——改任何"每天结算"的逻辑前先看这两行，别再新增第三个入口。
 
-地基（不是一张卡，别删）：`CoupleController` 的邀请建立（invite/accept/reject/cancel）/纪念日/空间个性化（`PUT /profile` 一次改宣言·主题·爱称，null=不改、空串=清除）/心动值/relationship-of，
-`CoupleNotifyController` `/notify`（F41 通知中心，`couple_notify` 是「对方不在线也能看见邀请」的唯一通道），
-`CoupleAdminController` `/admin/stats`（F45 看板，统计项现在只吃 couple_streak_day 与 couple_question_answer，字段是 `totalCheckinDays`/`totalAnswers`）。
-**已随裁剪消失、别再引用**：`CouplePinController`（F207 常用收藏 + F206 功能搜索，三张卡不需要导航）、`CoupleMemoryController`（百日回顾页）。
+地基（不是一张卡，别删）：`CoupleController` 的邀请建立（invite/accept/reject/cancel）/纪念日/空间个性化（`PUT /profile` 一次改宣言·主题·爱称，null=不改、空串=清除）/心动值/relationship-of。
+**已随裁剪消失、别再引用**：`CouplePinController`（F207 常用收藏 + F206 功能搜索，三张卡不需要导航）、`CoupleMemoryController`（百日回顾页）、`CoupleNotifyController`（F41 通知中心）、`CoupleAdminController`（F45 运营看板）。
 
 ### 3.2 心动值与打卡（口径已随二轮裁剪整体改写）
 
@@ -127,7 +124,7 @@ Service → ImPushService.pushCoupleEvent(Both) ─┬→ WS 帧 {type:'couple',
   七级称号与图标未动。回归保护两条：`IntimacyCalculatorTest` 锁规则与边界，`CoupleIntimacyTest` 锁端到端算分。
 - **补签不花钱**：`MakeupPolicy` 三条闸门（只能补最近 7 天、每自然月最多 3 次、今天不许补），
   原 `COST=20` 随积分台账 `couple_point_ledger` 一并删除，稀缺性改由次数守。
-- **已不存在的概念**：心情日记、贴贴、好事簿、留灯、安全词复盘、积分台账、愿望券、共同日历、卡片收藏——
+- **已不存在的概念**：心情日记、贴贴、好事簿、留灯、安全词复盘、积分台账、愿望券、共同日历、卡片收藏、通知中心与运营看板——
   它们曾是心动值旧六项与补签扣分的供数方，任何"读时算"的改动都不会被它们的旧测试发现，因为测试也一起删了。
 
 ### 3.3 内容库与定时任务
@@ -149,7 +146,7 @@ Service → ImPushService.pushCoupleEvent(Both) ─┬→ WS 帧 {type:'couple',
 - **`(from_user=? AND to_user=?) OR (to_user=? AND from_user=?)` 这种双向会话谓词吃不到索引**（硬性口径）：OR 两侧是不同的索引前缀，优化器只能全表扫，V49 加了 `idx_pm_from_to_created` / `idx_pm_to_from_created` 之后实测仍是 ~200ms/次。要按对端取「最后一条」「未读数」一律走 `PrivateMessageMapper.findLatestCreatedPerPeer`（两趟各方向 GROUP BY）与 `FriendMapper.selectUnreadCountsByPeer`（一趟 friend JOIN 聚合），别再回到 per-peer 循环。**同一族还有第二个案发现场**：`/api/friends/suggest` 曾在候选循环里对每个候选跑三条查询（一条边 + 两个方向的待处理单，10 个候选 = 31 趟），2026-10-05 改成按「我」三趟取全（`findAllByOwner` / `listOutgoing` / `listIncoming`）再在内存比对——凡是「列表 × 每条判关系/取最新」的接口都按这个手法写，并补一条 `verifyNoMoreInteractions` 用例锁住（现役两条：`listFriendsNeverFallsBackToPerPeerQueries`、`suggestNeverFallsBackToPerCandidateQueries`），改了取数口径还要配一条**真库差分测试**（`FriendSuggestRelationQueryTest`：同一片 H2 数据上把新旧两套算法逐候选比对，单向好友边、非 PENDING 旧申请、双向同时挂单这三种情形只有真表能照出来）。
   另外：**手写 `@Select`/聚合 SQL 必须有真库测试**（`@SpringBootTest` 打 H2+Flyway），mock 单测只会把 stub 改成新签名然后一路绿灯，SQL 语法与语义错误只有打到真表才暴露。
 
-- **`Integer`/`Long` 位字段禁止配 `isXxx()` 布尔 helper**（硬性）：Lombok 已给字段生成 `getXxx()`，再手写 `isXxx()` 就是同一属性两个不同类型的 getter，MyBatis `Reflector` 会按方法枚举顺序**随机**抛 `ReflectionException: ambiguous type for property`，而单测全用 mock 完全照不出来。位判断一律命名 `xxxFlag()`（现役：`CoupleNotifyPO.readFlag()`、`Wish.preparedFlag()/fulfilledFlag()`、`StreakDay.makeupFlag()`）；只有真 `private boolean` 字段才允许 `isXxx()`。首次案发现场是两条聚合接口整页 500（`/api/couple/world/world`、`/api/couple/legacy/vault`，两批 20 个功能对每个用户都不可用），那两个端点已随裁剪消失，教训保留。回归保护见 `src/test/java/com/smart/chat/EntityReflectionGuardTest`——**必须逐字段 `reflector.getGetInvoker(name).invoke(instance)` 真读一遍属性**：歧义 getter 被 MyBatis 包成 `AmbiguousMethodInvoker`，只实例化实体（旧写法）从不触发取值，守卫会恒绿成假守卫；新增实体后跑它，并确认它真的能变红
+- **`Integer`/`Long` 位字段禁止配 `isXxx()` 布尔 helper**（硬性）：Lombok 已给字段生成 `getXxx()`，再手写 `isXxx()` 就是同一属性两个不同类型的 getter，MyBatis `Reflector` 会按方法枚举顺序**随机**抛 `ReflectionException: ambiguous type for property`，而单测全用 mock 完全照不出来。位判断一律命名 `xxxFlag()`（现役：`Wish.preparedFlag()/fulfilledFlag()`、`StreakDay.makeupFlag()`）；只有真 `private boolean` 字段才允许 `isXxx()`。首次案发现场是两条聚合接口整页 500（`/api/couple/world/world`、`/api/couple/legacy/vault`，两批 20 个功能对每个用户都不可用），那两个端点已随裁剪消失，教训保留。回归保护见 `src/test/java/com/smart/chat/EntityReflectionGuardTest`——**必须逐字段 `reflector.getGetInvoker(name).invoke(instance)` 真读一遍属性**：歧义 getter 被 MyBatis 包成 `AmbiguousMethodInvoker`，只实例化实体（旧写法）从不触发取值，守卫会恒绿成假守卫；新增实体后跑它，并确认它真的能变红
 - **日期进 CSV 列一律用 `MMdd` 或周几 1-7，不要写 ISO**：ISO 一天 10 个字符，varchar 列宽会静默截断——历史上 `couple_theater_master_day.serves(40)` 存 ISO 三天就满（一周要记七天）、`couple_body_quit.broke_days(160)` 存 ISO 只够 14 条（两表均已下线，列宽算法照用）。新批次写 CSV 前先按「条数上限 × 记号长度」对一遍列宽，并留意 MySQL/H2 对超长值是**静默截断还是报错**（本仓 utf8mb4_bin 列踩过）
 - H2 兼容注意：`CHARACTER SET utf8mb4 COLLATE utf8mb4_bin` 列必须 `NOT NULL`，可空用户名列用普通 `varchar(50) DEFAULT NULL`（V17/V22 踩过坑）
 
