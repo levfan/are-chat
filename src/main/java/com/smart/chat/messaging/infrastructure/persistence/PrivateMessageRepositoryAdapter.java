@@ -56,7 +56,6 @@ public class PrivateMessageRepositoryAdapter implements PrivateMessageRepository
             po.setReplyToId(message.replyToId());
             po.setReadFlag(message.readFlagRaw());
             po.setEdited(message.editedRaw());
-            po.setHeartAt(message.heartAt());
             po.setCreated(message.created());
             messageMapper.insert(po);
             return;
@@ -71,7 +70,6 @@ public class PrivateMessageRepositoryAdapter implements PrivateMessageRepository
         po.setStatus(message.status());
         po.setReplyToId(message.replyToId());
         po.setEdited(message.editedRaw());
-        po.setHeartAt(message.heartAt());
     }
 
     @Override
@@ -97,11 +95,6 @@ public class PrivateMessageRepositoryAdapter implements PrivateMessageRepository
     }
 
     @Override
-    public List<PrivateMessage> findHeartMoments(String me, String peer) {
-        return toDomainList(messageMapper.findHeartMoments(me, peer));
-    }
-
-    @Override
     public List<PrivateMessage> searchGlobal(String me, String keyword) {
         return toDomainList(messageMapper.searchGlobal(me, keyword));
     }
@@ -122,6 +115,6 @@ public class PrivateMessageRepositoryAdapter implements PrivateMessageRepository
 
     private static PrivateMessage toDomain(PrivateMessagePO po) {
         return PrivateMessage.restore(po.getId(), po.getFromUser(), po.getToUser(), po.getContent(), po.getMsgType(),
-                po.getStatus(), po.getReplyToId(), po.getReadFlag(), po.getEdited(), po.getHeartAt(), po.getCreated());
+                po.getStatus(), po.getReplyToId(), po.getReadFlag(), po.getEdited(), po.getCreated());
     }
 }

@@ -27,7 +27,6 @@ class PrivateMessageResponseContractTest {
         po.setReplyToId("m0");
         po.setReadFlag(1);
         po.setEdited(1);
-        po.setHeartAt(123L);
         po.setCreated(456L);
         return po;
     }
@@ -36,7 +35,7 @@ class PrivateMessageResponseContractTest {
     void fullRowSerializesIntoTheSameKeysInSameOrder() {
         PrivateMessagePO po = populatedPo();
         PrivateMessage message = PrivateMessage.restore(po.getId(), po.getFromUser(), po.getToUser(), po.getContent(),
-                po.getMsgType(), po.getStatus(), po.getReplyToId(), po.getReadFlag(), po.getEdited(), po.getHeartAt(),
+                po.getMsgType(), po.getStatus(), po.getReplyToId(), po.getReadFlag(), po.getEdited(),
                 po.getCreated());
 
         assertThat(JSON.toJSONString(PrivateMessageService.SentMessageVO.of(message)))
@@ -55,7 +54,7 @@ class PrivateMessageResponseContractTest {
         po.setCreated(9L);
 
         PrivateMessage message = PrivateMessage.restore(po.getId(), po.getFromUser(), po.getToUser(), po.getContent(),
-                po.getMsgType(), po.getStatus(), po.getReplyToId(), po.getReadFlag(), po.getEdited(), po.getHeartAt(),
+                po.getMsgType(), po.getStatus(), po.getReplyToId(), po.getReadFlag(), po.getEdited(),
                 po.getCreated());
         String projected = JSON.toJSONString(PrivateMessageService.SentMessageVO.of(message));
 
@@ -67,7 +66,7 @@ class PrivateMessageResponseContractTest {
     void projectionCarriesEveryColumnOfTheRow() {
         PrivateMessagePO po = populatedPo();
         PrivateMessage message = PrivateMessage.restore(po.getId(), po.getFromUser(), po.getToUser(), po.getContent(),
-                po.getMsgType(), po.getStatus(), po.getReplyToId(), po.getReadFlag(), po.getEdited(), po.getHeartAt(),
+                po.getMsgType(), po.getStatus(), po.getReplyToId(), po.getReadFlag(), po.getEdited(),
                 po.getCreated());
 
         PrivateMessageService.SentMessageVO vo = PrivateMessageService.SentMessageVO.of(message);
@@ -81,7 +80,6 @@ class PrivateMessageResponseContractTest {
         assertThat(vo.replyToId()).isEqualTo("m0");
         assertThat(vo.readFlag()).isEqualTo(1);
         assertThat(vo.edited()).isEqualTo(1);
-        assertThat(vo.heartAt()).isEqualTo(123L);
         assertThat(vo.created()).isEqualTo(456L);
     }
 }

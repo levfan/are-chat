@@ -36,9 +36,6 @@ public interface PrivateMessageRepository {
     /** 会话内关键字搜索（只搜未撤回），倒序取最近 50 条 */
     List<PrivateMessage> searchConversation(String me, String peer, String keyword);
 
-    /** F36 心动时刻：我参与的、被标记的消息（可限定 peer） */
-    List<PrivateMessage> findHeartMoments(String me, String peer);
-
     /** 81 全局消息搜索：我参与的全部会话里的未撤回文本 */
     List<PrivateMessage> searchGlobal(String me, String keyword);
 

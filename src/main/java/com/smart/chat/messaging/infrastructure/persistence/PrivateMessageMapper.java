@@ -119,19 +119,4 @@ public interface PrivateMessageMapper extends BaseMapperCompat<PrivateMessagePO>
     default int deleteConversation(String me, String peer) {
         return delete(conversationWrapper(me, peer));
     }
-
-    /** F36 心动时刻：我参与的双向会话里被标记的消息（可限定 peer），倒序取最近 100 条。 */
-    default List<PrivateMessagePO> findHeartMoments(String me, String peer) {
-        LambdaQueryWrapper<PrivateMessagePO> wrapper = new LambdaQueryWrapper<PrivateMessagePO>()
-                .and(w -> w.eq(PrivateMessagePO::getFromUser, me).or().eq(PrivateMessagePO::getToUser, me))
-                .isNotNull(PrivateMessagePO::getHeartAt)
-                .orderByDesc(PrivateMessagePO::getHeartAt)
-                .last("LIMIT 100");
-        if (peer != null && !peer.isBlank()) {
-            wrapper.and(w -> w
-                    .and(w1 -> w1.eq(PrivateMessagePO::getFromUser, me).eq(PrivateMessagePO::getToUser, peer))
-                    .or(w2 -> w2.eq(PrivateMessagePO::getFromUser, peer).eq(PrivateMessagePO::getToUser, me)));
-        }
-        return selectList(wrapper);
-    }
 }

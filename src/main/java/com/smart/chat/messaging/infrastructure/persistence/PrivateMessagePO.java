@@ -43,8 +43,6 @@ public class PrivateMessagePO {
     private String replyToId;
     private Integer readFlag;
     private Integer edited;
-    /** F36 心动时刻标记时间（毫秒，null = 未标记），消息双方均可标记/取消 */
-    private Long heartAt;
     private Long created;
 
     public static PrivateMessagePO of(String from, String to, String content, String msgType) {

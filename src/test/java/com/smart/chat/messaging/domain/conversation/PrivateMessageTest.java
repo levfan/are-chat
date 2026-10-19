@@ -7,7 +7,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
- * 消息领域的两条真规则：<b>内容形态</b>（按类型各自的闸门）与<b>时间窗内的改写</b>（撤回/编辑/心动）。
+ * 消息领域的两条真规则：<b>内容形态</b>（按类型各自的闸门）与<b>时间窗内的改写</b>（撤回/编辑）。
  * 文案与 code 沿用改造前写在 Service 里的那一套，逐条锁住。
  */
 class PrivateMessageTest {
@@ -26,7 +26,6 @@ class PrivateMessageTest {
         assertThat(message.status()).isEqualTo(PrivateMessage.STATUS_SENT);
         assertThat(message.readFlag()).isFalse();
         assertThat(message.editedFlag()).isFalse();
-        assertThat(message.heartAt()).isNull();
         assertThat(message.created()).isEqualTo(NOW);
     }
 
@@ -126,7 +125,7 @@ class PrivateMessageTest {
                 .hasMessage("只有文本消息可以编辑");
 
         PrivateMessage recalled = PrivateMessage.restore("m1", "alice", "bob", "已撤回", PrivateMessage.TYPE_TEXT,
-                PrivateMessage.STATUS_RECALLED, null, null, null, null, NOW);
+                PrivateMessage.STATUS_RECALLED, null, null, null, NOW);
         assertThatThrownBy(() -> recalled.editBy("alice", NOW, "hi"))
                 .isInstanceOf(RuleViolation.class)
                 .hasMessage("消息已撤回，不能编辑")
@@ -154,31 +153,9 @@ class PrivateMessageTest {
     }
 
     @Test
-    void bothSidesCanMarkHeartButRecalledCannot() {
-        PrivateMessage message = text("alice", "bob", "这一刻");
-        message.heartBy("bob", true, 4_242L);
-        assertThat(message.heartAt()).isEqualTo(4_242L);
-        message.heartBy("alice", false, 5L);
-        assertThat(message.heartAt()).isNull();
-
-        PrivateMessage stranger = text("alice", "bob", "跟你无关");
-        assertThatThrownBy(() -> stranger.heartBy("carol", true, NOW))
-                .isInstanceOf(RuleViolation.class)
-                .hasMessage("只能标记你们俩的聊天记录哦")
-                .extracting(e -> ((RuleViolation) e).code()).isEqualTo(403);
-
-        PrivateMessage recalled = PrivateMessage.restore("m2", "alice", "bob", "已撤回", PrivateMessage.TYPE_TEXT,
-                PrivateMessage.STATUS_RECALLED, null, null, null, null, NOW);
-        assertThatThrownBy(() -> recalled.heartBy("alice", true, NOW))
-                .isInstanceOf(RuleViolation.class)
-                .hasMessage("撤回的消息不能标记")
-                .extracting(e -> ((RuleViolation) e).code()).isEqualTo(409);
-    }
-
-    @Test
     void recalledMessageCannotBePinnedButOthersCan() {
         PrivateMessage recalled = PrivateMessage.restore("m3", "alice", "bob", "已撤回", PrivateMessage.TYPE_TEXT,
-                PrivateMessage.STATUS_RECALLED, null, null, null, null, NOW);
+                PrivateMessage.STATUS_RECALLED, null, null, null, NOW);
         assertThatThrownBy(() -> recalled.requirePinable())
                 .isInstanceOf(RuleViolation.class)
                 .hasMessage("已撤回的消息不能置顶")

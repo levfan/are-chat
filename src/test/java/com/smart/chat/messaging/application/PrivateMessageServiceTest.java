@@ -92,7 +92,7 @@ class PrivateMessageServiceTest {
     private static PrivateMessage textWith(String id, String from, String to, String content, String status,
                                            Integer readFlag, long created) {
         return PrivateMessage.restore(id, from, to, content, PrivateMessage.TYPE_TEXT, status, null, readFlag, null,
-                null, created);
+                created);
     }
 
     private static Friend edge(String owner, String peer) {

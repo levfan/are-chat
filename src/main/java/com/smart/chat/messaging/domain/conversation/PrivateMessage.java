@@ -10,7 +10,7 @@ import java.util.UUID;
  * 消息流水本身是薄的：发出去就不改历史。值得写成领域的只有三类真规则——
  * <b>内容形态</b>（文本非空且 ≤2000、拍一拍留空回落默认文案且后缀 ≤100、图片必须是站内地址、
  * 名片/位置已下线只读不写）、<b>收发双方视角</b>（{@link #peerOf}「对方」、{@link #between} 双向会话谓词）、
- * <b>两条时间窗内的改写</b>（撤回、编辑），加上心动时刻的归属闸门。
+ * <b>两条时间窗内的改写</b>（撤回、编辑）。
  * <p>
  * 状态字面量 SENT/RECALLED 与类型字面量是数据库与前端的契约，照 PO 原值写死。
  * {@code readFlag} 是<b>只读列</b>：已读由 {@link PrivateMessageRepository#markIncomingRead} 批量刷，
@@ -52,11 +52,9 @@ public final class PrivateMessage {
     private String status;
     private String replyToId;
     private Integer edited;
-    /** F36 心动时刻标记时间（毫秒，null = 未标记），消息双方均可标记/取消 */
-    private Long heartAt;
 
     private PrivateMessage(String id, String fromUser, String toUser, String content, String msgType, String status,
-                           String replyToId, Integer readFlag, Integer edited, Long heartAt, Long created) {
+                           String replyToId, Integer readFlag, Integer edited, Long created) {
         this.id = id;
         this.fromUser = fromUser;
         this.toUser = toUser;
@@ -66,7 +64,6 @@ public final class PrivateMessage {
         this.replyToId = replyToId;
         this.readFlag = readFlag;
         this.edited = edited;
-        this.heartAt = heartAt;
         this.created = created;
     }
 
@@ -77,15 +74,15 @@ public final class PrivateMessage {
     public static PrivateMessage offer(String from, String to, String content, String msgType, long at) {
         String text = requireWellFormed(msgType, content);
         return new PrivateMessage(UUID.randomUUID().toString(), from, to, text, msgType, STATUS_SENT,
-                null, null, null, null, at);
+                null, null, null, at);
     }
 
     /** 从存储重建：不校验，历史行里的空值与怪内容必须读得出来。 */
     public static PrivateMessage restore(String id, String fromUser, String toUser, String content, String msgType,
                                          String status, String replyToId, Integer readFlag, Integer edited,
-                                         Long heartAt, Long created) {
+                                         Long created) {
         return new PrivateMessage(id, fromUser, toUser, content, msgType, status, replyToId, readFlag, edited,
-                heartAt, created);
+                created);
     }
 
     /**
@@ -179,17 +176,6 @@ public final class PrivateMessage {
         }
         this.content = text;
         this.edited = 1;
-    }
-
-    /** F36 心动时刻：只有消息双方能标记/取消，撤回的消息不能再标。 */
-    public void heartBy(String me, boolean hearted, long now) {
-        if (!participant(me)) {
-            throw RuleViolation.forbidden("只能标记你们俩的聊天记录哦");
-        }
-        if (recalledFlag()) {
-            throw RuleViolation.conflict("撤回的消息不能标记");
-        }
-        this.heartAt = hearted ? now : null;
     }
 
     /** 引用回复：只能引本会话（同一对人）的消息。 */
@@ -286,10 +272,6 @@ public final class PrivateMessage {
     /** 编辑位的原始值（1/0/null）；判定请用 {@link #editedFlag()}。 */
     public Integer editedRaw() {
         return edited;
-    }
-
-    public Long heartAt() {
-        return heartAt;
     }
 
     public Long created() {

@@ -46,7 +46,7 @@ class PrivateMessageRepositoryAdapterTest {
 
         // 聚合是「撤回」场景：只带 content/status，其余字段在内存里是 null
         PrivateMessage recalled = PrivateMessage.restore("m1", "alice", "bob", "原始内容",
-                PrivateMessage.TYPE_TEXT, PrivateMessage.STATUS_RECALLED, null, null, null, null, null);
+                PrivateMessage.TYPE_TEXT, PrivateMessage.STATUS_RECALLED, null, null, null, null);
         repository.save(recalled);
 
         ArgumentCaptor<PrivateMessagePO> captor = ArgumentCaptor.forClass(PrivateMessagePO.class);
@@ -95,7 +95,6 @@ class PrivateMessageRepositoryAdapterTest {
         po.setMsgType(PrivateMessage.TYPE_TEXT);
         po.setStatus(PrivateMessage.STATUS_SENT);
         po.setReadFlag(1);
-        po.setHeartAt(7L);
         when(messageMapper.selectBatchIds(anyCollection())).thenReturn(List.of(po));
 
         PrivateMessage message = repository.listByIds(List.of("m2")).get(0);
@@ -103,7 +102,6 @@ class PrivateMessageRepositoryAdapterTest {
         assertThat(message.id()).isEqualTo("m2");
         assertThat(message.readFlag()).isTrue();
         assertThat(message.readFlagRaw()).isEqualTo(1);
-        assertThat(message.heartAt()).isEqualTo(7L);
     }
 
     @Test
