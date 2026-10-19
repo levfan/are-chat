@@ -78,11 +78,6 @@ public final class StreakDays {
         return days.size();
     }
 
-    /** 最近一次打卡日，一天都没有返回 null。 */
-    public LocalDate lastCheckinDay() {
-        return days.stream().max(LocalDate::compareTo).orElse(null);
-    }
-
     /** 已解锁的档位 key（按天数从小到大）。 */
     public List<String> unlockedTierKeys() {
         int longest = longestStreak();

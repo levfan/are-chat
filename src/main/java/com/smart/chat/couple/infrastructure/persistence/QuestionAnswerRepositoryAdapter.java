@@ -33,12 +33,6 @@ public class QuestionAnswerRepositoryAdapter implements QuestionAnswerRepository
     }
 
     @Override
-    public List<QuestionAnswer> findBySpaceFrom(String spaceId, String fromDay) {
-        return answerMapper.findBySpaceFrom(spaceId, fromDay).stream()
-                .map(QuestionAnswerRepositoryAdapter::toDomain).toList();
-    }
-
-    @Override
     public List<QuestionAnswer> findBySpace(String spaceId) {
         return answerMapper.findBySpace(spaceId).stream().map(QuestionAnswerRepositoryAdapter::toDomain).toList();
     }

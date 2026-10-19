@@ -58,7 +58,6 @@ class CoupleQuestionServiceTest {
             lenient().when(answerRepository.findBySpace(SPACE)).thenAnswer(inv -> List.copyOf(rows));
             lenient().when(answerRepository.findBySpaceAndDay(SPACE, DAY)).thenAnswer(inv -> rows.stream()
                     .filter(r -> r.day().equals(DAY)).toList());
-            lenient().when(answerRepository.findBySpaceFrom(eq(SPACE), anyString())).thenAnswer(inv -> rows);
             lenient().when(answerRepository.find(eq(SPACE), anyString(), anyString())).thenAnswer(inv -> rows.stream()
                     .filter(r -> r.day().equals(inv.getArgument(1, String.class))
                             && r.username().equals(inv.getArgument(2, String.class)))
@@ -148,21 +147,6 @@ class CoupleQuestionServiceTest {
         assertThatThrownBy(() -> service.answer("alice", "一".repeat(301)))
                 .isInstanceOf(BusinessException.class).hasMessageContaining("300");
         assertThat(bag.rows).isEmpty();
-    }
-
-    @Test
-    void historyOnlyRevealsThePartnerOnDaysBothAnswered() {
-        stubSpace();
-        Bag bag = new Bag().stub();
-        bag.answered("alice", "我的答案");
-        bag.answered("bob", "TA 的答案");
-
-        CoupleQuestionService.HistoryListVO list = service.history("alice", 14);
-
-        assertThat(list.items()).hasSize(1);
-        assertThat(list.items().get(0).partnerAnswer()).isEqualTo("TA 的答案");
-        assertThat(list.answeredDays()).isEqualTo(1);
-        assertThat(list.bothAnsweredDays()).isEqualTo(1);
     }
 
     @Test

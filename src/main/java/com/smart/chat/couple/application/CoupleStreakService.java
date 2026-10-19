@@ -47,7 +47,7 @@ public class CoupleStreakService {
     }
 
     public record StreakBoardVO(String day, int currentStreak, int longestStreak, int confirmedDays,
-                                boolean checkedToday, boolean missedYesterday, String lastCheckinDay,
+                                boolean checkedToday, boolean missedYesterday,
                                 List<TierVO> tiers, String nextTierKey, String nextTierLabel, int daysToNext,
                                 List<StripCellVO> strip, int makeupWindowDays, int makeupLeftThisMonth,
                                 boolean canMakeup) {
@@ -101,8 +101,7 @@ public class CoupleStreakService {
         StreakTier next = streak.nextTier();
         int makeupLeft = MakeupPolicy.MONTHLY_QUOTA - makeupUsedThisMonth(space.id(), today);
         return new StreakBoardVO(today.toString(), streak.currentStreak(), streak.longestStreak(),
-                streak.confirmedDays(), streak.checkedToday(), streak.missedYesterday(),
-                streak.lastCheckinDay() == null ? null : streak.lastCheckinDay().toString(), tiers,
+                streak.confirmedDays(), streak.checkedToday(), streak.missedYesterday(), tiers,
                 next == null ? null : next.key(), next == null ? null : next.label(), streak.daysToNextTier(),
                 strip, MakeupPolicy.WINDOW_DAYS, makeupLeft, streak.missedYesterday() && makeupLeft > 0);
     }

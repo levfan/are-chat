@@ -123,13 +123,4 @@ class WishTest {
         assertThatThrownBy(() -> wish.requireDeletableBy("bob"))
                 .isInstanceOf(RuleViolation.class).hasMessageContaining("删不掉");
     }
-
-    @Test
-    void onlyTheRecorderCanEditTheNote() {
-        Wish wish = Wish.add("alice", "alice", "耳机", "黑色的");
-        assertThatThrownBy(() -> wish.editNote("bob", "改一下"))
-                .isInstanceOf(RuleViolation.class).hasMessageContaining("只有记这条愿望的人能改");
-        wish.editNote("alice", "白色的也行");
-        assertThat(wish.note()).isEqualTo("白色的也行");
-    }
 }

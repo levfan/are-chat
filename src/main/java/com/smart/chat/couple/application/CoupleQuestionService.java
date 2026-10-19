@@ -11,7 +11,6 @@ import com.smart.chat.sharedkernel.web.BusinessException;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
-import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -30,9 +29,6 @@ import static com.smart.chat.couple.application.DomainRules.rule;
 @Service
 public class CoupleQuestionService {
 
-    /** 答题历史回看的上限天数 */
-    private static final int HISTORY_MAX = 90;
-
     // ========== VO ==========
 
     public record AnswerVO(String username, String answer, Long createdAt, Long updatedAt) {
@@ -41,13 +37,6 @@ public class CoupleQuestionService {
     public record TodayVO(String day, int index, String question, AnswerVO mine, String partnerAnswer,
                           boolean answeredByMe, boolean answeredByPartner, boolean bothAnswered,
                           int answerMax) {
-    }
-
-    public record HistoryVO(String day, String question, String myAnswer, String partnerAnswer,
-                            boolean bothAnswered) {
-    }
-
-    public record HistoryListVO(List<HistoryVO> items, int answeredDays, int bothAnsweredDays) {
     }
 
     private final CoupleSpaceRepository spaceRepository;
@@ -84,39 +73,6 @@ public class CoupleQuestionService {
                         mine.updatedAt()),
                 view.partnerAnswerText(), view.answeredByMe(), view.answeredByPartner(), view.bothAnswered(),
                 DailyQuestion.ANSWER_MAX);
-    }
-
-    /** 回看最近 N 天（1-90，默认 14）：没答的一侧留空，答完才互看。 */
-    public HistoryListVO history(String me, Integer days) {
-        CoupleSpace space = requireSpace(me);
-        int limit = days == null || days <= 0 ? 14 : Math.min(days, HISTORY_MAX);
-        String startDay = LocalDate.now().minusDays(limit - 1L).toString();
-        List<QuestionAnswer> rows = answerRepository.findBySpaceFrom(space.id(), startDay);
-        List<String> dayKeys = new ArrayList<>();
-        for (QuestionAnswer row : rows) {
-            if (!dayKeys.contains(row.day())) {
-                dayKeys.add(row.day());
-            }
-        }
-        List<HistoryVO> items = new ArrayList<>();
-        int bothCount = 0;
-        int mineCount = 0;
-        for (String day : dayKeys) {
-            QuestionAnswer mine = findOf(rows, day, me);
-            QuestionAnswer theirs = findOf(rows, day, space.partnerOf(me));
-            String question = mine != null ? mine.question() : (theirs == null ? "" : theirs.question());
-            DailyQuestion view = DailyQuestion.of(day, 0, question,
-                    mine == null ? null : mine.answerText(), theirs == null ? null : theirs.answerText());
-            if (view.answeredByMe()) {
-                mineCount++;
-            }
-            if (view.bothAnswered()) {
-                bothCount++;
-            }
-            items.add(new HistoryVO(day, view.question(), view.myAnswerText(), view.partnerAnswerText(),
-                    view.bothAnswered()));
-        }
-        return new HistoryListVO(items, mineCount, bothCount);
     }
 
     // ========== 写 ==========
@@ -193,15 +149,6 @@ public class CoupleQuestionService {
     /** 最近若干条问答（百日回顾的时间轴原料）。 */
     public List<QuestionAnswer> recentAnswers(String spaceId) {
         return answerRepository.findBySpace(spaceId);
-    }
-
-    private QuestionAnswer findOf(List<QuestionAnswer> rows, String day, String username) {
-        for (QuestionAnswer row : rows) {
-            if (row.day().equals(day) && row.username().equals(username)) {
-                return row;
-            }
-        }
-        return null;
     }
 
     private CoupleSpace requireSpace(String me) {

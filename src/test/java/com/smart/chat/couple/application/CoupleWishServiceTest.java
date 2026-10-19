@@ -221,18 +221,14 @@ class CoupleWishServiceTest {
     }
 
     @Test
-    void removeAndEditNoteBelongToTheRecorder() {
+    void removeBelongsToTheRecorder() {
         stubSpace();
         Bag bag = new Bag().stub();
         Wish row = bag.add("alice", "bob", "帮 TA 实现的盲盒", Wish.STATUS_OPEN);
 
         assertThatThrownBy(() -> service.remove("alice", row.id()))
                 .isInstanceOf(BusinessException.class).hasMessageContaining("只有记这条愿望的人");
-        assertThatThrownBy(() -> service.updateNote("alice", row.id(), "改一下"))
-                .isInstanceOf(BusinessException.class).hasMessageContaining("只有记这条愿望的人能改");
 
-        service.updateNote("bob", row.id(), "改成蓝色的");
-        assertThat(row.note()).isEqualTo("改成蓝色的");
         service.remove("bob", row.id());
         assertThat(bag.rows).isEmpty();
     }

@@ -137,21 +137,6 @@ public final class Wish {
         }
     }
 
-    /** 改写补充说明：只有记录人能改，改完仍是那条愿望。 */
-    public void editNote(String me, String note) {
-        if (!creatorUser.equals(me)) {
-            throw new RuleViolation("只有记这条愿望的人能改它");
-        }
-        String extra = note == null ? null : note.trim();
-        if (extra != null && extra.isEmpty()) {
-            extra = null;
-        }
-        if (extra != null && extra.length() > NOTE_MAX) {
-            throw new RuleViolation("补充说明最多 " + NOTE_MAX + " 个字");
-        }
-        this.note = extra;
-    }
-
     /**
      * 站在某人视角看到的状态：愿望人本人看不到「已准备」，只看到 OPEN。
      * 这是「偷偷」的全部实现——VO 拼装必须走这个方法，不许直接读 {@link #status()}。

@@ -25,14 +25,6 @@ public interface CoupleQuestionAnswerMapper extends BaseMapperCompat<CoupleQuest
                 .eq(CoupleQuestionAnswerPO::getDay, day));
     }
 
-    /** 某空间从 fromDay（含）起的回答，按日期倒序，用于回看与百日回顾。 */
-    default List<CoupleQuestionAnswerPO> findBySpaceFrom(String spaceId, String fromDay) {
-        return selectList(new LambdaQueryWrapper<CoupleQuestionAnswerPO>()
-                .eq(CoupleQuestionAnswerPO::getSpaceId, spaceId)
-                .ge(CoupleQuestionAnswerPO::getDay, fromDay)
-                .orderByDesc(CoupleQuestionAnswerPO::getDay));
-    }
-
     /** 某空间全部回答（倒序）。 */
     default List<CoupleQuestionAnswerPO> findBySpace(String spaceId) {
         return selectList(new LambdaQueryWrapper<CoupleQuestionAnswerPO>()

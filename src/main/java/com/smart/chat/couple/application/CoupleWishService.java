@@ -123,15 +123,6 @@ public class CoupleWishService {
         return board(me);
     }
 
-    /** 改补充说明：只有记录人能改。 */
-    public WishBoardVO updateNote(String me, String id, String note) {
-        CoupleSpace space = requireSpace(me);
-        Wish wish = requireWish(space, id);
-        guard(() -> wish.editNote(me, note));
-        wishRepository.save(wish);
-        return board(me);
-    }
-
     /** 删除：只有记录人能删，已实现的删不掉。 */
     public WishBoardVO remove(String me, String id) {
         CoupleSpace space = requireSpace(me);

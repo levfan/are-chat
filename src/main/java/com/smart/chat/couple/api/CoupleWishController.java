@@ -26,10 +26,6 @@ public class CoupleWishController {
     public record WishIdRequest(String id) {
     }
 
-    /** 改补充说明。 */
-    public record NoteRequest(String id, String note) {
-    }
-
     private final CoupleWishService service;
 
     public CoupleWishController(CoupleWishService service) {
@@ -66,12 +62,6 @@ public class CoupleWishController {
     @PostMapping("/fulfill")
     public ApiResponse<CoupleWishService.WishBoardVO> fulfill(@RequestBody WishIdRequest req, HttpSession session) {
         return ApiResponse.ok(service.fulfill(Sessions.requireUser(session), req.id()));
-    }
-
-    /** 改补充说明（只有记录人能改）。 */
-    @PostMapping("/note")
-    public ApiResponse<CoupleWishService.WishBoardVO> note(@RequestBody NoteRequest req, HttpSession session) {
-        return ApiResponse.ok(service.updateNote(Sessions.requireUser(session), req.id(), req.note()));
     }
 
     /** 删除一条愿望（只有记录人能删，已实现的删不掉）。 */

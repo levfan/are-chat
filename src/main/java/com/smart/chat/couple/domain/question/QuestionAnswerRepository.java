@@ -11,9 +11,6 @@ public interface QuestionAnswerRepository {
 
     List<QuestionAnswer> findBySpaceAndDay(String spaceId, String day);
 
-    /** 某空间从 fromDay（含）起的回答，按日期倒序——回看与百日回顾都读这个 */
-    List<QuestionAnswer> findBySpaceFrom(String spaceId, String fromDay);
-
     List<QuestionAnswer> findBySpace(String spaceId);
 
     /** 新答则插入、改答则只回写答案与改动时刻 */

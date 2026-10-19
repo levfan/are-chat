@@ -8,11 +8,10 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * 每日一问（新卡 `couple-question`）：今日题目、回答与回看。
+ * 每日一问（新卡 `couple-question`）：今日题目与回答。
  */
 @RestController
 @RequestMapping("/api/couple/question")
@@ -38,12 +37,5 @@ public class CoupleQuestionController {
     @PostMapping("/answer")
     public ApiResponse<CoupleQuestionService.TodayVO> answer(@RequestBody AnswerRequest req, HttpSession session) {
         return ApiResponse.ok(service.answer(Sessions.requireUser(session), req.answer()));
-    }
-
-    /** 回看最近 N 天（1-90，默认 14）。 */
-    @GetMapping("/history")
-    public ApiResponse<CoupleQuestionService.HistoryListVO> history(@RequestParam(required = false) Integer days,
-                                                                    HttpSession session) {
-        return ApiResponse.ok(service.history(Sessions.requireUser(session), days));
     }
 }
