@@ -27,7 +27,7 @@
 
 | 层 | 内容 |
 |---|---|
-| api | 4 个 Controller（22 端点）：`CoupleController`（地基：邀请建立/纪念日/空间个性化/`relationship-of`/心动值，10）、`CoupleStreakController`（连续打卡看板+补签，2）、`CoupleQuestionController`（每日一问，3）、`CoupleWishController`（愿望清单，7）。原 10 个历史卡 Controller、`CouplePinController`、`CoupleMemoryController`、`CoupleNotifyController` 与 `CoupleAdminController` 已下线 |
+| api | 4 个 Controller（20 端点）：`CoupleController`（地基：邀请建立/纪念日/空间个性化/`relationship-of`/心动值，10）、`CoupleStreakController`（连续打卡看板+补签，2）、`CoupleQuestionController`（每日一问，2）、`CoupleWishController`（愿望清单，6）。原 10 个历史卡 Controller、`CouplePinController`、`CoupleMemoryController`、`CoupleNotifyController` 与 `CoupleAdminController` 已下线 |
 | application | 4 个 Service（`CoupleService`/`CoupleStreakService`/`CoupleQuestionService`/`CoupleWishService`）+ `DomainRules`（`RuleViolation` → 400/403/404/409，文案不重写）；VO 是 Service 内嵌 `record` |
 | domain | 17 文件。分包：`space`（`CoupleSpace` 聚合根：字典序定 A/B、单向解散、`decorate`/`renamePartner` 闸；`CoupleSpaceRepository` 端口）、`invite`（`Invite` 单向状态机 + 两处归属闸 + 端口）、`streak`（`StreakDay` 薄实体、`StreakDays` 读时算、`StreakTier` 六档、`MakeupPolicy` 补签闸门、`StreakDayRepository` 端口）、`question`（`QuestionAnswer` 每人行 + `DailyQuestion` 双方读模型 + 端口）、`wish`（`Wish` 的「已准备」对许愿人保密 + 端口）、`intimacy`（`IntimacyCalculator` 五项权重与七级阈值 + `IntimacySource` 供数值对象，纯领域无端口）、`RuleViolation` |
 | infrastructure | `persistence` 5 `*PO` + 5 Mapper + 5 `*RepositoryAdapter`（共 15 文件）；`content/CoupleQuestionBank`（每日一问题库 75 题 + `stableHash`，现役唯一静态内容库）；`scheduler` 2 个 Job（`CoupleQuestionJob`/`CoupleReminderJob`）；`account/SpaceCascadeAdapter`（实现 identity 的 `AccountCascade` 端口，供注销级联） |
