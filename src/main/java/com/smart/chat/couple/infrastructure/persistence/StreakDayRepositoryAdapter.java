@@ -33,11 +33,6 @@ public class StreakDayRepositoryAdapter implements StreakDayRepository {
     }
 
     @Override
-    public long countAll() {
-        return streakDayMapper.countAll();
-    }
-
-    @Override
     public void append(StreakDay streakDay) {
         CoupleStreakDayPO po = new CoupleStreakDayPO();
         po.setId(streakDay.id());

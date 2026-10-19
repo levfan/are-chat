@@ -24,11 +24,6 @@ public interface CoupleStreakDayMapper extends BaseMapperCompat<CoupleStreakDayP
                 .last("LIMIT 1"));
     }
 
-    /** 全库累计打卡天数。 */
-    default long countAll() {
-        return selectCount(new LambdaQueryWrapper<CoupleStreakDayPO>());
-    }
-
     /** 某个日期区间内该空间的补签条数（yyyy-MM-dd 字典序即时间序）。 */
     default long countMakeupBetween(String spaceId, String fromDay, String toDay) {
         return selectCount(new LambdaQueryWrapper<CoupleStreakDayPO>()

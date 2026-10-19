@@ -43,14 +43,6 @@ public class AdminService {
         }
     }
 
-    /** 93 审计视图 */
-    public record AuditVO(String id, String actor, String action, String target, String detail, Long created) {
-        static AuditVO of(AdminAudit audit) {
-            return new AuditVO(audit.id(), audit.actor(), audit.action(), audit.target(),
-                    audit.detail(), audit.created());
-        }
-    }
-
     private static final SecureRandom RANDOM = new SecureRandom();
     private static final String RESET_ALPHABET = "abcdefghjkmnpqrstuvwxyz";
     private static final String RESET_DIGITS = "23456789";
@@ -148,10 +140,6 @@ public class AdminService {
 
     public void audit(String actor, String action, String target, String detail) {
         audits.append(AdminAudit.written(actor, action, target, detail));
-    }
-
-    public List<AuditVO> auditLogs(int limit) {
-        return audits.listLatest(limit).stream().map(AuditVO::of).toList();
     }
 
     /** 在线管理员用户名（WS 审批待办推送的收件人） */

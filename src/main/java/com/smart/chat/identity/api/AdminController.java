@@ -20,7 +20,7 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * 79 管理员控制台接口：注册审批 / 用户管理 / 审计日志（公告管理已归 platform 的 AnnouncementAdminController）。
+ * 79 管理员控制台接口：注册审批 / 用户管理（公告管理已归 platform 的 AnnouncementAdminController）。
  * 所有接口都要求 ADMIN 角色（AppUserService.requireAdmin 兜底鉴权）。
  */
 @RestController
@@ -118,15 +118,6 @@ public class AdminController {
         String actor = requireAdmin(session);
         String password = adminService.resetPassword(actor, username, req == null ? null : req.password());
         return ApiResponse.ok(new ResetPasswordVO(username, password));
-    }
-
-    // ---------- 审计日志（93） ----------
-
-    @GetMapping("/audit")
-    public ApiResponse<List<AdminService.AuditVO>> audit(@RequestParam(defaultValue = "100") int limit,
-                                                         HttpSession session) {
-        requireAdmin(session);
-        return ApiResponse.ok(adminService.auditLogs(limit));
     }
 
     private String requireAdmin(HttpSession session) {

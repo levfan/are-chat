@@ -17,7 +17,4 @@ public interface StreakDayRepository {
 
     /** 只追加：打卡日一旦确认就不再改，改动等于篡改连续天数的事实 */
     void append(StreakDay streakDay);
-
-    /** 全库累计打卡天数（管理看板用，运营侧唯一还活着的互动量指标） */
-    long countAll();
 }

@@ -18,9 +18,6 @@ public interface CoupleSpaceRepository {
     /** 全部有效空间：每日出题、逾期提醒、夜间关怀这类批处理要遍历双方 */
     List<CoupleSpace> findAllActive();
 
-    /** 全部空间（含已解散）：运营看板统计口径用 */
-    List<CoupleSpace> findAll();
-
     /** 新空间落库、已有空间按聚合持有的字段更新（存储里聚合不认识的列一律保持原值） */
     void save(CoupleSpace space);
 }

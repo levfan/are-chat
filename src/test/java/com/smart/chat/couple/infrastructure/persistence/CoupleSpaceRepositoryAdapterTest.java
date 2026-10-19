@@ -95,11 +95,9 @@ class CoupleSpaceRepositoryAdapterTest {
         dissolved.setId("s5");
         dissolved.setStatus(CoupleSpacePO.STATUS_DISSOLVED);
         when(spaceMapper.findAllActive()).thenReturn(List.of(active));
-        when(spaceMapper.selectList(null)).thenReturn(List.of(active, dissolved));
         when(spaceMapper.selectById("s5")).thenReturn(dissolved);
 
         assertThat(repository.findAllActive()).extracting(CoupleSpace::id).containsExactly("s4");
-        assertThat(repository.findAll()).extracting(CoupleSpace::id).containsExactly("s4", "s5");
         assertThat(repository.findById("s5").orElseThrow().status()).isEqualTo(CoupleSpace.STATUS_DISSOLVED);
     }
 }

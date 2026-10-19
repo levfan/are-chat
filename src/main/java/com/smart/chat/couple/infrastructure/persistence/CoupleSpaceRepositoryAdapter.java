@@ -38,11 +38,6 @@ public class CoupleSpaceRepositoryAdapter implements CoupleSpaceRepository {
     }
 
     @Override
-    public List<CoupleSpace> findAll() {
-        return spaceMapper.selectList(null).stream().map(CoupleSpaceRepositoryAdapter::toDomain).toList();
-    }
-
-    @Override
     public void save(CoupleSpace space) {
         CoupleSpacePO existing = spaceMapper.selectById(space.id());
         if (existing == null) {

@@ -64,11 +64,6 @@ public class QuestionAnswerRepositoryAdapter implements QuestionAnswerRepository
         answerMapper.updateById(existing);
     }
 
-    @Override
-    public long countAll() {
-        return answerMapper.countAll();
-    }
-
     private static QuestionAnswer toDomain(CoupleQuestionAnswerPO po) {
         return QuestionAnswer.restore(po.getId(), po.getSpaceId(), po.getDay(), po.getQuestionIndex(),
                 po.getQuestion(), po.getUsername(), po.getAnswer(), po.getCreated(), po.getUpdatedAt());
