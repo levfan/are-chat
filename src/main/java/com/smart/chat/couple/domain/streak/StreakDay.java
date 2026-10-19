@@ -5,7 +5,7 @@ import java.util.UUID;
 /**
  * 一个打卡日：这一行代表「这天双方都答完了每日一问」（或空间建立当天、或事后补签成功）。
  * <p>
- * 薄实体——连续天数与七档解锁都由 {@link StreakDays} 从日子集合读时算出，
+ * 薄实体——连续天数与六档解锁都由 {@link StreakDays} 从日子集合读时算出，
  * 这一层不持有任何推导结果，也不重复实现补签规则（那是 {@link MakeupPolicy} 的事）。
  */
 public final class StreakDay {

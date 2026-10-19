@@ -15,7 +15,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 /**
  * 情侣空间地基：邀请建立 → 空间本体（在一起的日子 / 宣言 / 主题 / 爱称）→ 恋爱等级（心动值）。
- * 2026-10-05 二轮裁剪后本类只剩地基，四张功能卡各有自己的 Controller（streak/question/wish/memory）。
+ * 2026-10-05 二轮裁剪后本类只剩地基，三张功能卡各有自己的 Controller（streak/question/wish）。
  */
 @RestController
 @RequestMapping("/api/couple")

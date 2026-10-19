@@ -24,7 +24,7 @@ import static com.smart.chat.couple.application.DomainRules.guard;
 import static com.smart.chat.couple.application.DomainRules.rule;
 
 /**
- * 连续互动打卡：确认打卡日、算连续天数与七档解锁、受理补签。
+ * 连续互动打卡：确认打卡日、算连续天数与六档解锁、受理补签。
  * <p>
  * 打卡口径只有一条——<b>双方当天都答完每日一问才算一天</b>。2026-10-05 二轮裁剪把贴贴卡删掉后，
  * 这一条不再挂在贴贴上（{@code CoupleQuestionService.answer} 在双方都答完时调用本服务），

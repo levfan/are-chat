@@ -29,7 +29,7 @@ import static com.smart.chat.couple.application.DomainRules.rule;
 /**
  * 情侣空间地基：邀请建立 → 空间本体（纪念日/爱称/宣言/主题）→ 恋爱等级（心动值）。
  * <p>
- * 2026-10-05 二轮裁剪后本类只剩地基，四张功能卡各自成服务（streak/question/wish/memory）；
+ * 2026-10-05 二轮裁剪后本类只剩地基，三张功能卡各自成服务（streak/question/wish）；
  * 心动值的五项供数也全部改由现役功能供给，推导与阈值重标定见
  * {@code docs/adr/0010-couple-trim-to-v8-features.md}。
  */

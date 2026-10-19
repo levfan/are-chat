@@ -69,7 +69,7 @@ class StreakDaysTest {
         // 断签后重新爬到 3 天：峰值没涨，就不该再庆祝一次气泡
         assertThat(StreakDays.tiersCrossed(3, 3)).isEmpty();
         assertThat(StreakDays.tiersCrossed(3, 8)).containsExactly(StreakTier.BACKGROUND);
-        assertThat(StreakDays.tiersCrossed(99, 100)).containsExactly(StreakTier.EASTER_EGG);
+        assertThat(StreakDays.tiersCrossed(49, 50)).containsExactly(StreakTier.CUSTOM_EMOJI);
     }
 
     @Test
@@ -83,6 +83,6 @@ class StreakDaysTest {
     void tierKeysMatchTheFrontendHookNames() {
         assertThat(StreakTier.ofKey("nickname-glow")).isEqualTo(StreakTier.NICKNAME_GLOW);
         assertThat(StreakTier.ofKey("nope")).isNull();
-        assertThat(StreakTier.values()).hasSize(7);
+        assertThat(StreakTier.values()).hasSize(6);
     }
 }

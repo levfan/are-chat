@@ -27,7 +27,7 @@ public class CoupleStreakController {
         this.service = service;
     }
 
-    /** 打卡看板：连续天数、七档解锁进度、补签额度与近 21 天打卡条。 */
+    /** 打卡看板：连续天数、六档解锁进度、补签额度与近 21 天打卡条。 */
     @GetMapping("/board")
     public ApiResponse<CoupleStreakService.StreakBoardVO> board(HttpSession session) {
         return ApiResponse.ok(service.board(Sessions.requireUser(session)));
