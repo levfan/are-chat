@@ -2,8 +2,6 @@ package com.smart.chat.messaging.infrastructure.transport;
 
 import com.smart.chat.messaging.domain.AnnouncementBroadcaster;
 import com.smart.chat.messaging.domain.CoupleEventPublisher;
-import com.smart.chat.messaging.domain.NotifySinkRegistry;
-import com.smart.chat.messaging.domain.OutboundNotifySink;
 import com.smart.chat.messaging.domain.conversation.PrivateMessage;
 import com.alibaba.fastjson2.JSON;
 import com.smart.chat.messaging.infrastructure.transport.ChatSessionRegistry;
@@ -14,7 +12,7 @@ import org.springframework.stereotype.Component;
  * 复用聊天室的连接注册表（同一端点允许多端在线）。
  */
 @Component
-public class ImPushService implements CoupleEventPublisher, AnnouncementBroadcaster, NotifySinkRegistry {
+public class ImPushService implements CoupleEventPublisher, AnnouncementBroadcaster {
 
     public record DmPayload(String type, String msgId, String from, String to,
                             String content, String msgType, String replyToId, Boolean edited, Long created) {
@@ -151,7 +149,6 @@ public class ImPushService implements CoupleEventPublisher, AnnouncementBroadcas
     /** 情侣空间事件：推给除发起方之外的接收人（username 记录发起方）。 */
     public void pushCoupleEvent(String event, String actor, String toUser, String detail) {
         push(toUser, new CoupleEventPayload("couple", event, actor, detail));
-        recordNotify(event, actor, toUser, detail);
     }
 
     /** 情侣空间事件：推给双方（如今日仪式解锁），actor 为触发者。 */
@@ -161,23 +158,6 @@ public class ImPushService implements CoupleEventPublisher, AnnouncementBroadcas
         if (!userA.equals(userB)) {
             push(userB, payload);
         }
-        recordNotify(event, actor, userA, detail);
-        recordNotify(event, actor, userB, detail);
-    }
-
-    /** F41 通知中心存档钩子：由 couple 包的 CoupleNotifyRecorder 实现（im 包不反向依赖 couple）。 */
-    private void recordNotify(String event, String actor, String toUser, String detail) {
-        if (notifySink != null && toUser != null && !toUser.isBlank()) {
-            notifySink.record(event, actor, toUser, detail);
-        }
-    }
-
-    private volatile OutboundNotifySink notifySink;
-
-    /** 由 CoupleNotifyRecorder 在启动时注册（存档规则归 couple，钩子接口归 messaging）。 */
-    @Override
-    public void register(OutboundNotifySink sink) {
-        this.notifySink = sink;
     }
 
     @Override
