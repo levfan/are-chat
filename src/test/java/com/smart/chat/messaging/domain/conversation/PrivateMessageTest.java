@@ -41,15 +41,20 @@ class PrivateMessageTest {
     }
 
     @Test
-    void imageMustComeFromInAppStorageAndCardMustBeJson() {
+    void imageMustComeFromInAppStorageAndRetiredTypesAreRejected() {
         assertThatThrownBy(() -> PrivateMessage.offer("alice", "bob", "http://evil/a.png",
                 PrivateMessage.TYPE_IMAGE, NOW))
                 .isInstanceOf(RuleViolation.class)
                 .hasMessage("图片消息必须先上传到站内");
-        assertThatThrownBy(() -> PrivateMessage.offer("alice", "bob", "不是JSON",
+        // 名片/位置用合法 JSON 发，证明拒的是消息类型而不是内容形态
+        assertThatThrownBy(() -> PrivateMessage.offer("alice", "bob", "{\"username\":\"bob\"}",
                 PrivateMessage.TYPE_CARD, NOW))
                 .isInstanceOf(RuleViolation.class)
-                .hasMessage("卡片消息内容格式不正确");
+                .hasMessage("名片与位置分享已下线");
+        assertThatThrownBy(() -> PrivateMessage.offer("alice", "bob", "{\"name\":\"外滩\"}",
+                PrivateMessage.TYPE_LOCATION, NOW))
+                .isInstanceOf(RuleViolation.class)
+                .hasMessage("名片与位置分享已下线");
 
         assertThat(PrivateMessage.offer("alice", "bob", "/api/files/f1/download",
                 PrivateMessage.TYPE_IMAGE, NOW).msgType()).isEqualTo(PrivateMessage.TYPE_IMAGE);

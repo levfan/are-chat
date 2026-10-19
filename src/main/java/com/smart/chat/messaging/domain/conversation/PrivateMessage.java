@@ -9,7 +9,7 @@ import java.util.UUID;
  * <p>
  * 消息流水本身是薄的：发出去就不改历史。值得写成领域的只有三类真规则——
  * <b>内容形态</b>（文本非空且 ≤2000、拍一拍留空回落默认文案且后缀 ≤100、图片必须是站内地址、
- * 名片/位置必须是 JSON）、<b>收发双方视角</b>（{@link #peerOf}「对方」、{@link #between} 双向会话谓词）、
+ * 名片/位置已下线只读不写）、<b>收发双方视角</b>（{@link #peerOf}「对方」、{@link #between} 双向会话谓词）、
  * <b>两条时间窗内的改写</b>（撤回、编辑），加上心动时刻的归属闸门。
  * <p>
  * 状态字面量 SENT/RECALLED 与类型字面量是数据库与前端的契约，照 PO 原值写死。
@@ -25,9 +25,9 @@ public final class PrivateMessage {
     public static final String TYPE_IMAGE = "image";
     public static final String TYPE_POKE = "poke";
     public static final String TYPE_SYSTEM = "system";
-    /** 72 好友名片卡片：content 为 JSON（username/nickname/signature/avatar） */
+    /** 72 好友名片卡片（已下线，只保留读侧：库里历史行仍按 card 渲染，新的发送一律拒） */
     public static final String TYPE_CARD = "card";
-    /** 73 位置分享卡片：content 为 JSON（name/address） */
+    /** 73 位置分享卡片（已下线，只保留读侧：同上） */
     public static final String TYPE_LOCATION = "location";
     /** 82 文件消息：content 为 JSON（name/size/url），url 必须是站内下载地址 */
     public static final String TYPE_FILE = "file";
@@ -111,11 +111,14 @@ public final class PrivateMessage {
     }
 
     /**
-     * 内容形态裁决：顺序与改造前逐字对齐（先长度再站内地址，文案与 code 一字不动）。
-     * 系统消息与文件消息不做文本长度校验——前者文案由服务端写死、后者 content 是 JSON payload，
-     * 这两条在改造前就没有校验，这里不新增。
+     * 内容形态裁决：已下线的名片/位置一律拒（库里历史行照读，走 {@link #restore} 不经过这里），
+     * 其余顺序与改造前对齐（先长度再站内地址）。系统消息与文件消息不做文本长度校验——
+     * 前者文案由服务端写死、后者 content 是 JSON payload，这两条在改造前就没有校验，这里不新增。
      */
     private static String requireWellFormed(String msgType, String content) {
+        if (TYPE_CARD.equals(msgType) || TYPE_LOCATION.equals(msgType)) {
+            throw RuleViolation.of("名片与位置分享已下线");
+        }
         if (TYPE_POKE.equals(msgType)) {
             String suffix = content == null || content.isEmpty() ? POKE_TEXT : content;
             if (suffix.length() > POKE_SUFFIX_MAX) {
@@ -135,9 +138,6 @@ public final class PrivateMessage {
         }
         if (TYPE_IMAGE.equals(msgType) && !text.startsWith(IMAGE_URL_PREFIX)) {
             throw RuleViolation.of("图片消息必须先上传到站内");
-        }
-        if ((TYPE_CARD.equals(msgType) || TYPE_LOCATION.equals(msgType)) && !text.startsWith("{")) {
-            throw RuleViolation.of("卡片消息内容格式不正确");
         }
         return text;
     }
