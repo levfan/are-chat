@@ -56,7 +56,7 @@
 |---|---|---|---|
 | `friend` | 双向好友关系（双向各存一行，owner 视角） | `owner_username`/`friend_username`、`remark`/`tag`、`pinned`/`muted`/`blocked`、`last_read_at` | `uq_friend_pair(owner_username,friend_username)` |
 | `friend_request` | 好友申请 | `from_user`/`to_user`、`message`、`status` PENDING/ACCEPTED/REJECTED | `idx_fr_to_user_status`、`idx_fr_from_to` |
-| `private_message` | 点对点私信（text/image/poke/system/card/location/file） | `from_user`/`to_user`、`msg_type`、`status` SENT/RECALLED、`reply_to_id`、`read_flag`、`heart_at` | PK `id`；`idx_pm_from_to_created`、`idx_pm_to_from_created` |
+| `private_message` | 点对点私信（text/image/poke/system/file；card/location 是已下线的历史类型，库里旧行照读，新的发送被领域拒掉） | `from_user`/`to_user`、`msg_type`、`status` SENT/RECALLED、`reply_to_id`、`read_flag`、`heart_at` | PK `id`；`idx_pm_from_to_created`、`idx_pm_to_from_created` |
 | `message_reaction` | 消息表情回应（toggle） | `msg_id`/`username`/`emoji` | `uq_reaction(msg_id,username,emoji)` |
 | `message_star` | 消息收藏（个人视角） | `username`/`msg_id` | `uq_star(username,msg_id)` |
 | `conversation_pin` | 会话置顶消息（每双人会话一条，双方共享） | `user_a`/`user_b`（字典序）、`msg_id`、`created_by` | `uq_conv_pin(user_a,user_b)` |
