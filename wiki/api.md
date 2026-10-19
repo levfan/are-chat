@@ -1,8 +1,8 @@
 # REST 接口总表
 
 > 本页回答：全部 Controller 的端点清单（方法 + 路径 + 请求体 + 响应字段 + 错误码）。路径省略类前缀 `/api`；couple 系前缀见各节标题。
-> **当前口径（2026-10-05 二轮裁剪后实测）**：全仓 **18 个 Controller / 82 个端点**（逐条读各 `*Controller.java` 的 `@GetMapping/@PostMapping/@PutMapping/@DeleteMapping`，类上 `@RequestMapping` 是基址）。
-> 分上下文：identity 16、messaging 32、platform 6、filestorage 2、couple 26。其中 **couple 侧 7 个 Controller / 26 个端点**——2026-10-05 按 `docs/adr/0010-couple-trim-to-v8-features.md` 从 70 收缩到 26。
+> **当前口径（2026-10-20 三张卡裁剪后实测）**：全仓 **17 个 Controller / 81 个端点**（逐条读各 `*Controller.java` 的 `@GetMapping/@PostMapping/@PutMapping/@DeleteMapping`，类上 `@RequestMapping` 是基址）。
+> 分上下文：identity 16、messaging 32、platform 6、filestorage 2、couple 25。其中 **couple 侧 6 个 Controller / 25 个端点**——2026-10-05 按 `docs/adr/0010-couple-trim-to-v8-features.md` 从 70 收缩到 26，随后再下线百日隐藏页收缩到 25。
 > 更正一处旧口径：非 couple 侧是 **11 个 Controller**（不是旧文档写的 10）——`/api/admin` 基址同时由 identity 的 `AdminController` 与 platform 的 `AnnouncementAdminController` 两个类贡献。
 
 来源：`src/main/java` 各 `*Controller.java` 的映射注解与 javadoc；响应字段取自对应 Service 内嵌的 `public record XxxVO(...)`。返回统一 `ApiResponse{code,message,data}`；除 `/api/auth/**` 与 `/api/health` 外均需登录会话。业务失败抛 `BusinessException(code, 中文原话)`，`code` 同时作为 HTTP 状态码。可空性按字段类型判断：`Long`/`Integer`/包装类型可为 `null`，`long`/`int`/`boolean` 不为 `null`。
@@ -32,7 +32,7 @@
 ### `PrivateMessageController` `/messages`
 - GET `/{peer}` 会话历史 ｜ GET `/{peer}/search` 会话内搜索 ｜ GET `/search/global` 全局搜索
 - POST `/{peer}` 发送（`type` 认 text/image/poke/file；card 与 location 已下线，落到 `PrivateMessage.requireWellFormed` 直接拒「名片与位置分享已下线」，历史行仍按原类型读出） ｜ POST `/{peer}/read` 已读 ｜ POST `/{id}/recall` 撤回 ｜ PUT `/{id}` 2 分钟内编辑
-- POST `/{id}/reactions` 表情回应 toggle ｜ POST `/{id}/star` 收藏 toggle ｜ POST `/{id}/heart` 心动时刻 toggle ｜ GET `/hearts` 心动列表
+- POST `/{id}/reactions` 表情回应 toggle ｜ POST `/{id}/star` 收藏 toggle
 - POST/DELETE/GET `/{peer}/pin` 置顶/取消/查询 ｜ DELETE `/{peer}` 清空会话
 
 ### `ProfileController` `/profile`
@@ -46,12 +46,13 @@
 - `FileController` POST `/files`（multipart）上传 ｜ GET `/files/{id}/download` 下载
 - WS：`/ws/chat/{name}` 聊天室与推送通道（非 REST，见 [architecture.md](architecture.md)）
 
-## couple 接口（现役 7 个 Controller / 26 个端点）
+## couple 接口（现役 6 个 Controller / 25 个端点）
 
 > 逐端点写明：方法、路径、请求体字段、响应 record 逐字段（含可空性）、错误码与中文原话。
 > 原 10 张历史卡的 Controller（贴贴 `CoupleBondController`、求抱抱 `CoupleCareController`、安全词 `CoupleCatchController`、
 > 愿望券 `CoupleCeremonyController`、饭桌 `CoupleDiningController`、家务 `CoupleFactoryController`、加班 `CoupleQuestController`、
 > 好事簿 `CoupleEchoController`、惊喜 `CoupleSurpriseController`、收藏 `CouplePinController`）已随 ADR-0010 全部下线；
+> 百日隐藏页 `CoupleMemoryController` 与其 `/page` 端点也在随后一轮下线；
 > `CoupleController` 上的 `/moods`、`/anniversaries`（复数 CRUD）也一并删除。详见 [couple-space.md](couple-space.md)。
 
 ### `CoupleController` `/api/couple`（地基：建立 + 空间本体 + 心动值 · 10 个）
@@ -90,7 +91,7 @@
 ### `CoupleStreakController` `/api/couple/streak`（连续互动打卡 · 2 个）
 
 **响应 record**：`StreakBoardVO(String day, int currentStreak, int longestStreak, int confirmedDays, boolean checkedToday, boolean missedYesterday, String lastCheckinDay, List<TierVO> tiers, String nextTierKey, String nextTierLabel, int daysToNext, List<StripCellVO> strip, int makeupWindowDays, int makeupLeftThisMonth, boolean canMakeup)`
-- `day` 今天 `yyyy-MM-dd`｜`currentStreak` 当前连续（今天没打从昨天起算，不算断）｜`longestStreak` 历史最长峰值｜`confirmedDays` 累计打卡天数（非连续）｜`checkedToday` 今天是否已打｜`missedYesterday` 昨天是否缺行（断签判据）｜`lastCheckinDay` 最近打卡日（`String`，无则 `null`）｜`tiers` 七档逐档（下）｜`nextTierKey`/`nextTierLabel` 下一未解锁档（`String`，全解锁为 `null`）｜`daysToNext` 距下一档还差几天（按当前连续）｜`strip` 近 21 格日历条（下）｜`makeupWindowDays` 补签窗口（固定 7）｜`makeupLeftThisMonth` 本自然月还能补几次（3−已用）｜`canMakeup` 后端算好=昨天断了且还有额度。
+- `day` 今天 `yyyy-MM-dd`｜`currentStreak` 当前连续（今天没打从昨天起算，不算断）｜`longestStreak` 历史最长峰值｜`confirmedDays` 累计打卡天数（非连续）｜`checkedToday` 今天是否已打｜`missedYesterday` 昨天是否缺行（断签判据）｜`lastCheckinDay` 最近打卡日（`String`，无则 `null`）｜`tiers` 六档逐档（下）｜`nextTierKey`/`nextTierLabel` 下一未解锁档（`String`，全解锁为 `null`）｜`daysToNext` 距下一档还差几天（按当前连续）｜`strip` 近 21 格日历条（下）｜`makeupWindowDays` 补签窗口（固定 7）｜`makeupLeftThisMonth` 本自然月还能补几次（3−已用）｜`canMakeup` 后端算好=昨天断了且还有额度。
   - **注**：补签已改为**免费**，不再有「积分价格 / 账户余额」这类字段（原积分口径字段随台账一并删除），额度改由 `makeupWindowDays`/`makeupLeftThisMonth` 表达。
 - `TierVO(String key, int days, String label, String icon, String detail, boolean unlocked, String unlockedDay)`——`unlockedDay` 首次跨过的日期（`String`，未解锁 `null`）。
 - `StripCellVO(String day, boolean checked, boolean makeupFlag, boolean todayFlag)`。
@@ -132,19 +133,13 @@
 22. `POST /remove` body `WishIdRequest{ String id }` → `WishBoardVO`（仅记录人可删，已实现删不掉）
     - 错误：404「这条愿望不在你们的清单里」／400「已经实现的愿望要留在记录里，删不掉咯」／400「只有记这条愿望的人能删掉它」。**不推事件**。
 
-### `CoupleMemoryController` `/api/couple/memory`（百日隐藏页 · 1 个）
-
-23. `GET /page` → `MemoryVO(String summary, long daysTogether, int confirmedDays, int longestStreak, int currentStreak, int makeupDays, int bothAnsweredDays, int fulfilledWishes, String intimacyTitle, String unlockedDay, List<TimelineItemVO> timeline)`
-    - `summary` `RelationSummary` 规则生成的一句话（**无 LLM**）｜`unlockedDay` 首次满 100 天之日（`String`，理论可达）｜`TimelineItemVO(String day, String kind, String title, String detail)`，`kind` ∈ `space/unlock/question/wish/streak`，时间轴上限 80 条，建立/解锁/答完/实现四类不被截断。
-    - 错误（服务端闸门）：404「还没有建立情侣空间，先邀请一位好友吧」／400「这一页要连续贴满 100 天才打开，现在还差 N 天」（`longestStreak<100`）。
-
 ### `CoupleNotifyController` `/api/couple/notify`（通知中心 · 2 个）
 
-24. `GET ``（基址 `/api/couple/notify`） → `NotifyListVO(List<NotifyVO> items, long unread)`
+23. `GET ``（基址 `/api/couple/notify`） → `NotifyListVO(List<NotifyVO> items, long unread)`
     - `items` 最近通知（`NotifyVO(String id, String event, String actor, String detail, boolean read, Long created)`；`actor` 可为 `system`=定时任务；`created` 可空）｜`unread` 未读条数。**不需已建空间**（邀请到达时对方离线也靠这里补看）。
-25. `POST /notify/read-all` → `Void`（全部标记已读）。
+24. `POST /notify/read-all` → `Void`（全部标记已读）。
 
 ### `CoupleAdminController` `/api/couple/admin`（运营看板 · 1 个）
 
-26. `GET /stats`（基址 `/api/couple/admin`） → `CoupleStatsVO(long activeSpaces, long dissolvedSpaces, long avgDays, long totalCheckinDays, long totalAnswers, long spacesCreatedThisMonth)`（record 定义在 Controller 内，字段全 `long` 非空）
+25. `GET /stats`（基址 `/api/couple/admin`） → `CoupleStatsVO(long activeSpaces, long dissolvedSpaces, long avgDays, long totalCheckinDays, long totalAnswers, long spacesCreatedThisMonth)`（record 定义在 Controller 内，字段全 `long` 非空）
     - `totalCheckinDays` 来自 `couple_streak_day`、`totalAnswers` 来自 `couple_question_answer`（裁剪后统计项不再读贴贴/好事簿）。错误：403「仅管理员可查看运营看板」。

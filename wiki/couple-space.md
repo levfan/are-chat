@@ -6,32 +6,33 @@
 
 ## 本轮裁剪（先读这段）
 
-情侣空间在 2026-10-05 经过两轮改造：先加四张功能卡（每日一问 / 愿望清单 / 连续互动打卡 + 七档解锁 / 邀请建立补口，见
+情侣空间在 2026-10-05 经过三轮改造：先加四张功能卡（每日一问 / 愿望清单 / 连续互动打卡 + 七档解锁 / 百日隐藏回顾，见
 `docs/adr/0007`），随后按用户指令「除了这几项，其余功能全部删除」做了**一轮大裁剪**——判据从「排名高低」换成
-「这四项及其赖以成立的地基还活不活」，取舍、连带改造与被删清单的唯一依据是 **`docs/adr/0010-couple-trim-to-v8-features.md`**。
+「这四项及其赖以成立的地基还活不活」，取舍、连带改造与被删清单的唯一依据是 **`docs/adr/0010-couple-trim-to-v8-features.md`**；
+最后又按「用不上的功能也裁掉」下线了百日隐藏回顾与心动时刻，只留三张卡。
 
-现役规模（实测自源码与 `schema.sql`）：**57 个 java 文件 / 7 个 Controller / 26 个端点 / 6 张 `couple_*` 表 / 15 个 WS 事件 / 2 条定时任务**。
-按 ADR-0010 已下线、**不再存在**的功能（一句话点名即可，别当现役去找）：心情日记、贴贴宫格、求抱抱、安全词与暂停复盘、
-今晚饭桌、家务轮盘、加班预报与留灯、愿望券本、好事簿、刮刮乐与盲盒、共同日历（倒数日清单）、积分台账、卡片收藏与功能搜索。
+现役规模（实测自源码与 `schema.sql`）：**54 个 java 文件 / 6 个 Controller / 25 个端点 / 6 张 `couple_*` 表 / 15 个 WS 事件 / 2 条定时任务**。
+按 ADR-0010 与随后一轮已下线、**不再存在**的功能（一句话点名即可，别当现役去找）：心情日记、贴贴宫格、求抱抱、安全词与暂停复盘、
+今晚饭桌、家务轮盘、加班预报与留灯、愿望券本、好事簿、刮刮乐与盲盒、共同日历（倒数日清单）、积分台账、卡片收藏与功能搜索、百日隐藏回顾、心动时刻。
 其中三处曾是别的功能算数的根据，已按 ADR-0010 重新改挂：**打卡触发源**改挂每日一问（原挂贴贴）、**补签稀缺性**改由次数守（原扣积分台账）、
 **心动值供数**整体换成现役五项（原六项的表全部消失）。
 
-## 现役的四张功能卡 + 地基
+## 现役的三张功能卡 + 地基
 
-四张卡各有自己的 Controller/Service；地基（邀请建立、空间本体、心动值、通知中心、运营看板）不是卡，删不得。
+三张卡各有自己的 Controller/Service；地基（邀请建立、空间本体、心动值、通知中心、运营看板）不是卡，删不得。
 
 | 卡（`?card=` 深链 key） | Controller（前缀） | Service | 表 |
 |---|---|---|---|
 | 每日一问 `couple-question` | `CoupleQuestionController` `/api/couple/question` | `CoupleQuestionService` | `couple_question_answer` |
 | 连续互动打卡 `couple-streak` | `CoupleStreakController` `/api/couple/streak` | `CoupleStreakService` | `couple_streak_day` |
 | 愿望清单 `couple-wish` | `CoupleWishController` `/api/couple/wish` | `CoupleWishService` | `couple_wish` |
-| 百日回顾（隐藏页）`couple-memory` | `CoupleMemoryController` `/api/couple/memory` | `CoupleMemoryService` | 只读复用 streak_day / question_answer / wish |
 | 地基（建立/本体/心动值） | `CoupleController` `/api/couple` | `CoupleService` | `couple_space`, `couple_invite` |
 | 通知中心（F41） | `CoupleNotifyController` `/api/couple/notify` | `CoupleNotifyService` | `couple_notify` |
 | 运营看板（F45，仅管理员） | `CoupleAdminController` `/api/couple/admin` | （直连端口，无独立 Service） | 读 `couple_space` / `couple_streak_day` / `couple_question_answer` |
 
 > `CoupleAdminController.stats` 的两个计数在二轮裁剪后从「贴贴动作数 / 好事簿条数」换成 `totalCheckinDays`（`couple_streak_day`）与
-> `totalAnswers`（`couple_question_answer`）；原来描述的 `CouplePinController`（收藏卡 + 功能搜索）已随 ADR-0010 第 7 条整体删除。
+> `totalAnswers`（`couple_question_answer`）；原来描述的 `CouplePinController`（收藏卡 + 功能搜索）已随 ADR-0010 第 7 条整体删除，
+> 百日隐藏页的 `CoupleMemoryController` / `CoupleMemoryService` / `RelationSummary` 也在随后一轮下线。
 
 ## 1 · 邀请建立（状态机）
 
@@ -50,7 +51,7 @@
 - **宣言 `slogan`**：≤60 字（`CoupleSpace.SLOGAN_MAX`），超长 400「宣言最多 60 字，留白也很美」；`null`=不动、空串=清除。
 - **主题 `theme`**：白名单 `{classic, cherry, ocean, forest, night}`（`CoupleSpace.THEMES`），不在表内 400「这个主题还没上架哦」；建空间默认 `classic`。**7 天档动态背景叠在主题上**，所以 `theme` 保留。
 - **爱称 `petName`**：给对方起的专属爱称，≤30 字（`NICK_MAX`），超长 400「爱称最长 30 个字」；只能由**对方**改（`renamePartner` 守这条），落 `couple_space.nick_a/nick_b`。爱称变化**单独推 `pet-name-changed`**（「TA 给你起了新爱称「X」🏷️」/「TA 把给你的爱称收回了 🏷️」），宣言或主题变化推 `space-themed`，都没变一条都不推——只改爱称却推「装扮了小空间」是把一件心事说成一次装修（ADR-0010 第 12 条）。
-- **在一起的日子 `anniversary`**：`PUT /api/couple/anniversary` 绑定单个日期（`yyyy-MM-dd`，缺省取 `created`），是一起天数 / 百日回顾 / 纪念日倒数三处的共同根据（事件 `anniversary-updated`）。**这不是共同日历**——`couple_anniversary` 倒数日清单已随 ADR-0010 第 8 条删除。
+- **在一起的日子 `anniversary`**：`PUT /api/couple/anniversary` 绑定单个日期（`yyyy-MM-dd`，缺省取 `created`），是一起天数与纪念日的共同根据（事件 `anniversary-updated`）。**这不是共同日历**——`couple_anniversary` 倒数日清单已随 ADR-0010 第 8 条删除。
 - **已删除的旧列**：`couple_space.stickers`（F28 贴纸墙）随 ADR-0010 第 6 条 DROP——它与 50 天档「专属贴纸包」语义撞车；50 天档实现在前端按 `tierUnlocked('custom-emoji')` 放行固定 unicode 贴纸，不依赖这一列。
 
 ## 3 · 每日一问（`couple_question_answer`）
@@ -69,7 +70,7 @@
 - **补签 `MakeupPolicy`（免费）**：买回一个缺口，闸门三条——**只能补最近 7 天**（`WINDOW_DAYS`）、**每自然月最多 3 次**（`MONTHLY_QUOTA`）、**今天不许补**；**不再扣积分**（积分台账已随 ADR-0010 第 3 条删除，稀缺性换成次数）。原话（用户所见）：日期没给「想补哪一天？日期没给呢」；补今天「今天还不能补——两个人都答完今天的每日一问就算打卡 😉」；超窗口「只能补最近 7 天里的缺口…」；已打「<day> 已经打过卡了，不用补」；满 3 次「这个月已经补过 3 次了，下个月再来吧（<年-月>）」；格式「日期格式应为 yyyy-MM-dd」。
 - **事件**：`streak-checkin`（首次落 AUTO 行）、`streak-unlocked`（跨过档位）、`streak-makeup`（补签成功）。
 
-## 5 · 七档解锁（`StreakTier`，key 上线即冻结）
+## 5 · 六档解锁（`StreakTier`，key 上线即冻结）
 
 | 天数 | key | 标签 | 图标 | detail |
 |---|---|---|---|---|
@@ -79,9 +80,8 @@
 | 21 | `pendant` | 双人挂件 | 🧸 | 你们头像边上挂上了联动小挂件 |
 | 30 | `title` | 恋爱等级称号 | 🏷️ | 恋爱等级称号挂上空间顶部，旁边的人都能看到 |
 | 50 | `custom-emoji` | 专属贴纸包 | 🎨 | 解锁一组只有你们俩能用的专属贴纸 |
-| 100 | `easter-egg` | 隐藏彩蛋页 | 🥚 | 多了一个谁都不给看的隐藏页，里面是你们的一百天 |
 
-- 档位天数/key/文案一律不动（ADR-0010 第 10 条）——前端按 key 挂视觉，改 key 等于没收已解锁用户的外观。
+- 其余档位天数/key/文案一律不动（ADR-0010 第 10 条）——前端按 key 挂视觉，改 key 等于没收已解锁用户的外观；本轮仅按用户指令下线了 100 天 `easter-egg` 档（隐藏页已不可用）。
 - **30 天档只控制「把称号挂到顶部」这个动作**，称号内容取心动值七级 `IntimacyVO.title`，**不造第二套等级**（ADR-0007 第 5 条）。
 
 ## 6 · 愿望清单（`couple_wish`）
@@ -119,14 +119,8 @@
 
   > 称号名与阈值以 `IntimacyCalculator` 为准，`IntimacyCalculatorTest`/`CoupleIntimacyTest` 逐条钉边界。
   > 注意 `CONTEXT.md` 第 103 行、`docs/adr/0010` 第 103 行括注的**图标串**与本表按序对齐存在偏差（详见同步报告的「不一致清单」）——
-  > 本页按代码 `ICONS` 数组给值。满勤 100 天约 754 分落在 L6，**故意不满级**：一百天是隐藏页门槛，不该同时把「相守一生」发完。
-
-## 8 · 百日隐藏页（`CoupleMemoryService`）
-
-- 连续满 100 天（`StreakTier.EASTER_EGG.days()`）才打开。**服务端也挡一道**：`longestStreak < 100` → 400「这一页要连续贴满 100 天才打开，现在还差 N 天」，不靠前端藏页签。
-- **时间轴**（`TimelineItemVO`，上限 `TIMELINE_MAX=80`）只收有真实时间戳或可精确派生日期的事件；建立（`space`）/解锁（`unlock`）/答完的题（`question`）/实现的愿望（`wish`）四类**优先占位不被截断**，只有「刷峰值的日子」（`streak`）这类填充项从新往旧补到 80 为止。
-- **一句话总结**（`domain/memory/RelationSummary`）**规则生成、本仓库无 LLM 依赖**（ADR-0007 第 7 条）：只说数据里真有的事（在一起天数 / 打卡天数 / 最长连续 / 补签次数 / 双方答完题数 / 已实现愿望数 / 心动值称号 / 最近解锁档位），零值整段消失。
-  > 该生成器与看板话术仍沿用「贴」「花钱补」等**旧文案用字**（如总结里「一起贴了 N 天的卡」「其中 N 天是花钱补回来的」、隐藏页闸门「连续贴满」）——这是代码里的既有用词，非现役机制；补签实际已免费。
+  > 本页按代码 `ICONS` 数组给值。`IntimacyCalculatorTest` 的 100 天样例（100×1 + 90×2 + 60×3 + 88×3 + 6×5 = 754）落在 L6，
+  > 满级留给更少见的行为继续累积。
 
 ## 核心业务规则（跨功能通用）
 

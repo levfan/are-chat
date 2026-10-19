@@ -40,10 +40,9 @@
 | 偷偷准备 | `Wish.visibleStatusFor(me)` | 对方给我许的愿标了「已准备」，我这边仍显示 OPEN | 唯一回显入口；标记/撤销**不推任何事件**，连 `preparedAt` 也置 null |
 | 打卡日 | `StreakDay`（表映射 `CoupleStreakDayPO`；`streak`） | 那一天双方共同活跃：都答完每日一问，或空间建立当天，或补签成功 | 原名 `BondDay`——`bond` 在此表建立之后才随贴贴一起下线，2026-10-05 改名（ADR-0010 第 5 条） |
 | 连续互动 | `StreakDays` | 由打卡日集合读时算：`currentStreak` / `longestStreak` | 今天没打**不算断**，只有昨天缺行才叫断；不物化缓存列 |
-| 解锁档位 | `StreakTier` | 七档 3/7/14/21/30/50/100 天，管气泡·背景·昵称光效·挂件·称号·贴纸·隐藏页 | 判 `longestStreak`，**单调不回退**；档位 key 是前端挂视觉的合同，上线即冻结 |
+| 解锁档位 | `StreakTier` | 六档 3/7/14/21/30/50 天，管气泡·背景·昵称光效·挂件·称号·贴纸 | 判 `longestStreak`，**单调不回退**；档位 key 是前端挂视觉的合同，上线即冻结 |
 | 补签 | `MakeupPolicy` | 免费买回一个缺口 | 只能补最近 7 天、每自然月最多 3 次、今天不许补；**不再扣积分**（积分台账已删，稀缺性换成次数） |
 | 每日一问 | `QuestionAnswer`（表映射 `CoupleQuestionAnswerPO`；双方视角的读模型是 `DailyQuestion`，`question`） | 一个空间一天一题，每人一行答案 | 同空间同天同题（`stableHash`）；**双方都答过才互看**；它同时是打卡的触发源（`CoupleQuestionService.answer()` 唯一挂钩） |
-| 百日回顾 | `CoupleMemoryService` | 连满 100 天的隐藏页：时间轴 + 一句话总结 | 总结是规则生成（`RelationSummary`），本仓库无 LLM 依赖，见 ADR-0007 第 7 条 |
 | 在一起的日子 | `CoupleSpace.anniversary`（列） | 单个日期，恋爱天数 / 里程碑横幅 / 纪念日倒数三处的共同根据 | **不是共同日历**（`couple_anniversary` 倒数日清单已删） |
 | 通知 | `NotifyEntry`（表映射 `CoupleNotifyPO`） | 情侣事件推送的落库副本（离线可补看） | 经 `CoupleNotifyRecorder` 挂接，im 不反向依赖 couple；邀请能否被看见全押在这一条上，故算地基不算功能 |
 | 邀请 | `Invite`（表映射 `CoupleInvitePO`） | PENDING→ACCEPTED/REJECTED/CANCELED 单向，只能处理发给自己的、只能撤回自己发的 | 建立流程写第 1 个打卡日（`CoupleStreakService.confirmCreationDay`） |
@@ -51,7 +50,8 @@
 > 本轮删掉的术语（贴贴 `BondAction` / 心情日记 `Mood` / 心情回应 `MoodReaction` / 求抱抱 `ComfortRequest` /
 > 安全词与暂停复盘 `Safeword`·`SafewordUse` / 饭票 `DineTicket` / 家务轮盘 `SpinTask` / 加班预报与留灯 `QuestOvertime` /
 > 愿望券 `WishCoupon` / 好事簿 `Deed` / 刮刮乐与盲盒 `Scratch`·`MysteryBox` / 积分台账 `PointEntry` /
-> 共同日历 `Anniversary` / 收藏卡 `UserPin`）已从本表移除，判据与连带改造见 `docs/adr/0010-couple-trim-to-v8-features.md`。
+> 共同日历 `Anniversary` / 收藏卡 `UserPin` / 百日回顾 `CoupleMemory` / 心动时刻（`private_message.heart_at` 列保留但已不读不写）
+> 已从本表移除，判据与连带改造见 `docs/adr/0010-couple-trim-to-v8-features.md`。
 > 再引入同名概念前，必须先回答「它和保留的四项功能是什么关系」。
 
 ## 事件命名口径
