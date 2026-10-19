@@ -97,11 +97,6 @@ public class PrivateMessageRepositoryAdapter implements PrivateMessageRepository
     }
 
     @Override
-    public List<PrivateMessage> findConversationAll(String me, String peer) {
-        return toDomainList(messageMapper.findConversationAll(me, peer));
-    }
-
-    @Override
     public List<PrivateMessage> findHeartMoments(String me, String peer) {
         return toDomainList(messageMapper.findHeartMoments(me, peer));
     }
@@ -109,11 +104,6 @@ public class PrivateMessageRepositoryAdapter implements PrivateMessageRepository
     @Override
     public List<PrivateMessage> searchGlobal(String me, String keyword) {
         return toDomainList(messageMapper.searchGlobal(me, keyword));
-    }
-
-    @Override
-    public List<PrivateMessage> findAttachments(String me, String peer, String msgType) {
-        return toDomainList(messageMapper.findAttachments(me, peer, msgType));
     }
 
     @Override

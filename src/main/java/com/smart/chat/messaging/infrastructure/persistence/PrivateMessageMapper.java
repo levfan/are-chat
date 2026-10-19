@@ -95,13 +95,6 @@ public interface PrivateMessageMapper extends BaseMapperCompat<PrivateMessagePO>
                 .last("LIMIT 50"));
     }
 
-    /** 56 导出：全量拉取双向会话消息（正序由调用方保证，上限 10000 条）。 */
-    default List<PrivateMessagePO> findConversationAll(String me, String peer) {
-        return selectList(conversationWrapper(me, peer)
-                .orderByAsc(PrivateMessagePO::getCreated)
-                .last("LIMIT 10000"));
-    }
-
     /** 已读回执：把 from 发给 to 的未读消息全部标记已读。 */
     default int markIncomingRead(String from, String to) {
         return update(null, new com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper<PrivateMessagePO>()
@@ -120,15 +113,6 @@ public interface PrivateMessageMapper extends BaseMapperCompat<PrivateMessagePO>
                 .like(PrivateMessagePO::getContent, keyword)
                 .orderByDesc(PrivateMessagePO::getCreated)
                 .last("LIMIT 50"));
-    }
-
-    /** 95 会话附件：双向会话中指定类型的消息（image/file），倒序取最近 100 条。 */
-    default List<PrivateMessagePO> findAttachments(String me, String peer, String msgType) {
-        return selectList(conversationWrapper(me, peer)
-                .eq(PrivateMessagePO::getStatus, PrivateMessagePO.STATUS_SENT)
-                .eq(PrivateMessagePO::getMsgType, msgType)
-                .orderByDesc(PrivateMessagePO::getCreated)
-                .last("LIMIT 100"));
     }
 
     /** 85 清空聊天记录：删除双向会话全部消息，返回删除条数。 */

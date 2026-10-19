@@ -121,8 +121,6 @@ class PrivateMessageRepositoryAdapterTest {
         repository.findConversationPage("alice", "bob", null, 20);
         verify(messageMapper).findConversationPage("alice", "bob", null, 20);
 
-        repository.findAttachments("alice", "bob", PrivateMessage.TYPE_IMAGE);
-        verify(messageMapper).findAttachments("alice", "bob", PrivateMessage.TYPE_IMAGE);
     }
 
     @Test

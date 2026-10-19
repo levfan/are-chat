@@ -36,17 +36,11 @@ public interface PrivateMessageRepository {
     /** 会话内关键字搜索（只搜未撤回），倒序取最近 50 条 */
     List<PrivateMessage> searchConversation(String me, String peer, String keyword);
 
-    /** 56 导出：全量拉取双向会话消息 */
-    List<PrivateMessage> findConversationAll(String me, String peer);
-
     /** F36 心动时刻：我参与的、被标记的消息（可限定 peer） */
     List<PrivateMessage> findHeartMoments(String me, String peer);
 
     /** 81 全局消息搜索：我参与的全部会话里的未撤回文本 */
     List<PrivateMessage> searchGlobal(String me, String keyword);
-
-    /** 95 会话附件：双向会话中指定类型（image/file）的消息 */
-    List<PrivateMessage> findAttachments(String me, String peer, String msgType);
 
     /** 已读回执：把 from 发给 to 的未读消息全部标记已读（批量 UPDATE，不走 save） */
     void markIncomingRead(String from, String to);

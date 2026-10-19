@@ -54,13 +54,6 @@ public class PrivateMessageController {
         return ApiResponse.ok(messageService.search(Sessions.requireUser(session), peer, q));
     }
 
-    /** 56 导出当前会话全部消息（JSON）。 */
-    @GetMapping("/{peer}/export")
-    public ApiResponse<List<PrivateMessageService.MessageVO>> export(@PathVariable String peer,
-                                                                     HttpSession session) {
-        return ApiResponse.ok(messageService.export(Sessions.requireUser(session), peer));
-    }
-
     @PostMapping("/{peer}")
     public ApiResponse<PrivateMessageService.SentMessageVO> send(@PathVariable String peer,
                                             @RequestBody SendMessageRequest req,
@@ -154,15 +147,6 @@ public class PrivateMessageController {
     public ApiResponse<ClearedVO> clear(@PathVariable String peer, HttpSession session) {
         long deleted = messageService.clearConversation(Sessions.requireUser(session), peer);
         return ApiResponse.ok(new ClearedVO(deleted));
-    }
-
-    /** 95 会话附件：图片墙 / 文件列表（type=image|file，默认 image） */
-    @GetMapping("/{peer}/attachments")
-    public ApiResponse<List<PrivateMessageService.AttachmentVO>> attachments(
-            @PathVariable String peer,
-            @RequestParam(defaultValue = "image") String type,
-            HttpSession session) {
-        return ApiResponse.ok(messageService.attachments(Sessions.requireUser(session), peer, type));
     }
 
     public record PinRequest(String msgId) {

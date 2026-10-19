@@ -67,10 +67,6 @@ public class PrivateMessageService {
     public record GlobalSearchHitVO(String id, String peer, String content, String fromUser, Long created) {
     }
 
-    /** 95 附件条目 */
-    public record AttachmentVO(String id, String name, long size, String url, String fromUser, Long created) {
-    }
-
     public record PinVO(String msgId, String createdBy) {
     }
 
@@ -191,15 +187,6 @@ public class PrivateMessageService {
         int safeLimit = Math.min(Math.max(limit, 1), 100);
         List<PrivateMessage> page = messageRepository.findConversationPage(me, peer, before, safeLimit);
         return toVOs(page.stream().sorted(Comparator.comparing(PrivateMessage::created)).toList(), me);
-    }
-
-    /** 56 导出当前会话全部消息（含撤回/编辑标记与回应，正序）。 */
-    public List<MessageVO> export(String me, String peer) {
-        String peerName = peer == null ? "" : peer.trim();
-        if (peerName.isEmpty()) {
-            throw new BusinessException(400, "会话对象不能为空");
-        }
-        return toVOs(messageRepository.findConversationAll(me, peerName), me);
     }
 
     /** 一次性装配：回应列表、我的收藏、我发消息的已读状态、编辑标记。 */
@@ -399,34 +386,5 @@ public class PrivateMessageService {
         int deleted = messageRepository.deleteConversation(me, peerName);
         unpin(me, peerName);
         return deleted;
-    }
-
-    // ---------- 95 会话附件面板 ----------
-
-    /** 会话内图片/文件附件（最近 100 条，倒序） */
-    public List<AttachmentVO> attachments(String me, String peer, String type) {
-        String peerName = accounts.normalizeUsername(peer);
-        requireConversation(me, peerName);
-        String msgType = "file".equals(type) ? PrivateMessage.TYPE_FILE : PrivateMessage.TYPE_IMAGE;
-        List<PrivateMessage> rows = messageRepository.findAttachments(me, peerName, msgType);
-        List<AttachmentVO> result = new ArrayList<>(rows.size());
-        for (PrivateMessage m : rows) {
-            if (msgType.equals(PrivateMessage.TYPE_IMAGE)) {
-                result.add(new AttachmentVO(m.id(), "图片", 0, m.content(), m.fromUser(), m.created()));
-            } else {
-                com.alibaba.fastjson2.JSONObject payload;
-                try {
-                    payload = com.alibaba.fastjson2.JSON.parseObject(m.content());
-                } catch (Exception e) {
-                    continue;
-                }
-                if (payload == null) {
-                    continue;
-                }
-                result.add(new AttachmentVO(m.id(), payload.getString("name"),
-                        payload.getLongValue("size"), payload.getString("url"), m.fromUser(), m.created()));
-            }
-        }
-        return result;
     }
 }
