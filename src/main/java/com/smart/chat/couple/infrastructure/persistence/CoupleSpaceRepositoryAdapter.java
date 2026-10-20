@@ -55,20 +55,15 @@ public class CoupleSpaceRepositoryAdapter implements CoupleSpaceRepository {
         spaceMapper.updateById(existing);
     }
 
-    /** 聚合负责维护的列；其余列（cityA/cityB…）由各自的写入方负责，这里一律不碰 */
+    /** 聚合负责维护的列；其余列（cityA/cityB/nickA/nickB/slogan/theme…）是下线功能的死存储，这里一律不碰 */
     private static void applyOwnedFields(CoupleSpacePO po, CoupleSpace space) {
         po.setStatus(space.status());
         po.setAnniversary(space.anniversary());
-        po.setNickA(space.nickA());
-        po.setNickB(space.nickB());
-        po.setSlogan(space.slogan());
-        po.setTheme(space.theme());
         po.setDissolvedAt(space.dissolvedAt());
     }
 
     private static CoupleSpace toDomain(CoupleSpacePO po) {
         return CoupleSpace.restore(po.getId(), po.getUserA(), po.getUserB(), po.getStatus(),
-                po.getCreated() == null ? 0L : po.getCreated(), po.getAnniversary(),
-                po.getNickA(), po.getNickB(), po.getSlogan(), po.getTheme(), po.getDissolvedAt());
+                po.getCreated() == null ? 0L : po.getCreated(), po.getAnniversary(), po.getDissolvedAt());
     }
 }

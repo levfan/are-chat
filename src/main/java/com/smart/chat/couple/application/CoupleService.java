@@ -1,13 +1,9 @@
 package com.smart.chat.couple.application;
 
-import com.smart.chat.couple.domain.intimacy.IntimacyCalculator;
-import com.smart.chat.couple.domain.intimacy.IntimacySource;
 import com.smart.chat.couple.domain.invite.Invite;
 import com.smart.chat.couple.domain.invite.InviteRepository;
 import com.smart.chat.couple.domain.space.CoupleSpace;
 import com.smart.chat.couple.domain.space.CoupleSpaceRepository;
-import com.smart.chat.couple.domain.streak.StreakDays;
-import com.smart.chat.couple.domain.wish.WishRepository;
 import com.smart.chat.identity.domain.AccountDirectory;
 import com.smart.chat.messaging.domain.CoupleEventPublisher;
 import com.smart.chat.messaging.domain.FriendshipChecker;
@@ -21,17 +17,17 @@ import java.time.LocalDate;
 import java.time.ZoneId;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
-import java.util.Objects;
 
 import static com.smart.chat.couple.application.DomainRules.guard;
 import static com.smart.chat.couple.application.DomainRules.rule;
 
 /**
- * 情侣空间地基：邀请建立 → 空间本体（纪念日/爱称/宣言/主题）→ 恋爱等级（心动值）。
+ * 情侣空间地基：邀请建立 → 空间本体（在一起的日子）。
  * <p>
- * 2026-10-05 二轮裁剪后本类只剩地基，三张功能卡各自成服务（streak/question/wish）；
- * 心动值的五项供数也全部改由现役功能供给，推导与阈值重标定见
- * {@code docs/adr/0010-couple-trim-to-v8-features.md}。
+ * 2026-10-20 第三轮裁剪后本类只剩「建立 / 纪念日 / 解除 / 总览」这一条地基线——每日一问、连续打卡、
+ * 愿望清单三张卡连同它们供养的心动值一起下线，空间个性化（宣言 / 主题 / 爱称）也随之收口：
+ * 这三样原先各占一个端点与一份推送，如今既没有承载卡片，也没有读它的人。
+ * 现役功能卡只剩亲密日历一张，见 {@link CoupleCalendarService}。
  */
 @Service
 public class CoupleService {
@@ -45,51 +41,29 @@ public class CoupleService {
         }
     }
 
-    public record PartnerVO(String username, String nickname, String avatar, boolean online, String petName) {
+    public record PartnerVO(String username, String nickname, String avatar, boolean online) {
     }
 
-    public record SpaceVO(String id, PartnerVO partner, Long created, String anniversary, long days,
-                          String slogan, String theme) {
+    public record SpaceVO(String id, PartnerVO partner, Long created, String anniversary, long days) {
     }
 
     public record OverviewVO(SpaceVO space, List<InviteVO> incoming, List<InviteVO> outgoing) {
-    }
-
-    /**
-     * 心动值明细：在一起天数、累计打卡天数、历史最长连续、双方都答完每日一问的天数、已实现愿望条数。
-     * 五项全部来自现役功能——裁剪前那六项里的心情/贴贴/好事/留灯/复盘/积分已随功能一并下线。
-     */
-    public record IntimacyBreakdown(long daysTogether, long checkinDays, long longestStreak, long answerDays,
-                                    long wishFulfilled) {
-    }
-
-    public record IntimacyVO(int score, int level, String title, String icon, Integer nextLevelAt,
-                             /** 距下一级进度 0-100（满级=100） */
-                             int levelProgress, IntimacyBreakdown breakdown) {
     }
 
     // ========== 依赖 ==========
 
     private final CoupleSpaceRepository spaceRepository;
     private final InviteRepository inviteRepository;
-    private final WishRepository wishRepository;
-    private final CoupleStreakService streakService;
-    private final CoupleQuestionService questionService;
     private final FriendshipChecker friendships;
     private final PeerProfileReader profiles;
     private final AccountDirectory accounts;
     private final CoupleEventPublisher push;
 
     public CoupleService(CoupleSpaceRepository spaceRepository, InviteRepository inviteRepository,
-                         WishRepository wishRepository, CoupleStreakService streakService,
-                         CoupleQuestionService questionService,
                          FriendshipChecker friendships, PeerProfileReader profiles,
                          AccountDirectory accounts, CoupleEventPublisher push) {
         this.spaceRepository = spaceRepository;
         this.inviteRepository = inviteRepository;
-        this.wishRepository = wishRepository;
-        this.streakService = streakService;
-        this.questionService = questionService;
         this.friendships = friendships;
         this.profiles = profiles;
         this.accounts = accounts;
@@ -132,7 +106,7 @@ public class CoupleService {
         return InviteVO.of(invite);
     }
 
-    /** B 同意 → 情侣空间开启，并立刻确认第 1 天打卡（点头本身就是一次互动）。 */
+    /** B 同意 → 情侣空间开启。 */
     @Transactional
     public SpaceVO accept(String me, String inviteId) {
         Invite invite = requireInvite(inviteId);
@@ -146,10 +120,8 @@ public class CoupleService {
         // 建立走聚合工厂：字典序规范化与 ACTIVE 初值只在一处定义（couple.domain.space.CoupleSpace）
         CoupleSpace opened = CoupleSpace.open(from, me, System.currentTimeMillis());
         spaceRepository.save(opened);
-        CoupleSpace space = requireSpace(me);
-        streakService.confirmCreationDay(space);
         push.pushCoupleEvent("invite-accepted", me, from, "对方同意啦！你们的情侣空间已开启 🎉");
-        return toSpaceVO(space, me);
+        return toSpaceVO(opened, me);
     }
 
     /** B 拒绝。 */
@@ -188,7 +160,7 @@ public class CoupleService {
         return new OverviewVO(toSpaceVO(space, me), incoming, outgoing);
     }
 
-    /** 绑定「在一起」的日子：它是在一起天数、百日回顾与倒数提醒共同的起点。 */
+    /** 绑定「在一起」的日子：在一起天数与纪念日倒数提醒共同的起点。 */
     public SpaceVO setAnniversary(String me, String date) {
         CoupleSpace space = requireSpace(me);
         String normalized = normalizeDate(date, "纪念日格式应为 yyyy-MM-dd");
@@ -214,66 +186,6 @@ public class CoupleService {
         return spaceRepository.findActiveByMember(name)
                 .<RelationshipVO>map(space -> new RelationshipVO(true, daysTogether(space), space.anniversary()))
                 .orElse(new RelationshipVO(false, null, null));
-    }
-
-    // ========== 空间个性化：宣言 / 主题 / 爱称 ==========
-
-    /**
-     * 更新空间个性化：宣言（≤60 字）、主题（白名单）、给对方起的爱称（≤30 字）。
-     * 任一传 null 表示该项不修改；爱称只能由对方改（{@code renamePartner} 守这条），
-     * 传空串表示清除。全部字段校验后一次性保存。
-     * <p>
-     * 推送按<b>真正变了什么</b>分流：爱称要给对方看到那句「TA 给你起了新爱称」，
-     * 装扮走另一条事件；只改爱称却推「打扮了小空间」等于把一件心事说成一次装修。
-     */
-    public SpaceVO updateProfile(String me, String slogan, String theme, String petName) {
-        CoupleSpace space = requireSpace(me);
-        String partner = space.partnerOf(me);
-        String sloganBefore = space.slogan();
-        String themeBefore = space.theme();
-        String petBefore = space.nickOf(partner);
-        DomainRules.guard(() -> {
-            space.decorate(slogan, theme);
-            if (petName != null) {
-                space.renamePartner(me, petName);
-            }
-        });
-        spaceRepository.save(space);
-        String petNow = space.nickOf(partner);
-        if (!Objects.equals(petBefore, petNow)) {
-            push.pushCoupleEvent("pet-name-changed", me, partner, petNow == null
-                    ? "TA 把给你的爱称收回了 🏷️ 想起来了再喊我"
-                    : "TA 给你起了新爱称「" + petNow + "」🏷️");
-        }
-        if (!Objects.equals(sloganBefore, space.slogan()) || !Objects.equals(themeBefore, space.theme())) {
-            push.pushCoupleEvent("space-themed", me, partner, "TA 打扮了你们的小空间 ✨ 快去看看");
-        }
-        return toSpaceVO(space, me);
-    }
-
-    // ========== 心动值 & 恋爱等级 ==========
-
-    /**
-     * 心动值 = 在一起天数×1 + 累计打卡天数×2 + 历史最长连续×3 + 双方都答完每日一问的天数×3
-     *          + 已实现愿望数×5；累计分数映射七级恋爱等级。
-     * 取数只负责「攒了多少」，加权与定级在 couple.domain.intimacy。
-     */
-    public IntimacyVO intimacy(String me) {
-        CoupleSpace space = requireSpace(me);
-        StreakDays streak = streakService.streakOf(space.id());
-        long daysTogether = daysTogether(space);
-        long checkinDays = streak.confirmedDays();
-        long longestStreak = streak.longestStreak();
-        long answerDays = questionService.bothAnsweredDays(space.id());
-        long wishFulfilled = wishRepository.countFulfilled(space.id());
-
-        IntimacyCalculator.Intimacy result = IntimacyCalculator.evaluate(
-                new IntimacySource(daysTogether, checkinDays, longestStreak, answerDays, wishFulfilled));
-        IntimacyCalculator.IntimacyLevel level = result.level();
-        IntimacyBreakdown breakdown = new IntimacyBreakdown(daysTogether, checkinDays, longestStreak,
-                answerDays, wishFulfilled);
-        return new IntimacyVO(result.score(), level.level(), level.title(), level.icon(),
-                level.nextLevelAt(), level.progress(), breakdown);
     }
 
     // ========== 84 注销清理（AppUserService.deactivate 调用） ==========
@@ -307,10 +219,8 @@ public class CoupleService {
         String nickname = profile == null || profile.nickname() == null || profile.nickname().isBlank()
                 ? partner : profile.nickname();
         String avatar = profile == null || profile.avatar() == null ? "" : profile.avatar();
-        PartnerVO partnerVO = new PartnerVO(partner, nickname, avatar, push.isOnline(partner), space.nickOf(partner));
-        return new SpaceVO(space.id(), partnerVO, space.created(), space.anniversary(),
-                daysTogether(space), space.slogan(),
-                space.theme() == null ? "classic" : space.theme());
+        PartnerVO partnerVO = new PartnerVO(partner, nickname, avatar, push.isOnline(partner));
+        return new SpaceVO(space.id(), partnerVO, space.created(), space.anniversary(), daysTogether(space));
     }
 
     /** 在一起天数：从纪念日（缺省取建立日）算到今天，含当天（建立当天 = 第 1 天）。 */

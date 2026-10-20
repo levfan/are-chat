@@ -14,8 +14,9 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * 情侣空间地基：邀请建立 → 空间本体（在一起的日子 / 宣言 / 主题 / 爱称）→ 恋爱等级（心动值）。
- * 2026-10-05 二轮裁剪后本类只剩地基，三张功能卡各有自己的 Controller（streak/question/wish）。
+ * 情侣空间地基：邀请建立 → 空间本体（在一起的日子）→ 解除。
+ * 2026-10-20 三轮裁剪后本类只剩建立与纪念日这一条地基线，空间个性化与心动值随其功能一并下线；
+ * 现役功能卡只剩亲密日历一张（{@link CoupleCalendarController}）。
  */
 @RestController
 @RequestMapping("/api/couple")
@@ -25,10 +26,6 @@ public class CoupleController {
     }
 
     public record AnniversaryDateRequest(String date) {
-    }
-
-    /** 空间个性化：宣言 / 主题 / 给 TA 的爱称（传 null 表示该项不修改，传空串表示清除）。 */
-    public record ProfileUpdateRequest(String slogan, String theme, String petName) {
     }
 
     private final CoupleService coupleService;
@@ -78,14 +75,6 @@ public class CoupleController {
         return ApiResponse.ok(coupleService.setAnniversary(Sessions.requireUser(session), req.date()));
     }
 
-    /** 空间个性化：我们的宣言 / 空间主题 / 给对方起的爱称。 */
-    @PutMapping("/profile")
-    public ApiResponse<CoupleService.SpaceVO> updateProfile(@RequestBody ProfileUpdateRequest req,
-                                                            HttpSession session) {
-        return ApiResponse.ok(coupleService.updateProfile(Sessions.requireUser(session),
-                req.slogan(), req.theme(), req.petName()));
-    }
-
     /** F44 恋爱中徽章：查某人是否在恋爱中 + 在一起天数（好友资料卡展示）。 */
     @GetMapping("/relationship-of/{username}")
     public ApiResponse<CoupleService.RelationshipVO> relationshipOf(@PathVariable String username,
@@ -98,12 +87,5 @@ public class CoupleController {
     public ApiResponse<Void> dissolve(HttpSession session) {
         coupleService.dissolve(Sessions.requireUser(session));
         return ApiResponse.ok();
-    }
-
-    // ---------- 心动值 & 恋爱等级 ----------
-
-    @GetMapping("/intimacy")
-    public ApiResponse<CoupleService.IntimacyVO> intimacy(HttpSession session) {
-        return ApiResponse.ok(coupleService.intimacy(Sessions.requireUser(session)));
     }
 }
