@@ -66,51 +66,45 @@ class CoupleIntimateLogServiceTest {
 
     private void stubSpace() {
         CoupleSpace space = CoupleSpace.restore(SPACE, "alice", "bob", CoupleSpace.STATUS_ACTIVE,
-                System.currentTimeMillis(), null, null, null, null, null, null);
+                System.currentTimeMillis(), null, null);
         lenient().when(spaceRepository.findActiveByMember(anyString())).thenReturn(Optional.of(space));
     }
 
+    /** 写口不再返回看板（展示统一走月历读模型），所以这里直接看落库的那一行长什么样。 */
     @Test
-    void addStoresTheRecordAndReturnsWholeBoard() {
+    void addStoresTheRecordAsTyped() {
         stubSpace();
-        new Bag().stub();
+        Bag bag = new Bag().stub();
 
-        CoupleIntimateLogService.IntimateBoardVO board = service.add("alice", TODAY.minusDays(2).toString(),
-                "SEX", "  很好  ");
+        service.add("alice", TODAY.minusDays(2).toString(), "SEX", "  很好  ");
 
-        assertThat(board.records()).hasSize(1);
-        assertThat(board.records().get(0).day()).isEqualTo(TODAY.minusDays(2).toString());
-        assertThat(board.records().get(0).kind()).isEqualTo(IntimateLog.KIND_SEX);
-        assertThat(board.records().get(0).note()).isEqualTo("很好");
-        assertThat(board.records().get(0).recorderUser()).isEqualTo("alice");
-        assertThat(board.lastDay()).isEqualTo(TODAY.minusDays(2).toString());
-        assertThat(board.lastKind()).isEqualTo(IntimateLog.KIND_SEX);
-        assertThat(board.monthCount()).isEqualTo(1);
-        assertThat(board.totalCount()).isEqualTo(1);
+        assertThat(bag.rows).hasSize(1);
+        assertThat(bag.rows.get(0).day()).isEqualTo(TODAY.minusDays(2).toString());
+        assertThat(bag.rows.get(0).kind()).isEqualTo(IntimateLog.KIND_SEX);
+        assertThat(bag.rows.get(0).note()).isEqualTo("很好");
+        assertThat(bag.rows.get(0).recorderUser()).isEqualTo("alice");
     }
 
     @Test
     void theSameDayCanHoldMoreThanOneRecord() {
         stubSpace();
-        new Bag().stub();
+        Bag bag = new Bag().stub();
         service.add("alice", TODAY.toString(), "EDGE", null);
+        service.add("bob", TODAY.toString(), "SEX", null);
 
-        CoupleIntimateLogService.IntimateBoardVO board = service.add("bob", TODAY.toString(), "SEX", null);
-
-        assertThat(board.records()).hasSize(2);
-        assertThat(board.monthCount()).isEqualTo(2);
-        assertThat(board.monthEdgeCount()).isEqualTo(1);
-        assertThat(board.monthSexCount()).isEqualTo(1);
-        assertThat(board.lastKind()).isEqualTo(IntimateLog.KIND_SEX);
+        assertThat(bag.rows).hasSize(2);
+        assertThat(bag.rows).extracting(IntimateLog::kind)
+                .containsExactlyInAnyOrder(IntimateLog.KIND_EDGE, IntimateLog.KIND_SEX);
     }
 
     @Test
     void removeDeletesTheRowAndUnknownIdsAreNotFound() {
         stubSpace();
         Bag bag = new Bag().stub();
-        String id = service.add("alice", TODAY.toString(), "SEX", null).records().get(0).id();
+        service.add("alice", TODAY.toString(), "SEX", null);
+        String id = bag.rows.get(0).id();
 
-        assertThat(service.remove("bob", id).records()).isEmpty();
+        service.remove("bob", id);
         assertThat(bag.rows).isEmpty();
 
         IntimateLog elsewhere = IntimateLog.restore("i9", "other-space", TODAY.toString(), "EDGE", null, "carol", 0L);
@@ -123,9 +117,9 @@ class CoupleIntimateLogServiceTest {
     void noSpaceMeansStandardNotFoundAndNoWrites() {
         when(spaceRepository.findActiveByMember("solo")).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> service.board("solo"))
-                .isInstanceOf(BusinessException.class).hasMessage("还没有建立情侣空间，先邀请一位好友吧");
         assertThatThrownBy(() -> service.add("solo", TODAY.toString(), "SEX", null))
+                .isInstanceOf(BusinessException.class).hasMessage("还没有建立情侣空间，先邀请一位好友吧");
+        assertThatThrownBy(() -> service.remove("solo", "i1"))
                 .isInstanceOf(BusinessException.class).hasMessage("还没有建立情侣空间，先邀请一位好友吧");
         verify(logRepository, never()).save(any(IntimateLog.class));
     }
@@ -133,24 +127,20 @@ class CoupleIntimateLogServiceTest {
     @Test
     void invalidKindIsTranslatedToFourHundred() {
         stubSpace();
-        new Bag().stub();
+        Bag bag = new Bag().stub();
         assertThatThrownBy(() -> service.add("alice", TODAY.toString(), "KISS", null))
                 .isInstanceOf(BusinessException.class).hasMessageContaining("选「边缘」或「生活」");
+        assertThat(bag.rows).isEmpty();
     }
 
     @Test
-    void boardKeepsOnlyTheLatestThirtyRowsButCountsThemAll() {
+    void futureDayAndOverlongNoteAreBothRejected() {
         stubSpace();
         Bag bag = new Bag().stub();
-        for (int i = 0; i < 32; i++) {
-            bag.rows.add(IntimateLog.restore("i" + i, SPACE, TODAY.minusDays(i).toString(), "EDGE", null,
-                    "alice", (long) i));
-        }
-
-        CoupleIntimateLogService.IntimateBoardVO board = service.board("alice");
-
-        assertThat(board.records()).hasSize(30);
-        assertThat(board.totalCount()).isEqualTo(32);
-        assertThat(board.records().get(0).id()).isEqualTo("i0");
+        assertThatThrownBy(() -> service.add("alice", TODAY.plusDays(1).toString(), "SEX", null))
+                .isInstanceOf(BusinessException.class).hasMessageContaining("还没到的日子");
+        assertThatThrownBy(() -> service.add("alice", TODAY.toString(), "SEX", "啊".repeat(61)))
+                .isInstanceOf(BusinessException.class).hasMessageContaining("备注最多 60 个字");
+        assertThat(bag.rows).isEmpty();
     }
 }

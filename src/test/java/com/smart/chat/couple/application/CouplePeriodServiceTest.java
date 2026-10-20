@@ -1,5 +1,6 @@
 package com.smart.chat.couple.application;
 
+import com.smart.chat.couple.domain.period.PeriodCycles;
 import com.smart.chat.couple.domain.period.PeriodRecord;
 import com.smart.chat.couple.domain.period.PeriodRepository;
 import com.smart.chat.couple.domain.space.CoupleSpace;
@@ -70,39 +71,35 @@ class CouplePeriodServiceTest {
 
     private void stubSpace() {
         CoupleSpace space = CoupleSpace.restore(SPACE, "alice", "bob", CoupleSpace.STATUS_ACTIVE,
-                System.currentTimeMillis(), null, null, null, null, null, null);
+                System.currentTimeMillis(), null, null);
         lenient().when(spaceRepository.findActiveByMember(anyString())).thenReturn(Optional.of(space));
     }
 
     @Test
-    void addStoresTheDayAndReturnsTheWholeBoard() {
+    void addStoresTheDayAndLeavesItOpen() {
         stubSpace();
-        new Bag().stub();
+        Bag bag = new Bag().stub();
 
-        CouplePeriodService.PeriodBoardVO board = service.add("alice", TODAY.minusDays(3).toString());
+        service.add("alice", TODAY.minusDays(3).toString());
 
-        assertThat(board.records()).hasSize(1);
-        assertThat(board.records().get(0).startDay()).isEqualTo(TODAY.minusDays(3).toString());
-        assertThat(board.records().get(0).recorderUser()).isEqualTo("alice");
-        assertThat(board.records().get(0).endDay()).isNull();
-        assertThat(board.predictedNextDay()).isEqualTo(TODAY.plusDays(25).toString());
-        assertThat(board.cycleSampleCount()).isZero();
+        assertThat(bag.rows).hasSize(1);
+        assertThat(bag.rows.get(0).startDay()).isEqualTo(TODAY.minusDays(3).toString());
+        assertThat(bag.rows.get(0).endDay()).isNull();
+        assertThat(bag.rows.get(0).recorderUser()).isEqualTo("alice");
     }
 
+    /** 周期与预测的算法在 PeriodCycles 里（那里逐条测过），这里只确认两行都落库、没互相覆盖。 */
     @Test
     void twoRecordsGiveARealAverageAndPrediction() {
         stubSpace();
         new Bag().stub();
         service.add("alice", TODAY.minusDays(56).toString());
+        service.add("bob", TODAY.minusDays(28).toString());
 
-        CouplePeriodService.PeriodBoardVO board = service.add("bob", TODAY.minusDays(28).toString());
-
-        assertThat(board.records()).extracting(CouplePeriodService.PeriodRecordVO::startDay)
-                .containsExactly(TODAY.minusDays(28).toString(), TODAY.minusDays(56).toString());
-        assertThat(board.cycleSampleCount()).isEqualTo(1);
-        assertThat(board.averageCycleDays()).isEqualTo(28);
-        assertThat(board.predictedNextDay()).isEqualTo(TODAY.toString());
-        assertThat(board.daysUntilNext()).isZero();
+        PeriodCycles cycles = PeriodCycles.of(periodRepository.findBySpace(SPACE), TODAY);
+        assertThat(cycles.sampleCount()).isEqualTo(1);
+        assertThat(cycles.averageCycleDays()).isEqualTo(28);
+        assertThat(cycles.predictedNextDay()).isEqualTo(TODAY);
     }
 
     @Test
@@ -122,11 +119,12 @@ class CouplePeriodServiceTest {
     @Test
     void endIsRecordedOnceAndOnly() {
         stubSpace();
-        new Bag().stub();
-        String id = service.add("alice", TODAY.minusDays(4).toString()).records().get(0).id();
+        Bag bag = new Bag().stub();
+        service.add("alice", TODAY.minusDays(4).toString());
+        String id = bag.rows.get(0).id();
 
-        CouplePeriodService.PeriodBoardVO ended = service.end("bob", id);
-        assertThat(ended.records().get(0).endDay()).isEqualTo(TODAY.toString());
+        service.end("bob", id);
+        assertThat(bag.rows.get(0).endDay()).isEqualTo(TODAY.toString());
 
         assertThatThrownBy(() -> service.end("alice", id))
                 .isInstanceOf(BusinessException.class).hasMessageContaining("已经记过结束日");
@@ -136,9 +134,10 @@ class CouplePeriodServiceTest {
     void removeDeletesTheRowAndUnknownIdsAreNotFound() {
         stubSpace();
         Bag bag = new Bag().stub();
-        String id = service.add("alice", TODAY.minusDays(2).toString()).records().get(0).id();
+        service.add("alice", TODAY.minusDays(2).toString());
+        String id = bag.rows.get(0).id();
 
-        assertThat(service.remove("bob", id).records()).isEmpty();
+        service.remove("bob", id);
         assertThat(bag.rows).isEmpty();
 
         assertThatThrownBy(() -> service.end("alice", id))
@@ -149,13 +148,16 @@ class CouplePeriodServiceTest {
                 .isInstanceOf(BusinessException.class).hasMessage("这条经期记录不在你们的空间里");
     }
 
+    /** 三个写口都没有看板可回了，闸门与 404 得逐个确认还在。 */
     @Test
     void noSpaceMeansStandardNotFoundAndNoWrites() {
         when(spaceRepository.findActiveByMember("solo")).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> service.board("solo"))
-                .isInstanceOf(BusinessException.class).hasMessage("还没有建立情侣空间，先邀请一位好友吧");
         assertThatThrownBy(() -> service.add("solo", TODAY.toString()))
+                .isInstanceOf(BusinessException.class).hasMessage("还没有建立情侣空间，先邀请一位好友吧");
+        assertThatThrownBy(() -> service.end("solo", "p1"))
+                .isInstanceOf(BusinessException.class).hasMessage("还没有建立情侣空间，先邀请一位好友吧");
+        assertThatThrownBy(() -> service.remove("solo", "p1"))
                 .isInstanceOf(BusinessException.class).hasMessage("还没有建立情侣空间，先邀请一位好友吧");
         verify(periodRepository, never()).save(any(PeriodRecord.class));
     }
@@ -163,8 +165,9 @@ class CouplePeriodServiceTest {
     @Test
     void invalidDateIsTranslatedToFourHundred() {
         stubSpace();
-        new Bag().stub();
+        Bag bag = new Bag().stub();
         assertThatThrownBy(() -> service.add("alice", "2026/10/01"))
                 .isInstanceOf(BusinessException.class).hasMessageContaining("yyyy-MM-dd");
+        assertThat(bag.rows).isEmpty();
     }
 }

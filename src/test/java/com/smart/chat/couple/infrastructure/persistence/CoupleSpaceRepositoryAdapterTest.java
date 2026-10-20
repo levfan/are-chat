@@ -18,8 +18,10 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
- * 仓储适配器的写回口径：聚合只维护自己那几列，存储里聚合不认识的列（cityA/cityB）必须原样留着。
+ * 仓储适配器的写回口径：聚合只维护自己那几列，存储里聚合不认识的列必须原样留着。
  * 这条断言防的是「用聚合重建整行、把没建模到的列静默清空」——这类 bug 编译与业务测试都照不出来。
+ * 2026-10-20 三轮裁剪后，爱称/宣言/主题三列也归进「聚合不认识」那一侧：功能下线了，
+ * 老值留在库里但谁也不读写，适配器要是拿 null 去覆盖就等于顺手抹掉别人的历史。
  */
 @ExtendWith(MockitoExtension.class)
 class CoupleSpaceRepositoryAdapterTest {
@@ -36,11 +38,13 @@ class CoupleSpaceRepositoryAdapterTest {
         existing.setId("s1");
         existing.setCityA("杭州");
         existing.setCityB("厦门");
+        existing.setNickA("宝宝");
+        existing.setSlogan("宣言");
         existing.setTheme("ocean");
         when(spaceMapper.selectById("s1")).thenReturn(existing);
 
         CoupleSpace space = CoupleSpace.restore("s1", "alice", "bob", CoupleSpace.STATUS_ACTIVE, 1L,
-                "2026-10-01", "宝宝", null, "宣言", "cherry", null);
+                "2026-10-01", null);
         repository.save(space);
 
         ArgumentCaptor<CoupleSpacePO> captor = ArgumentCaptor.forClass(CoupleSpacePO.class);
@@ -48,18 +52,17 @@ class CoupleSpaceRepositoryAdapterTest {
         CoupleSpacePO written = captor.getValue();
         assertThat(written.getCityA()).as("聚合没建模的列不能被动").isEqualTo("杭州");
         assertThat(written.getCityB()).isEqualTo("厦门");
-        assertThat(written.getAnniversary()).isEqualTo("2026-10-01");
         assertThat(written.getNickA()).isEqualTo("宝宝");
         assertThat(written.getSlogan()).isEqualTo("宣言");
-        assertThat(written.getTheme()).isEqualTo("cherry");
+        assertThat(written.getTheme()).isEqualTo("ocean");
+        assertThat(written.getAnniversary()).isEqualTo("2026-10-01");
         verify(spaceMapper, never()).insert(any(CoupleSpacePO.class));
     }
 
     @Test
     void newSpaceIsInsertedWithBothMembersAndOwnership() {
         when(spaceMapper.selectById("s2")).thenReturn(null);
-        CoupleSpace space = CoupleSpace.restore("s2", "alice", "bob", CoupleSpace.STATUS_ACTIVE, 123L,
-                null, null, null, null, "classic", null);
+        CoupleSpace space = CoupleSpace.restore("s2", "alice", "bob", CoupleSpace.STATUS_ACTIVE, 123L, null, null);
 
         repository.save(space);
 
@@ -77,14 +80,14 @@ class CoupleSpaceRepositoryAdapterTest {
     void findActiveByMemberMapsStorageBackIntoTheAggregate() {
         CoupleSpacePO po = CoupleSpacePO.of("alice", "bob");
         po.setId("s3");
-        po.setNickA("宝宝");
+        po.setAnniversary("2026-06-01");
         when(spaceMapper.findActiveByUser("bob")).thenReturn(Optional.of(po));
 
         CoupleSpace space = repository.findActiveByMember("bob").orElseThrow();
 
         assertThat(space.id()).isEqualTo("s3");
         assertThat(space.partnerOf("bob")).isEqualTo("alice");
-        assertThat(space.nickOf("alice")).isEqualTo("宝宝");
+        assertThat(space.anniversary()).isEqualTo("2026-06-01");
     }
 
     @Test

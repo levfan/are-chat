@@ -20,15 +20,6 @@ class CoupleSpaceTest {
     }
 
     @Test
-    void nicksFollowTheReorderedMembers() {
-        // 传入顺序被换过来了，爱称也必须跟着人走，不能贴错格子
-        CoupleSpace space = CoupleSpace.restore("id1", "alice", "bob", CoupleSpace.STATUS_ACTIVE, 1L,
-                null, "宝宝", "猪猪", null, "classic", null);
-        assertThat(space.nickOf("alice")).isEqualTo("宝宝");
-        assertThat(space.nickOf("bob")).isEqualTo("猪猪");
-    }
-
-    @Test
     void partnerOfRejectsOutsiders() {
         CoupleSpace space = CoupleSpace.open("alice", "bob", 1L);
         assertThat(space.partnerOf("alice")).isEqualTo("bob");
@@ -53,36 +44,14 @@ class CoupleSpaceTest {
         assertThat(space.isActive()).isFalse();
         assertThatThrownBy(() -> space.dissolve(1000L)).isInstanceOf(RuleViolation.class);
         assertThatThrownBy(() -> space.bindAnniversary("2026-10-01")).isInstanceOf(RuleViolation.class);
-        assertThatThrownBy(() -> space.decorate("宣言", "classic")).isInstanceOf(RuleViolation.class);
     }
 
     @Test
-    void decorateGuardsThemeWhitelistAndSloganLength() {
+    void anniversaryIsBlankTreatedAsUnset() {
         CoupleSpace space = CoupleSpace.open("alice", "bob", 1L);
-        space.decorate("只有彼此懂的一句话", "cherry");
-        assertThat(space.theme()).isEqualTo("cherry");
-        assertThat(space.slogan()).isEqualTo("只有彼此懂的一句话");
-
-        assertThatThrownBy(() -> space.decorate(null, "neon"))
-                .isInstanceOf(RuleViolation.class)
-                .hasMessageContaining("主题");
-        assertThatThrownBy(() -> space.decorate("一".repeat(CoupleSpace.SLOGAN_MAX + 1), null))
-                .isInstanceOf(RuleViolation.class)
-                .hasMessageContaining("宣言最多");
-        // 传 null 表示该项不动
-        space.decorate(null, null);
-        assertThat(space.theme()).isEqualTo("cherry");
-        assertThat(space.slogan()).isEqualTo("只有彼此懂的一句话");
-    }
-
-    @Test
-    void renamingPartnerIsTheOtherHalfsPrivilege() {
-        CoupleSpace space = CoupleSpace.open("alice", "bob", 1L);
-        space.renamePartner("bob", "宝宝");
-        assertThat(space.nickOf("alice")).isEqualTo("宝宝");
-        assertThat(space.nickOf("bob")).isNull();
-        // 留空 = 清除
-        space.renamePartner("bob", "   ");
-        assertThat(space.nickOf("alice")).isNull();
+        space.bindAnniversary("2026-06-01");
+        assertThat(space.anniversary()).isEqualTo("2026-06-01");
+        space.bindAnniversary("   ");
+        assertThat(space.anniversary()).isNull();
     }
 }
