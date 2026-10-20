@@ -4,15 +4,15 @@ import com.smart.chat.couple.application.CoupleIntimateLogService;
 import com.smart.chat.sharedkernel.web.ApiResponse;
 import com.smart.chat.sharedkernel.web.Sessions;
 import jakarta.servlet.http.HttpSession;
-import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * 亲密记录（卡根 `couple-intimate`）：记一笔边缘亲昵/性生活、删一笔。
- * 三个接口都返回整份看板，前端拿最新统计直接替换。按月的日历视图走 {@code /api/couple/calendar}。
+ * 亲密记录的写口（在日历卡 `couple-calendar` 上操作）：记一笔边缘亲昵/性生活、删一笔。
+ * 两个接口都只回成功与否——展示数据统一由 {@code GET /api/couple/calendar/month} 下发，
+ * 前端写完重拉当月（原 {@code GET /intimate/board} 已随卡片合并下线）。
  */
 @RestController
 @RequestMapping("/api/couple/intimate")
@@ -32,23 +32,17 @@ public class CoupleIntimateLogController {
         this.service = service;
     }
 
-    /** 亲密看板：最近记录 + 最近一次 + 本月/累计次数。 */
-    @GetMapping("/board")
-    public ApiResponse<CoupleIntimateLogService.IntimateBoardVO> board(HttpSession session) {
-        return ApiResponse.ok(service.board(Sessions.requireUser(session)));
-    }
-
     /** 记一笔。 */
     @PostMapping("/add")
-    public ApiResponse<CoupleIntimateLogService.IntimateBoardVO> add(@RequestBody AddRequest req,
-                                                                     HttpSession session) {
-        return ApiResponse.ok(service.add(Sessions.requireUser(session), req.day(), req.kind(), req.note()));
+    public ApiResponse<Void> add(@RequestBody AddRequest req, HttpSession session) {
+        service.add(Sessions.requireUser(session), req.day(), req.kind(), req.note());
+        return ApiResponse.ok();
     }
 
     /** 删掉一笔错记。 */
     @PostMapping("/remove")
-    public ApiResponse<CoupleIntimateLogService.IntimateBoardVO> remove(@RequestBody RecordIdRequest req,
-                                                                        HttpSession session) {
-        return ApiResponse.ok(service.remove(Sessions.requireUser(session), req.id()));
+    public ApiResponse<Void> remove(@RequestBody RecordIdRequest req, HttpSession session) {
+        service.remove(Sessions.requireUser(session), req.id());
+        return ApiResponse.ok();
     }
 }

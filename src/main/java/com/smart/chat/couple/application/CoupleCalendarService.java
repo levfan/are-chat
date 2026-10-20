@@ -3,6 +3,7 @@ package com.smart.chat.couple.application;
 import com.smart.chat.couple.domain.RuleViolation;
 import com.smart.chat.couple.domain.intimatelog.IntimateLog;
 import com.smart.chat.couple.domain.intimatelog.IntimateLogRepository;
+import com.smart.chat.couple.domain.intimatelog.IntimateLogs;
 import com.smart.chat.couple.domain.period.PeriodCycles;
 import com.smart.chat.couple.domain.period.PeriodRecord;
 import com.smart.chat.couple.domain.period.PeriodRepository;
@@ -20,22 +21,29 @@ import java.util.List;
 import static com.smart.chat.couple.application.DomainRules.rule;
 
 /**
- * 亲密日历的读模型：把「这个月哪几天在经期里、哪几天记了边缘/性生活」一次算齐给日历铺格子。
+ * 亲密日历的读模型：日历卡是经期与亲密记录的唯一入口，所以「这个月铺什么格子、
+ * 某一天能删哪条、周期算得怎么样」全在这里一次给齐。
  * <p>
- * 经期与亲密记录各有一套自己的看板，但日历同时要看两者——让前端去拼就得再打一次
- * {@code /period/board}，同一页出现两份经期真相。所以这里跨两个聚合出一份只读结果，
- * 覆盖日由 {@link PeriodRecord#covers} 判（还没记结束日的只到今天），周期推算照 {@link PeriodCycles} 的口径。
- * 和两张记录卡一样：不推 WS 事件，也不参与心动值。
+ * 覆盖日由 {@link PeriodRecord#covers} 判（还没记结束日的只到今天），周期推算照 {@link PeriodCycles} 的口径；
+ * 前端只按下发的天列表与记录 id 渲染，不自己数区间。写口（经期与亲密的 add/end/remove）
+ * 成功后返回的也是这一份，界面拿它整体替换，不用再发第二次请求。
+ * 和两张记录卡原来一样：不推 WS 事件，也不参与心动值。
  */
 @Service
 public class CoupleCalendarService {
 
-    /** 日历上的一条亲密标记：够铺图标和展开当天详情用，删除仍回记录卡。 */
-    public record CalendarIntimateVO(String day, String kind, String note, String recorderUser) {
+    /** 日历上的一条亲密标记：带 id 才删得掉，备注与记录人给「点一天看详情」用。 */
+    public record CalendarIntimateVO(String id, String day, String kind, String note, String recorderUser) {
+    }
+
+    /** 与本月经期区间有关的一次记录：endDay 为 null 就是还没结束，日历据此给「今天结束了」。 */
+    public record CalendarPeriodVO(String id, String startDay, String endDay) {
     }
 
     public record CoupleCalendarVO(String month, List<String> periodDays, List<String> periodStartDays,
-                                   List<String> periodEndDays, String predictedNextDay,
+                                   List<String> periodEndDays, List<CalendarPeriodVO> periods,
+                                   String predictedNextDay, int averageCycleDays, int cycleSampleCount,
+                                   Integer daysUntilNext, int intimateTotal,
                                    List<CalendarIntimateVO> intimate) {
     }
 
@@ -61,13 +69,24 @@ public class CoupleCalendarService {
         List<String> periodDays = new ArrayList<>();
         List<String> periodStartDays = new ArrayList<>();
         List<String> periodEndDays = new ArrayList<>();
+        List<CalendarPeriodVO> periods = new ArrayList<>();
+        String first = viewed.atDay(1).toString();
+        String last = viewed.atEndOfMonth().toString();
+        String todayText = today.toString();
+        for (PeriodRecord record : records) {
+            // 与本月的三种相交：压住月初、压住月末、开始日就在这个月里
+            if (record.covers(first, todayText) || record.covers(last, todayText)
+                    || (record.startDay().compareTo(first) >= 0 && record.startDay().compareTo(last) <= 0)) {
+                periods.add(new CalendarPeriodVO(record.id(), record.startDay(), record.endDay()));
+            }
+        }
         for (LocalDate day = viewed.atDay(1); !day.isAfter(viewed.atEndOfMonth()); day = day.plusDays(1)) {
             String key = day.toString();
             boolean covered = false;
             boolean start = false;
             boolean end = false;
             for (PeriodRecord record : records) {
-                covered |= record.covers(key, today.toString());
+                covered |= record.covers(key, todayText);
                 start |= record.startsOn(key);
                 end |= record.endsOn(key);
             }
@@ -86,9 +105,13 @@ public class CoupleCalendarService {
                 .findInRange(space.id(), viewed.atDay(1), viewed.plusMonths(1).atDay(1)).stream()
                 .map(CoupleCalendarService::toRow)
                 .toList();
+        // 累计次数走领域值对象（它按全量算，不受本月列表影响），其余统计都来自本月列表
+        int intimateTotal = IntimateLogs.of(logRepository.findBySpace(space.id()), today).totalCount();
         return new CoupleCalendarVO(viewed.toString(), List.copyOf(periodDays), List.copyOf(periodStartDays),
-                List.copyOf(periodEndDays),
-                cycles.predictedNextDay() == null ? null : cycles.predictedNextDay().toString(), rows);
+                List.copyOf(periodEndDays), List.copyOf(periods),
+                cycles.predictedNextDay() == null ? null : cycles.predictedNextDay().toString(),
+                cycles.averageCycleDays(), cycles.sampleCount(), cycles.daysUntilNext(),
+                intimateTotal, rows);
     }
 
     private CoupleSpace requireSpace(String me) {
@@ -108,6 +131,6 @@ public class CoupleCalendarService {
     }
 
     private static CalendarIntimateVO toRow(IntimateLog log) {
-        return new CalendarIntimateVO(log.day(), log.kind(), log.note(), log.recorderUser());
+        return new CalendarIntimateVO(log.id(), log.day(), log.kind(), log.note(), log.recorderUser());
     }
 }

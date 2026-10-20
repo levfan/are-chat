@@ -4,15 +4,15 @@ import com.smart.chat.couple.application.CouplePeriodService;
 import com.smart.chat.sharedkernel.web.ApiResponse;
 import com.smart.chat.sharedkernel.web.Sessions;
 import jakarta.servlet.http.HttpSession;
-import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * 经期记录（新卡 `couple-period`）：记开始日、补结束日、删错记。
- * 四个接口都返回整份看板，前端拿最新周期与预测直接替换。
+ * 经期记录的写口（在日历卡 `couple-calendar` 上操作）：记开始日、补结束日、删错记。
+ * 三个接口都只回成功与否——展示数据统一由 {@code GET /api/couple/calendar/month} 下发，
+ * 前端写完重拉当月，不在这里再拼一份经期看板（原 {@code GET /period/board} 已随卡片合并下线）。
  */
 @RestController
 @RequestMapping("/api/couple/period")
@@ -32,28 +32,24 @@ public class CouplePeriodController {
         this.service = service;
     }
 
-    /** 经期看板：全部记录 + 平均周期 + 下次预计。 */
-    @GetMapping("/board")
-    public ApiResponse<CouplePeriodService.PeriodBoardVO> board(HttpSession session) {
-        return ApiResponse.ok(service.board(Sessions.requireUser(session)));
-    }
-
     /** 记一个开始日。 */
     @PostMapping("/add")
-    public ApiResponse<CouplePeriodService.PeriodBoardVO> add(@RequestBody AddRequest req, HttpSession session) {
-        return ApiResponse.ok(service.add(Sessions.requireUser(session), req.startDay()));
+    public ApiResponse<Void> add(@RequestBody AddRequest req, HttpSession session) {
+        service.add(Sessions.requireUser(session), req.startDay());
+        return ApiResponse.ok();
     }
 
-    /** 给最近一次还没结束的记录补上今天的结束日。 */
+    /** 给某次还没结束的经期补上今天的结束日（后端只认今天，历史区间改不了）。 */
     @PostMapping("/end")
-    public ApiResponse<CouplePeriodService.PeriodBoardVO> end(@RequestBody RecordIdRequest req, HttpSession session) {
-        return ApiResponse.ok(service.end(Sessions.requireUser(session), req.id()));
+    public ApiResponse<Void> end(@RequestBody RecordIdRequest req, HttpSession session) {
+        service.end(Sessions.requireUser(session), req.id());
+        return ApiResponse.ok();
     }
 
     /** 删掉一条错记。 */
     @PostMapping("/remove")
-    public ApiResponse<CouplePeriodService.PeriodBoardVO> remove(@RequestBody RecordIdRequest req,
-                                                                 HttpSession session) {
-        return ApiResponse.ok(service.remove(Sessions.requireUser(session), req.id()));
+    public ApiResponse<Void> remove(@RequestBody RecordIdRequest req, HttpSession session) {
+        service.remove(Sessions.requireUser(session), req.id());
+        return ApiResponse.ok();
     }
 }
