@@ -1,7 +1,7 @@
 # 情侣空间业务全景
 
 > 本页回答：couple 包现在有哪些功能、各自对应哪个 Controller/Service/表，以及贯穿全局的核心业务规则与内容库。
-> 事实源：`src/main/java/com/smart/chat/couple/**`（Controller/Service/domain）、`src/main/resources/schema.sql` + `db/V52/V53/V54`、
+> 事实源：`src/main/java/com/smart/chat/couple/**`（Controller/Service/domain）、`src/main/resources/schema.sql` + `db/V52/V53/V54/V55`、
 > 术语合同 `CONTEXT.md`、去留判据 `docs/adr/0010-couple-trim-to-v8-features.md`。
 
 ## 本轮裁剪（先读这段）
@@ -9,23 +9,24 @@
 情侣空间在 2026-10-05 经过三轮改造：先加四张功能卡（每日一问 / 愿望清单 / 连续互动打卡 + 七档解锁 / 百日隐藏回顾，见
 `docs/adr/0007`），随后按用户指令「除了这几项，其余功能全部删除」做了**一轮大裁剪**——判据从「排名高低」换成
 「这四项及其赖以成立的地基还活不活」，取舍、连带改造与被删清单的唯一依据是 **`docs/adr/0010-couple-trim-to-v8-features.md`**；
-最后又按「用不上的功能也裁掉」下线了百日隐藏回顾与心动时刻，只留三张卡；2026-10-20 按用户要求新增第四张卡「经期记录」。
+最后又按「用不上的功能也裁掉」下线了百日隐藏回顾与心动时刻，只留三张卡；2026-10-20 按用户要求依次新增第四张卡「经期记录」与第五张卡「亲密记录」。
 
-现役规模（实测自源码与 `schema.sql`）：**53 个 java 文件 / 5 个 Controller / 24 个端点 / 7 张 `couple_*` 表（`couple_notify` 已无代码）/ 15 个 WS 事件 / 2 条定时任务**。
+现役规模（实测自源码与 `schema.sql`）：**61 个 java 文件 / 6 个 Controller / 27 个端点 / 8 张 `couple_*` 表（`couple_notify` 已无代码）/ 15 个 WS 事件 / 2 条定时任务**。
 按 ADR-0010 与随后几轮已下线、**不再存在**的功能（一句话点名即可，别当现役去找）：心情日记、贴贴宫格、求抱抱、安全词与暂停复盘、
 今晚饭桌、家务轮盘、加班预报与留灯、愿望券本、好事簿、刮刮乐与盲盒、共同日历（倒数日清单）、积分台账、卡片收藏与功能搜索、百日隐藏回顾、心动时刻、通知中心、运营看板。
 其中三处曾是别的功能算数的根据，已按 ADR-0010 重新改挂：**打卡触发源**改挂每日一问（原挂贴贴）、**补签稀缺性**改由次数守（原扣积分台账）、
 **心动值供数**整体换成现役五项（原六项的表全部消失）。
 
-## 现役的四张功能卡 + 地基
+## 现役的五张功能卡 + 地基
 
-四张卡各有自己的 Controller/Service；地基（邀请建立、空间本体、心动值）不是卡，删不得。
+五张卡各有自己的 Controller/Service；地基（邀请建立、空间本体、心动值）不是卡，删不得。
 
 | 卡（`?card=` 深链 key） | Controller（前缀） | Service | 表 |
 |---|---|---|---|
 | 每日一问 `couple-question` | `CoupleQuestionController` `/api/couple/question` | `CoupleQuestionService` | `couple_question_answer` |
 | 连续互动打卡 `couple-streak` | `CoupleStreakController` `/api/couple/streak` | `CoupleStreakService` | `couple_streak_day` |
 | 姨妈记录 `couple-period` | `CouplePeriodController` `/api/couple/period` | `CouplePeriodService` | `couple_period` |
+| 亲密记录 `couple-intimate` | `CoupleIntimateLogController` `/api/couple/intimate` | `CoupleIntimateLogService` | `couple_intimacy_log` |
 | 愿望清单 `couple-wish` | `CoupleWishController` `/api/couple/wish` | `CoupleWishService` | `couple_wish` |
 | 地基（建立/本体/心动值） | `CoupleController` `/api/couple` | `CoupleService` | `couple_space`, `couple_invite` |
 
@@ -101,7 +102,16 @@
 - **不参与心动值**：五项供数仍是 daysTogether/checkinDays/longestStreak/answerDays/wishFulfilled，经期记录只做展示与提醒，不改任何等级或积分。
 - 关键闸门话术：空开始日「开始日得选一个日子呀」、格式错「开始日得是 yyyy-MM-dd 这样的日子呀」、未来日「还没到的日子记不了呀，今天之后的事留给明天 🩸」、重复日「这一天已经记过啦…」、重复结束「这次已经记过结束日啦」、越界记录 404「这条经期记录不在你们的空间里」。
 
-## 8 · 心动值（五项供数 · 七级阈值 0/60/150/260/400/560/760）
+## 8 · 亲密记录（`couple_intimacy_log`）
+
+- **一行 = 一次亲密**：`day` 必填（`yyyy-MM-dd`，不能晚于今天），`kind` 只有 `EDGE`（边缘亲昵）/`SEX`（性生活）两种，`note` 选填（≤60 字）；`recorder_user` 只留痕——这是两个人共享的记录，**双方都能记、都能删**，不设「只有本人能删」的闸门。
+- **同一天允许多条**：本表**没有唯一键**，只建普通索引 `idx_couple11_intimacy_space_day(space_id, day)`；同一天记两次不同类型的记录是合法事实，重复提交由前端按钮 loading 拦，不在库上做「一天一次」的假设。
+- **看板只给最近 30 条，统计覆盖全量**（`domain/intimatelog/IntimateLogs`）：`records` 按 day 新→旧、同日按 created 新→旧截前 30 条；`lastDay`/`lastKind` 取全量里最近一次；`monthCount`/`monthEdgeCount`/`monthSexCount` 按**当前自然月**统计；`totalCount` 是累计条数。列表被 LIMIT 时后端直查原始集合算计数，**不从 30 条回算**（与愿望清单同一条口径）。
+- **不推任何 WS 事件**：三个端点都返回整份看板，对方记一条不会给你弹提醒（与经期记录同属私密记录，连事件都不发）。
+- **不参与心动值**：五项供数不变，亲密记录只做展示与统计，不改任何等级或积分。
+- 关键闸门话术：空日期「哪天呀？日子得选一个」、格式错「日子得是 yyyy-MM-dd 这样的」、未来日「还没到的日子记不了呀，今天之后的事留给明天 💞」、类型不认识「这类记录认不出来，选「边缘」或「生活」就好」、备注超长「备注最多 60 个字，留白也很甜」、越界记录 404「这条亲密记录不在你们的空间里」。
+
+## 9 · 心动值（五项供数 · 七级阈值 0/60/150/260/400/560/760）
 
 - **读时算、无表**（`CoupleService.intimacy()`）：取数只攒「多少」，加权与定级在 `domain/intimacy/IntimacyCalculator`。
 - **五项权重（越少见的行为越贵，ADR-0010 第 4 条）**：
@@ -149,7 +159,7 @@
 
 1. 表映射 `XxxPO`：`@Data @TableName` + `@TableId(IdType.INPUT)` + 静态工厂 + 常量。**`Integer`/`Long` 位字段禁止配 `isXxx()` 布尔 helper**（与 Lombok `getXxx()` 撞成歧义 getter，MyBatis 反射随机抛 `ambiguous type`）——位判断一律命名 `xxxFlag()`（现役：`StreakDay.makeup()`/`Wish.preparedFlag()`/`NotifyEntry` 走 `readFlag()`）。
 2. Mapper：`interface XxxMapper extends BaseMapperCompat<XxxPO>`，常用查询写 default 方法；Mapper 不感知领域类型。
-3. 领域：`domain/<集合>/Xxx`（私有构造 + `restore()` 不校验 + 工厂校验抛 `RuleViolation`，访问器用短名）+ `XxxRepository` 端口；`infrastructure/persistence/XxxRepositoryAdapter` 做 PO↔领域翻译，更新只回写聚合纳管的列。couple 现役 6 张表 = 6 端口 = 6 适配器。
+3. 领域：`domain/<集合>/Xxx`（私有构造 + `restore()` 不校验 + 工厂校验抛 `RuleViolation`，访问器用短名）+ `XxxRepository` 端口；`infrastructure/persistence/XxxRepositoryAdapter` 做 PO↔领域翻译，更新只回写聚合纳管的列。couple 现役 8 张表 = 8 端口 = 8 适配器。
 4. Service：注入**端口不是 Mapper**，VO 用嵌套 `record`，写接口返回整份聚合 VO 让前端整体替换；判定与话术在领域，异常经 `DomainRules.rule|guard` 翻译。
 5. Controller：`@RestController @RequestMapping("/api/couple/xxx")`，请求体用 record，每方法一句 javadoc（`wiki/api.md` 的端点说明就是抓这句生成的）。
 6. 新增/删除表走 Flyway 增量脚本并同步 `schema.sql`；新增 WS 事件同步前端 `stores/couple.ts` 的 case。
