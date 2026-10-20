@@ -1,8 +1,8 @@
 # REST 接口总表
 
 > 本页回答：全部 Controller 的端点清单（方法 + 路径 + 请求体 + 响应字段 + 错误码）。路径省略类前缀 `/api`；couple 系前缀见各节标题。
-> **当前口径（2026-10-20 新增亲密记录后逐条实测）**：全仓 **16 个 Controller / 75 个端点**（逐条读各 `*Controller.java` 的 `@GetMapping/@PostMapping/@PutMapping/@DeleteMapping`，类上 `@RequestMapping` 是基址；`GlobalExceptionHandler` 不是 Controller，不计入）。
-> 分上下文：identity 15、messaging 25、platform 6、filestorage 2、couple 27（合计 75）。其中 **couple 侧 6 个 Controller / 27 个端点**——2026-10-05 按 `docs/adr/0010-couple-trim-to-v8-features.md` 从 70 收缩到 26，随后再下线百日隐藏页收缩到 25，2026-10-20 再删除通知中心（2）与运营看板（1）后为 22，同日再删问答回看与愿望改备注（2）后为 20，随后新增经期记录（4）后为 24，再新增亲密记录（3）后为 27。
+> **当前口径（2026-10-20 新增亲密日历后逐条实测）**：全仓 **17 个 Controller / 76 个端点**（逐条读各 `*Controller.java` 的 `@GetMapping/@PostMapping/@PutMapping/@DeleteMapping`，类上 `@RequestMapping` 是基址；`GlobalExceptionHandler` 不是 Controller，不计入）。
+> 分上下文：identity 15、messaging 25、platform 6、filestorage 2、couple 28（合计 76）。其中 **couple 侧 7 个 Controller / 28 个端点**——2026-10-05 按 `docs/adr/0010-couple-trim-to-v8-features.md` 从 70 收缩到 26，随后再下线百日隐藏页收缩到 25，2026-10-20 再删除通知中心（2）与运营看板（1）后为 22，同日再删问答回看与愿望改备注（2）后为 20，随后新增经期记录（4）、亲密记录（3）与亲密日历（1）后为 28。
 > 非 couple 侧是 **10 个 Controller**（identity 2 + messaging 4 + platform 3 + filestorage 1）。
 
 来源：`src/main/java` 各 `*Controller.java` 的映射注解与 javadoc；响应字段取自对应 Service 内嵌的 `public record XxxVO(...)`。返回统一 `ApiResponse{code,message,data}`；除 `/api/auth/**` 与 `/api/health` 外均需登录会话。业务失败抛 `BusinessException(code, 中文原话)`，`code` 同时作为 HTTP 状态码。可空性按字段类型判断：`Long`/`Integer`/包装类型可为 `null`，`long`/`int`/`boolean` 不为 `null`。
@@ -44,7 +44,7 @@
 - `FileController` POST `/files`（multipart）上传 ｜ GET `/files/{id}/download` 下载
 - WS：`/ws/chat/{name}` 聊天室与推送通道（非 REST，见 [architecture.md](architecture.md)）
 
-## couple 接口（现役 6 个 Controller / 27 个端点）
+## couple 接口（现役 7 个 Controller / 28 个端点）
 
 > 逐端点写明：方法、路径、请求体字段、响应 record 逐字段（含可空性）、错误码与中文原话。
 > 原 10 张历史卡的 Controller（贴贴 `CoupleBondController`、求抱抱 `CoupleCareController`、安全词 `CoupleCatchController`、
@@ -155,3 +155,17 @@
     - 错误：400「哪天呀？日子得选一个」／400「日子得是 yyyy-MM-dd 这样的」／400「还没到的日子记不了呀，今天之后的事留给明天 💞」／400「这类记录认不出来，选「边缘」或「生活」就好」／400「备注最多 60 个字，留白也很甜」／404「还没有建立情侣空间…」。**不推事件**。
 27. `POST /remove` body `RecordIdRequest{ String id }` → `IntimateBoardVO`（删一条，双方都能删，不进回收站）
     - 错误：404「这条亲密记录不在你们的空间里」。**不推事件**。
+
+### `CoupleCalendarController` `/api/couple/calendar`（亲密日历 · 1 个）
+
+**响应 record**：`CoupleCalendarVO(String month, List<String> periodDays, List<String> periodStartDays, List<String> periodEndDays, String predictedNextDay, List<CalendarIntimateVO> intimate)`
+- `month` 后端回写的 `yyyy-MM`（入参补齐后的原值）｜`periodDays` 这个月里被经期覆盖的天，`yyyy-MM-dd` 升序，**只含本月的天**（跨月的经期在两个月各铺各的那段）。
+- `periodStartDays`/`periodEndDays` 覆盖日里哪几天算开始、哪几天算结束——开始日/结束日落在上个月时这里就是空数组，前端不必自己判区间。
+- `predictedNextDay` 照 `PeriodCycles` 的推算口径原样给出（可能为 `null`，也可能落在别的月份，前端只标那一天，不铺预测区间）。
+- `intimate` 本月的亲密标记，`CalendarIntimateVO(String day, String kind, String note, String recorderUser)`，按 `day` 升序、同日按记录时刻升序；**没有 `id`/`created`**——日历只看不删，删除回记录卡。条数不受亲密看板那 30 条上限影响。
+- 覆盖日的判据在领域里：`PeriodRecord.covers(day, today)`——记了结束日按 [开始日, 结束日] 含首含尾，还没记结束日只到今天；脏日期静默算没覆盖，不让一行历史数据把整卡打成 500。
+
+28. `GET /month?month=yyyy-MM` → `CoupleCalendarVO`。未来的月份正常返回（`periodDays`/`intimate` 为空，只可能带 `predictedNextDay`）。
+    - 错误：400「要看哪个月呀？给我 yyyy-MM 这样的」（缺参或空白）／400「月份得是 yyyy-MM 这样的」（格式错）／404「还没有建立情侣空间，先邀请一位好友吧」。**不推事件**，也不参与心动值。
+
+> 这个读口跨两个聚合（`domain/period` 与 `domain/intimatelog`），是**只读**的：写仍然走经期卡与亲密卡各自的端点。当初让前端自己拿 `/period/board` + 亲密看板拼日历被单测拦下——同一页会打两次 `/period/board`、留下两份经期真相，故收成一个后端读模型。

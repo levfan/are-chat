@@ -9,22 +9,23 @@
 情侣空间在 2026-10-05 经过三轮改造：先加四张功能卡（每日一问 / 愿望清单 / 连续互动打卡 + 七档解锁 / 百日隐藏回顾，见
 `docs/adr/0007`），随后按用户指令「除了这几项，其余功能全部删除」做了**一轮大裁剪**——判据从「排名高低」换成
 「这四项及其赖以成立的地基还活不活」，取舍、连带改造与被删清单的唯一依据是 **`docs/adr/0010-couple-trim-to-v8-features.md`**；
-最后又按「用不上的功能也裁掉」下线了百日隐藏回顾与心动时刻，只留三张卡；2026-10-20 按用户要求依次新增第四张卡「经期记录」与第五张卡「亲密记录」。
+最后又按「用不上的功能也裁掉」下线了百日隐藏回顾与心动时刻，只留三张卡；2026-10-20 按用户要求依次新增第四张卡「经期记录」、第五张卡「亲密记录」与第六张卡「亲密日历」。
 
-现役规模（实测自源码与 `schema.sql`）：**61 个 java 文件 / 6 个 Controller / 27 个端点 / 8 张 `couple_*` 表（`couple_notify` 已无代码）/ 15 个 WS 事件 / 2 条定时任务**。
+现役规模（实测自源码与 `schema.sql`）：**63 个 java 文件 / 7 个 Controller / 28 个端点 / 8 张 `couple_*` 表（`couple_notify` 已无代码）/ 15 个 WS 事件 / 2 条定时任务**。
 按 ADR-0010 与随后几轮已下线、**不再存在**的功能（一句话点名即可，别当现役去找）：心情日记、贴贴宫格、求抱抱、安全词与暂停复盘、
 今晚饭桌、家务轮盘、加班预报与留灯、愿望券本、好事簿、刮刮乐与盲盒、共同日历（倒数日清单）、积分台账、卡片收藏与功能搜索、百日隐藏回顾、心动时刻、通知中心、运营看板。
 其中三处曾是别的功能算数的根据，已按 ADR-0010 重新改挂：**打卡触发源**改挂每日一问（原挂贴贴）、**补签稀缺性**改由次数守（原扣积分台账）、
 **心动值供数**整体换成现役五项（原六项的表全部消失）。
 
-## 现役的五张功能卡 + 地基
+## 现役的六张功能卡 + 地基
 
-五张卡各有自己的 Controller/Service；地基（邀请建立、空间本体、心动值）不是卡，删不得。
+六张卡各有自己的 Controller/Service；地基（邀请建立、空间本体、心动值）不是卡，删不得。
 
 | 卡（`?card=` 深链 key） | Controller（前缀） | Service | 表 |
 |---|---|---|---|
 | 每日一问 `couple-question` | `CoupleQuestionController` `/api/couple/question` | `CoupleQuestionService` | `couple_question_answer` |
 | 连续互动打卡 `couple-streak` | `CoupleStreakController` `/api/couple/streak` | `CoupleStreakService` | `couple_streak_day` |
+| 亲密日历 `couple-calendar` | `CoupleCalendarController` `/api/couple/calendar` | `CoupleCalendarService`（只读，跨经期与亲密两个聚合） | 无自有表 |
 | 姨妈记录 `couple-period` | `CouplePeriodController` `/api/couple/period` | `CouplePeriodService` | `couple_period` |
 | 亲密记录 `couple-intimate` | `CoupleIntimateLogController` `/api/couple/intimate` | `CoupleIntimateLogService` | `couple_intimacy_log` |
 | 愿望清单 `couple-wish` | `CoupleWishController` `/api/couple/wish` | `CoupleWishService` | `couple_wish` |
@@ -111,7 +112,15 @@
 - **不参与心动值**：五项供数不变，亲密记录只做展示与统计，不改任何等级或积分。
 - 关键闸门话术：空日期「哪天呀？日子得选一个」、格式错「日子得是 yyyy-MM-dd 这样的」、未来日「还没到的日子记不了呀，今天之后的事留给明天 💞」、类型不认识「这类记录认不出来，选「边缘」或「生活」就好」、备注超长「备注最多 60 个字，留白也很甜」、越界记录 404「这条亲密记录不在你们的空间里」。
 
-## 9 · 心动值（五项供数 · 七级阈值 0/60/150/260/400/560/760）
+## 9 · 亲密日历（`CoupleCalendarService` · 只读，无自有表）
+
+- **一份月度读模型**：`GET /api/couple/calendar/month?month=yyyy-MM` 一次给全这个月要铺的东西——`periodDays`（被经期覆盖的天）、`periodStartDays`/`periodEndDays`（哪几天算开始、哪几天算结束）、`predictedNextDay`（经期推算的下次开始日）、`intimate`（本月亲密标记：day/kind/note/recorderUser）。
+- **为什么不让前端拼**：前端手里只有两张卡各自的看板，拼一张日历就得再敲一次 `/period/board`——同一页两份经期真相、两个请求。单测把这条抓出来了（`couple.spec.ts` 断言 `periodBoard` 只被调一次），所以收成后端读模型。
+- **区间判定留在领域里**：`PeriodRecord.covers(day, today)`——记了结束日按 [开始日, 结束日] 含首含尾，还没记结束日只到今天；跨月的经期在两个月各铺各的那段；脏日期静默算没覆盖，一行历史数据不该让日历 500。前端只按后端给的天列表渲染。
+- **只读**：日历不写库、不推 WS 事件、不参与心动值；删除仍然回经期卡与亲密卡各自的端点（所以 `intimate` 里故意不下发 `id`/`created`）。
+- 关键闸门话术：缺月份或空白「要看哪个月呀？给我 yyyy-MM 这样的」、格式错「月份得是 yyyy-MM 这样的」、无空间 404「还没有建立情侣空间，先邀请一位好友吧」。未来的月份正常返回空覆盖日，不报错。
+
+## 10 · 心动值（五项供数 · 七级阈值 0/60/150/260/400/560/760）
 
 - **读时算、无表**（`CoupleService.intimacy()`）：取数只攒「多少」，加权与定级在 `domain/intimacy/IntimacyCalculator`。
 - **五项权重（越少见的行为越贵，ADR-0010 第 4 条）**：

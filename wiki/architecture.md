@@ -21,7 +21,7 @@
 
 按**限界上下文**分包（`couple` / `messaging` / `identity` / `platform` / `filestorage` + `sharedkernel` + `bootstrap`），
 每个上下文内部四层，2026-10-05 五个上下文全部完成战术改造（判据与实测见 `docs/ddd/06-ddd-standard.md`、决策见 `docs/adr/0001-0008`）；
-同日核心域 `couple` 又经历一轮功能大裁剪（`docs/adr/0010-couple-trim-to-v8-features.md`），百日隐藏页与心动时刻随后也按「用不上就裁」下线，裁剪后只留三张功能卡（每日一问 / 连续互动打卡 / 愿望清单）与地基，2026-10-20 又依次新增第四张卡「经期记录」与第五张卡「亲密记录」；三张卡之外的表、Controller、领域包与内容库全部下线，`couple` 从 167 个 Java 文件缩到 45 个、`couple_*` 表从 22 缩到 6，经期与亲密记录落地后为 61 个文件 / 8 张表。要点：
+同日核心域 `couple` 又经历一轮功能大裁剪（`docs/adr/0010-couple-trim-to-v8-features.md`），百日隐藏页与心动时刻随后也按「用不上就裁」下线，裁剪后只留三张功能卡（每日一问 / 连续互动打卡 / 愿望清单）与地基，2026-10-20 又依次新增第四张卡「经期记录」、第五张卡「亲密记录」与第六张卡「亲密日历」；三张卡之外的表、Controller、领域包与内容库全部下线，`couple` 从 167 个 Java 文件缩到 45 个、`couple_*` 表从 22 缩到 6，经期、亲密记录与日历落地后为 63 个文件 / 8 张表。要点：
 
 - 表映射（`infrastructure/persistence/XxxPO`）：`@Data @TableName` + `@TableId(IdType.INPUT)`（UUID 由应用层生成），**只有映射职责**，业务名让给领域类型（ADR-0002）。
 - Mapper：`@Mapper interface extends com.smart.chat.sharedkernel.persistence.BaseMapperCompat<XxxPO>`（项目对 MP `BaseMapper` 的统一兼容层），常用查询写成 default 方法；**Mapper 不感知领域类型**。
