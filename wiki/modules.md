@@ -4,7 +4,7 @@
 > 2026-10-04 由 11 个功能包合成 5 个限界上下文（ADR-0001），2026-10-05 五个上下文全部完成战术改造
 > （ADR-0008；判据与实测见 `docs/ddd/06-ddd-standard.md`，施工模板见 `docs/ddd/05-tactical-playbook.md`）；
 > 同日 couple 又经历一轮**大裁剪**（`docs/adr/0010`），现役功能卡之外的功能、表、类全部下线。
-> 统计口径（2026-10-20 亲密日历后实测）：主源文件 215 个、测试文件 71 个、`@TableName` 实体 19 个 = 仓储端口 19 个 = 适配器 19 个（21 张表里 `couple_notify` 与 `message_star` 已无代码，其余一张表一端口一适配器，无遗漏）。
+> 统计口径（2026-10-20 三轮裁剪后实测）：主源文件 187 个、测试文件 61 个、`@TableName` 实体 16 个 = 仓储端口 16 个 = 适配器 16 个（18 张表里 `couple_notify` 与 `message_star` 已无代码，其余一张表一端口一适配器，无遗漏）。
 
 ## 每个上下文内部的四层（方向唯一）
 
@@ -21,20 +21,20 @@
 `api`/`application`/`domain` 任一层 import 本上下文的 `infrastructure.persistence` 都会让构建红
 （`ArchitectureGuardTest.persistenceTypesStayBehindRepositoryPorts`，账本 `TACTICAL_PENDING` 现为空集）。
 
-## couple — 情侣空间（核心域，63 个文件）
+## couple — 情侣空间（核心域，34 个文件）
 
-> 2026-10-05 二轮裁剪（ADR-0010）与 2026-10-20 后续两批裁剪（百日回顾/心动时刻、通知中心/运营看板）后只剩三张功能卡 + 地基，同日晚些时候依次新增经期记录、亲密记录与亲密日历三张卡；下表为现役实测。
+> 2026-10-05 二轮裁剪（ADR-0010）与 2026-10-20 后续几批裁剪（百日回顾/心动时刻、通知中心/运营看板，以及三轮裁剪的每日一问/连续互动打卡/愿望清单/心动值/空间个性化）后只剩一张功能卡「亲密日历」+ 地基；下表为现役实测。
 
 | 层 | 内容 |
 |---|---|
-| api | 7 个 Controller（28 端点）：`CoupleController`（地基：邀请建立/纪念日/空间个性化/`relationship-of`/心动值，10）、`CoupleStreakController`（连续打卡看板+补签，2）、`CoupleQuestionController`（每日一问，2）、`CoupleWishController`（愿望清单，6）、`CouplePeriodController`（经期记录，4）、`CoupleIntimateLogController`（亲密记录，3）、`CoupleCalendarController`（亲密日历月度读模型，1）。原 10 个历史卡 Controller、`CouplePinController`、`CoupleMemoryController`、`CoupleNotifyController` 与 `CoupleAdminController` 已下线 |
-| application | 7 个 Service（`CoupleService`/`CoupleStreakService`/`CoupleQuestionService`/`CoupleWishService`/`CouplePeriodService`/`CoupleIntimateLogService`/`CoupleCalendarService`——最后这个只读，跨经期与亲密两个聚合出一份月度结果）+ `DomainRules`（`RuleViolation` → 400/403/404/409，文案不重写）；VO 是 Service 内嵌 `record` |
-| domain | 23 文件。分包：`space`（`CoupleSpace` 聚合根：字典序定 A/B、单向解散、`decorate`/`renamePartner` 闸；`CoupleSpaceRepository` 端口）、`invite`（`Invite` 单向状态机 + 两处归属闸 + 端口）、`streak`（`StreakDay` 薄实体、`StreakDays` 读时算、`StreakTier` 六档、`MakeupPolicy` 补签闸门、`StreakDayRepository` 端口）、`question`（`QuestionAnswer` 每人行 + `DailyQuestion` 双方读模型 + 端口）、`wish`（`Wish` 的「已准备」对许愿人保密 + 端口）、`period`（`PeriodRecord` 实体：`covers`/`startsOn`/`endsOn` 判某天在不在经期里，没记结束日的只到今天 + `PeriodCycles` 读时算平均周期与下次预测 + `PeriodRepository` 端口）、`intimatelog`（`IntimateLog` 实体：类型 EDGE/SEX、备注 ≤60、未来日拒绝；`IntimateLogs` 读时算上次/本月分类/累计 + `IntimateLogRepository` 端口）、`intimacy`（`IntimacyCalculator` 五项权重与七级阈值 + `IntimacySource` 供数值对象，纯领域无端口）、`RuleViolation` |
-| infrastructure | `persistence` 7 `*PO` + 7 Mapper + 7 `*RepositoryAdapter`（共 21 文件）；`content/CoupleQuestionBank`（每日一问题库 75 题 + `stableHash`，现役唯一静态内容库）；`scheduler` 2 个 Job（`CoupleQuestionJob`/`CoupleReminderJob`）；`account/SpaceCascadeAdapter`（实现 identity 的 `AccountCascade` 端口，供注销级联） |
+| api | 4 个 Controller（14 端点）：`CoupleController`（地基：邀请建立/纪念日/`relationship-of`/解除，8）、`CouplePeriodController`（经期记录写口，3）、`CoupleIntimateLogController`（亲密记录写口，2）、`CoupleCalendarController`（亲密日历月度读模型，1）。原 10 个历史卡 Controller、`CouplePinController`、`CoupleMemoryController`、`CoupleNotifyController`、`CoupleAdminController` 与 `CoupleQuestionController`、`CoupleStreakController`、`CoupleWishController` 已下线 |
+| application | 4 个 Service（`CoupleService`/`CouplePeriodService`/`CoupleIntimateLogService`/`CoupleCalendarService`——最后这个只读，跨经期与亲密两个聚合出一份月度结果，两张记录卡合并进日历后它是唯一的读口；经期与亲密那两个只落库与守闸门，返回 void 不再投影看板）+ `DomainRules`（`RuleViolation` → 400/403/404/409，文案不重写）；VO 是 Service 内嵌 `record` |
+| domain | 11 文件。分包：`space`（`CoupleSpace` 聚合根：字典序定 A/B、单向解散、`bindAnniversary` 闸；`CoupleSpaceRepository` 端口）、`invite`（`Invite` 单向状态机 + 两处归属闸 + 端口）、`period`（`PeriodRecord` 实体：`covers`/`startsOn`/`endsOn` 判某天在不在经期里，没记结束日的只到今天 + `PeriodCycles` 读时算平均周期与下次预测 + `PeriodRepository` 端口）、`intimatelog`（`IntimateLog` 实体：类型 EDGE/SEX、备注 ≤60、未来日拒绝；`IntimateLogs` 读时算上次/本月分类/累计 + `IntimateLogRepository` 端口）、`RuleViolation`。`streak`/`question`/`wish`/`intimacy` 四个包随其功能于 2026-10-20 一并删除 |
+| infrastructure | `persistence` 4 `*PO` + 4 Mapper + 4 `*RepositoryAdapter`（共 12 文件）；`scheduler` 1 个 Job（`CoupleReminderJob`，09:30 纪念日倒数）；`account/SpaceCascadeAdapter`（实现 identity 的 `AccountCascade` 端口，供注销级联）。`content/CoupleQuestionBank` 每日一问题库已随卡片下线 |
 
 ## messaging — 好友 / 私信 / 在线状态 / 推送门面（支撑域，59 个文件）
 
-- **零业务出向依赖之外只依赖 `identity.domain`**；对外发布 5 个语言端口：`CoupleEventPublisher`（15 个情侣事件的唯一出口）、`PeerProfileReader`、`FriendshipChecker`、`PresenceReader`、`AnnouncementBroadcaster`。
+- **零业务出向依赖之外只依赖 `identity.domain`**；对外发布 5 个语言端口：`CoupleEventPublisher`（6 个情侣事件的唯一出口）、`PeerProfileReader`、`FriendshipChecker`、`PresenceReader`、`AnnouncementBroadcaster`。
 - domain：`friend/Friend`+`FriendRequest`+`FriendshipGate`（双向边与申请状态机）、`conversation/PrivateMessage`、`pin/Conversation`+`ConversationPin`、`profile/UserProfile`、`reaction/MessageReaction`，各配端口（6 个）；消息收藏 `MessageStar` 已删，`message_star` 表保留未删。
 - infrastructure：6 `*PO` + 6 Mapper + 6 适配器；`transport`（`ImPushService`/`ChatSessionRegistry`/`ChatEndpoint`/`ChatWebSocketBridge`/`ChatMessage`）、`throttle/MessageRateLimiter`、`identity/` 下 4 个实现 identity 端口的适配器。
 - 取数硬口径：双向会话谓词吃不到索引，「最后一条」「未读数」走 `findLatestCreatedPerPeer` / `selectUnreadCountsByPeer`，不许退回 per-peer 循环。

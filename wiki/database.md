@@ -1,10 +1,10 @@
 # 数据库
 
-> 本页回答：全库数据约定、V1→V55 Flyway 迁移时间线、schema 中的 21 张表（其中 2 张已无代码）的逐表清单、随 ADR-0010 下线的 16 张 `couple_*` 表。
+> 本页回答：全库数据约定、V1→V56 Flyway 迁移时间线、schema 中的 18 张表（其中 2 张已无代码）的逐表清单、历轮裁剪陆续下线的 `couple_*` 表。
 
-结构事实源：真正被运行时执行的是 `src/main/resources/db/V*.sql`（Flyway 增量脚本，**V1→V55 共 55 个**）；`src/main/resources/schema.sql` 是**全量结构文档、不再被执行**（`spring.sql.init.mode=never`）。生产 MariaDB 10.11 与测试 H2（MODE=MySQL）跑同一批 V 脚本。
+结构事实源：真正被运行时执行的是 `src/main/resources/db/V*.sql`（Flyway 增量脚本，**V1→V56 共 56 个**）；`src/main/resources/schema.sql` 是**全量结构文档、不再被执行**（`spring.sql.init.mode=never`）。生产 MariaDB 10.11 与测试 H2（MODE=MySQL）跑同一批 V 脚本。
 
-**当前规模（实测 `grep -c "^CREATE TABLE" src/main/resources/schema.sql` = 21）**：schema 里 **21 张表 = 8 张 `couple_*` + 13 张非情侣表**；`couple_notify` 与 `message_star` 已无读写代码，按「不破坏性删表」原则保留。其中 couple 侧在 2026-10-04 裁剪（V50/V51）后为 19 张、2026-10-05 v8 第一批（V52）加到 22 张、**同日二轮裁剪（V53）删到 6 张**（`docs/adr/0010-couple-trim-to-v8-features.md` 第 1/9 条）、**2026-10-20 新增经期记录（V54）后为 7 张、新增亲密记录（V55）后为 8 张**。13 张非情侣表自 V2 基线以来未受这些情侣裁剪影响。
+**当前规模（实测 `grep -c "^CREATE TABLE" src/main/resources/schema.sql` = 18）**：schema 里 **18 张表 = 5 张 `couple_*` + 13 张非情侣表**；`couple_notify` 与 `message_star` 已无读写代码，按「不破坏性删表」原则保留。couple 侧的来路：2026-10-04 裁剪（V50/V51）后 19 张、v8 第一批（V52）加到 22 张、二轮裁剪（V53）删到 6 张、2026-10-20 新增经期记录（V54）与亲密记录（V55）后 8 张、**同日三轮裁剪（V56）删掉每日一问 / 打卡 / 愿望三张表后为 5 张**。13 张非情侣表自 V2 基线以来未受这些情侣裁剪影响。
 
 ## 数据约定（硬性）
 
@@ -21,9 +21,9 @@
 
 改表流程与幂等细则：`.agents/skills/db-migration/SKILL.md`；「新增 V 脚本 + 同步 schema.sql + 独立 db commit」为硬性要求（见 [dev-guide.md](dev-guide.md)）。
 
-## 迁移时间线（V1 → V55）
+## 迁移时间线（V1 → V56）
 
-> 下表记录每个脚本**当时**建过/删过什么，是历史事实；其中大量 `couple_*` 表已在 V50/V51/V53 被 drop，不代表现役（现役只有 21 张）。
+> 下表记录每个脚本**当时**建过/删过什么，是历史事实；其中大量 `couple_*` 表已在 V50/V51/V53/V56 被 drop，不代表现役（现役只有 18 张）。
 
 | 版本 | 主题 | 变更摘要 |
 |---|---|---|
@@ -38,11 +38,12 @@
 | **V53** | **二轮裁剪（2026-10-05）** | **drop 16 张**被删功能表；`couple_bond_day` 改名重建为 `couple_streak_day`（索引 `uk_couple8_bond_day`→`uk_couple9_streak_day`，用 DROP+CREATE 因 H2 索引名全库唯一、跨库改名无双兼容写法，且该表 V52 才建、库外无数据）；`couple_space` DROP COLUMN `stickers`。现役 `couple_*` 收口到 **6 张**、全库 **19 张**。不做数据迁移、不建备份表（被删功能数据作废，生产库执行前手动备份）。 |
 | **V54** | **新增经期记录（2026-10-20）** | 新建 `couple_period`（一行=一次经期的开始日，结束日可后补；索引 `uk_couple10_period_start(space_id, start_day)`）。`schema.sql` 同步追加该表定义；现役 `couple_*` 增至 **7 张**、全库 **20 张**。存量库首启只有这一条新增脚本，无需迁移数据。 |
 | **V55** | **新增亲密记录（2026-10-20）** | 新建 `couple_intimacy_log`（一行=一次边缘亲昵或性生活，同一天可多条；索引 `idx_couple11_intimacy_space_day(space_id, day)`）。`schema.sql` 同步追加该表定义；现役 `couple_*` 增至 **8 张**、全库 **21 张**。存量库首启只有这一条新增脚本，无需迁移数据。 |
+| **V56** | **三轮裁剪（2026-10-20）** | 按用户指令「保留在一起天数、纪念日、日历记录，其它功能都不要了」**drop 3 张**：`couple_question_answer`（每日一问）、`couple_streak_day`（连续互动打卡与六档解锁）、`couple_wish`（愿望清单）。`couple_*` 收口到 **5 张**、全库 **18 张**；`couple_space` 的 `nick_a`/`nick_b`/`slogan`/`theme`/`city_a`/`city_b` 六列**保留不动**（与 `couple_notify`、`message_star` 同口径的死存储，聚合已不再持有）。不做数据迁移、不建备份表。 |
 
-> **索引/唯一键名全库唯一**（H2 索引不随表隔离，重名报 42S11「Index already exists」）：V52 用 `uk_couple8_` 前缀、V53 新增 `uk_couple9_streak_day`、V54 新增 `uk_couple10_period_start`、V55 新增 `idx_couple11_intimacy_space_day`，写入前均对全部 `db/V*.sql` 查过重。
+> **索引/唯一键名全库唯一**（H2 索引不随表隔离，重名报 42S11「Index already exists」）：V52 用 `uk_couple8_` 前缀、V53 新增 `uk_couple9_streak_day`、V54 新增 `uk_couple10_period_start`、V55 新增 `idx_couple11_intimacy_space_day`，写入前均对全部 `db/V*.sql` 查过重。V56 只 drop 表、不新增任何索引名。
 > **已入库脚本一律不得再修改**：每轮裁剪都新增脚本（V51 不改 V50、V53 不改 V52），因为回改会让打过该版本的库在 Flyway 校验和上失败。
 
-## schema 表清单（21 张，实测自 schema.sql 的 CREATE TABLE）
+## schema 表清单（18 张，实测自 schema.sql 的 CREATE TABLE）
 
 ### identity — 账号与准入（3 张）
 
@@ -77,26 +78,21 @@
 |---|---|---|---|
 | `uploaded_file` | 上传文件档案（内容寻址去重） | `original_name`/`stored_path`/`content_type`/`size`/`sha256` | `uq_uploaded_file_sha256(sha256)` |
 
-### couple — 情侣空间（8 张，详写）
+### couple — 情侣空间（5 张，详写）
 
 | 表 | 用途 | 关键字段 | 唯一键 / 索引 |
 |---|---|---|---|
-| `couple_space` | 空间本体（唯一容器） | `user_a`/`user_b`（`utf8mb4_bin`，字典序小者为 A）、`status` ACTIVE/DISSOLVED、`anniversary`(yyyy-MM-dd)、`slogan`(≤60)、`theme`(classic/cherry/ocean/forest/night)、`nick_a`/`nick_b`(≤30)、`created`/`dissolved_at`；`city_a`/`city_b` 列为历史遗留（异地功能已下线，列仍在） | PK `id`；`idx_couple_space_a(user_a)`、`idx_couple_space_b(user_b)`。**有意不加**「一用户一有效空间」唯一约束（ADR-0007 第 12 条 / ADR-0010 第 11 条） |
+| `couple_space` | 空间本体（唯一容器） | `user_a`/`user_b`（`utf8mb4_bin`，字典序小者为 A）、`status` ACTIVE/DISSOLVED、`anniversary`(yyyy-MM-dd，在一起天数与纪念日倒数共同的起点)、`created`/`dissolved_at`；`slogan`(≤60)、`theme`、`nick_a`/`nick_b`(≤30)、`city_a`/`city_b` 四组六列是**死存储**（空间个性化与异地功能已下线，列保留、代码不再读写） | PK `id`；`idx_couple_space_a(user_a)`、`idx_couple_space_b(user_b)`。**有意不加**「一用户一有效空间」唯一约束（ADR-0007 第 12 条 / ADR-0010 第 11 条） |
 | `couple_invite` | 建立空间的邀请单 | `from_user`/`to_user`、`message`(≤100)、`status` PENDING/ACCEPTED/REJECTED/CANCELED、`updated_at` | PK `id`；`idx_couple_invite_to(to_user,status)` |
-| `couple_notify` | 通知中心落库副本（2026-10-20 读写代码已删，表保留未删；不再有新行） | `username`、`event`（历史 15 个事件名）、`actor`（`system`=定时任务）、`detail`、`read_flag` | PK `id`；`idx_couple_notify_user(username,created)`。`event` 字段不做白名单 |
-| `couple_streak_day` | 连续互动打卡日（原 `couple_bond_day`，V53 改名） | `space_id`、`day`(yyyy-MM-dd)、`source` AUTO/MAKEUP、`operator_user`、`created`；连续天数与六档解锁由本表 day 集合**读时算**，无缓存列 | `uk_couple9_streak_day(space_id,day)` |
-| `couple_question_answer` | 每日一问回答（同时是打卡触发源） | `space_id`、`day`、`question_index`（按 space+day 稳定哈希，落快照）、`question`(≤200)、`username`、`answer`(≤300)、`created`/`updated_at`；「双方都答过才互看」是读时判定，库里不存可见位 | `uk_couple8_question_day_user(space_id,day,username)` |
-| `couple_wish` | 愿望清单 | `space_id`、`owner_user`（想要的人）、`creator_user`（记录的人，可不同）、`title`(≤80)、`note`(≤200)、`status` OPEN/PREPARED/FULFILLED、`prepared_by`/`prepared_at`（对被许愿人保密）、`fulfilled_at` | `uk_couple8_wish_title(space_id,owner_user,title)` |
+| `couple_notify` | 通知中心落库副本（2026-10-20 读写代码已删，表保留未删；不再有新行） | `username`、`event`（历史事件名，不做白名单）、`actor`（`system`=定时任务）、`detail`、`read_flag` | PK `id`；`idx_couple_notify_user(username,created)` |
 | `couple_period` | 经期记录（V54） | `space_id`、`start_day`(yyyy-MM-dd)、`end_day`(yyyy-MM-dd，未结束为 `NULL`)、`recorder_user`（记录人，只留痕不作权限闸门）、`created`/`updated_at`；平均周期与下次预测**读时算**（`PeriodCycles`，有效间隔 15–45 天），表里不存缓存列 | `uk_couple10_period_start(space_id,start_day)` |
 | `couple_intimacy_log` | 亲密记录（V55） | `space_id`、`day`(yyyy-MM-dd)、`kind` EDGE（边缘亲昵）/SEX（性生活）、`note`(≤60，可空)、`recorder_user`（记录人，只留痕不作权限闸门）、`created`；**同一天允许同类型/不同类型多条**（无唯一键）；上次记录、本月分类型次数与累计次数均**读时算**（`IntimateLogs`），表里不存缓存列 | `idx_couple11_intimacy_space_day(space_id,day)`（普通索引，非唯一） |
 
-> **随 ADR-0010 下线的 16 张 `couple_*` 表**（不再存在，确切表名的 DROP 列表见 `db/V53__trim_couple_space_to_v8_features.sql` 与 `docs/adr/0010` 第 1 条）：
-> 贴贴动作、共同日历（倒数日清单）、安全词约定、安全词使用记录、愿望券本、求抱抱、今晚饭票、好事簿、心情日记、心情回应、恋爱盲盒、
-> 积分台账、加班预报与留灯、刮刮乐、家务轮盘、常用收藏卡。（另 `couple_bond_day` 是**改名重建**为 `couple_streak_day`，不计入删除。）
+> **历轮裁剪下线、现已不存在的 `couple_*` 表**：随 ADR-0010 二轮裁剪 drop 的 16 张（贴贴动作、共同日历、安全词约定、安全词使用记录、愿望券本、求抱抱、今晚饭票、好事簿、心情日记、心情回应、恋爱盲盒、积分台账、加班预报与留灯、刮刮乐、家务轮盘、常用收藏卡，确切表名见 `db/V53__trim_couple_space_to_v8_features.sql`），以及 2026-10-20 三轮裁剪 drop 的 3 张（`couple_question_answer` 每日一问、`couple_streak_day` 连续互动打卡、`couple_wish` 愿望清单，见 `db/V56__trim_couple_space_to_days_and_calendar.sql`）。另 `couple_bond_day` 是 V53 **改名重建**为 `couple_streak_day`，不计入删除，而这张表本身已在 V56 删掉。
 
 ## Flyway 现状
 
-- 运行时建表**只走 Flyway**：`spring.flyway.locations=classpath:db`，脚本命名 `V{n}__{描述}.sql`，**最新到 V55**（55 个迁移在 H2 文件库从 V1 全量重放通过，见 ADR-0010 验证一节与 V55 新增后的全量 `mvn -o test`）。
+- 运行时建表**只走 Flyway**：`spring.flyway.locations=classpath:db`，脚本命名 `V{n}__{描述}.sql`，**最新到 V56**（56 个迁移在 H2 从 V1 全量重放通过——每轮全量 `mvn -o test` 跑的就是这条链）。
 - `spring.sql.init.mode=never`：`src/main/resources/schema.sql` 已退役为**全量结构文档**（供人读与逐表核对），**不再被任何环境执行**；改表时必须「新增 V 脚本 + 同步 schema.sql」双写。
 - `baseline-on-migrate=true` + `baseline-version=0`：存量老库首次启动自动打 0 基线后**从 V1 全量重放**——所以**每个脚本都必须幂等**（`CREATE TABLE IF NOT EXISTS` / `ADD·DROP COLUMN ... IF NOT EXISTS` / `DROP TABLE IF EXISTS`）。`clean-disabled=true`。
 - 已入库脚本不可修改；新版本号 = `db` 目录最大版本 + 1。完整规范见 `.agents/skills/db-migration/SKILL.md`。
@@ -104,5 +100,5 @@
 ## 查询与访问模式备忘
 
 - 全部经 MyBatis-Plus `BaseMapperCompat` 的 default 方法，无 XML mapper、无手写 SQL 文件；复杂聚合为多查 + 内存算。
-- 「按天/空间稳定取内容」不查库，用 `CoupleQuestionBank.stableHash(space + salt + day)` 在静态数组上取模——同日重放一致。
+- 经期与亲密记录都是**读时算**：库里只存原始行，平均周期、下次预计、本月与累计次数在领域对象（`PeriodCycles` / `IntimateLogs`）上现算，不建缓存列，也就没有「缓存与真值漂移」这一类 bug。
 - **双向会话谓词 `(... AND from=?) OR (... AND to=?)` 吃不到索引**：取「最后一条」「未读数」一律走 `findLatestCreatedPerPeer` / `selectUnreadCountsByPeer`，不许退回 per-peer 循环（V49 补索引后实测仍慢）。

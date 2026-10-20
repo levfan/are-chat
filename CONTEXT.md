@@ -6,7 +6,7 @@
 ## 全局规则
 
 - 一个概念**只有一个名字**。历史别名（如 `letter` 曾同时指「情书」与「异地见面信」）已随裁剪消失，不得再引入。
-- 中文文案与代码术语一一对应：界面上叫「每日一问」的概念，代码里是 `question`，不出现 `qa`/`daily-ask` 这类同义异名。
+- 中文文案与代码术语一一对应：界面上叫「亲密日历」的概念，代码里是 `CoupleCalendar`，不出现 `calendar-month`/`month-view` 这类同义异名。
 - 表映射类一律 `*PO`（ADR-0002/0008）；下表「代码」列写的是**领域类型名**，括号里给出对应的表映射类，两者不是同一个类型，翻译只在仓储适配器里发生。
 - 术语属于**它所在的限界上下文**。`user` 在 `identity` 指账号，在 `messaging` 指好友关系的一端，在 `couple` 指空间成员——同名不同义是允许的，跨上下文传递时必须显式转换（见 `docs/ddd/02-layering.md`）。
 
@@ -34,47 +34,42 @@
 | 空间 | `CoupleSpace`（表映射 `CoupleSpacePO`） | 两个人绑定的唯一容器；`userA`/`userB` 按**用户名（区分大小写）字典序**分配 | 一用户只能在一个有效空间 |
 | 我 / TA | `me` / `partnerOf(me)` | 服务层的两个视角；`partnerOf` 是唯一的「对方」定义 | 不得出现 `user1/user2` 这类无语言指称的变量 |
 | 有效空间 | `requireSpace(me)` | 取当前有效空间，无效抛 404 | 「未建空间」一律 404 中文文案，不由前端兜 |
-| 心动值 | `Intimacy`（`CoupleService.intimacy()`，算式在 `IntimacyCalculator`） | 由五项活数据算出的关系温度计：`daysTogether×1 + checkinDays×2 + longestStreak×3 + answerDays×3 + wishFulfilled×5` | 阶梯阈值 0/60/150/260/400/560/760；2026-10-05 二轮裁剪**已重标定**（旧六项供数全灭，沿用会把称号卡在一级） |
-| 答题天数 | `answerDays`（`CoupleQuestionService.bothAnsweredDays(spaceId)`） | **双方当天都答完每日一问**的日子数，单向答了不算 | 与「打卡日」同源，不另立第二套判定 |
-| 愿望清单 | `Wish`（表映射 `CoupleWishPO`；`wish`） | 「我想要什么东西」，双方都能添加 | **不是愿望券**（愿望券已随 ADR-0010 第 1 条下线）；`PREPARED` 对被许愿人保密 |
-| 偷偷准备 | `Wish.visibleStatusFor(me)` | 对方给我许的愿标了「已准备」，我这边仍显示 OPEN | 唯一回显入口；标记/撤销**不推任何事件**，连 `preparedAt` 也置 null |
-| 打卡日 | `StreakDay`（表映射 `CoupleStreakDayPO`；`streak`） | 那一天双方共同活跃：都答完每日一问，或空间建立当天，或补签成功 | 原名 `BondDay`——`bond` 在此表建立之后才随贴贴一起下线，2026-10-05 改名（ADR-0010 第 5 条） |
-| 连续互动 | `StreakDays` | 由打卡日集合读时算：`currentStreak` / `longestStreak` | 今天没打**不算断**，只有昨天缺行才叫断；不物化缓存列 |
-| 解锁档位 | `StreakTier` | 六档 3/7/14/21/30/50 天，管气泡·背景·昵称光效·挂件·称号·贴纸 | 判 `longestStreak`，**单调不回退**；档位 key 是前端挂视觉的合同，上线即冻结 |
-| 补签 | `MakeupPolicy` | 免费买回一个缺口 | 只能补最近 7 天、每自然月最多 3 次、今天不许补；**不再扣积分**（积分台账已删，稀缺性换成次数） |
-| 每日一问 | `QuestionAnswer`（表映射 `CoupleQuestionAnswerPO`；双方视角的读模型是 `DailyQuestion`，`question`） | 一个空间一天一题，每人一行答案 | 同空间同天同题（`stableHash`）；**双方都答过才互看**；它同时是打卡的触发源（`CoupleQuestionService.answer()` 唯一挂钩） |
-| 在一起的日子 | `CoupleSpace.anniversary`（列） | 单个日期，恋爱天数 / 里程碑横幅 / 纪念日倒数三处的共同根据 | **不是共同日历**（`couple_anniversary` 倒数日清单已删） |
-| 通知 | `NotifyEntry`（表映射 `CoupleNotifyPO`） | 情侣事件推送的落库副本（离线可补看） | 经 `CoupleNotifyRecorder` 挂接，im 不反向依赖 couple；邀请能否被看见全押在这一条上，故算地基不算功能 |
-| 邀请 | `Invite`（表映射 `CoupleInvitePO`） | PENDING→ACCEPTED/REJECTED/CANCELED 单向，只能处理发给自己的、只能撤回自己发的 | 建立流程写第 1 个打卡日（`CoupleStreakService.confirmCreationDay`） |
+| 在一起的日子 | `CoupleSpace.anniversary`（列） | 单个日期，在一起天数与纪念日倒数共同的根据 | **不是共同日历**（`couple_anniversary` 倒数日清单已删）；没绑过时天数按建空间那天起算 |
+| 在一起的天数 | `CoupleService.daysTogether(space)` → `SpaceVO.days` | 从纪念日（缺省取建立日）数到今天，含当天 | 建立当天 = 第 1 天；最小值钳到 1 |
+| 经期 | `PeriodRecord`（表映射 `CouplePeriodPO`；`couple_period`） | 一次经期的一行：开始日必填、结束日可后补 | 结束日只能记「今天」，历史区间改不了；同一天不许记两遍 |
+| 覆盖日 | `PeriodRecord.covers(day, today)` | 某一天是不是在这次经期的第一天到最后一日之间 | 记了结束日含首含尾；**没记结束日只到今天**；脏日期静默算没覆盖 |
+| 周期 | `PeriodCycles` | 由若干次经期的**开始日之间隔**读时算：平均周期、下次预计、距下次天数 | 只认 15–45 天的有效间隔；一条记录时按默认 28 天估；文案必须写「按记录推算，不是医学判断」 |
+| 亲密记录 | `IntimateLog`（表映射 `CoupleIntimateLogPO`；`couple_intimacy_log`） | 一次边缘亲昵（EDGE）或性生活（SEX）的一行 | 同一天允许多条；上次/本月分类型/累计全部**读时算**（`IntimateLogs`） |
+| 亲密日历 | `CoupleCalendarService.CoupleCalendarVO` | 一个自然月的**唯一读模型**：经期覆盖日/开始日/结束日、本月经期区间、周期统计、本月亲密标记 | 跨两个聚合但**只读**；写仍走经期与亲密各自的端点；前端不自己拼两张看板，也不自己数天数 |
+| 通知 | `NotifyEntry`（表映射 `CoupleNotifyPO`） | 情侣事件推送的落库副本 | 通知中心已于 2026-10-20 下线，表保留但**已无读写代码**，不再有新行 |
+| 邀请 | `Invite`（表映射 `CoupleInvitePO`） | PENDING→ACCEPTED/REJECTED/CANCELED 单向，只能处理发给自己的、只能撤回自己发的 | 同意之后才存在空间；不再顺带写打卡日（打卡已下线） |
 
-> 本轮删掉的术语（贴贴 `BondAction` / 心情日记 `Mood` / 心情回应 `MoodReaction` / 求抱抱 `ComfortRequest` /
-> 安全词与暂停复盘 `Safeword`·`SafewordUse` / 饭票 `DineTicket` / 家务轮盘 `SpinTask` / 加班预报与留灯 `QuestOvertime` /
+> 历轮裁剪删掉的术语（贴贴 `BondAction` / 心情日记 `Mood` / 心情回应 `MoodReaction` / 求抱抱 `ComfortRequest` /
+> 安全词 `Safeword`·`SafewordUse` / 饭票 `DineTicket` / 家务轮盘 `SpinTask` / 加班预报与留灯 `QuestOvertime` /
 > 愿望券 `WishCoupon` / 好事簿 `Deed` / 刮刮乐与盲盒 `Scratch`·`MysteryBox` / 积分台账 `PointEntry` /
 > 共同日历 `Anniversary` / 收藏卡 `UserPin` / 百日回顾 `CoupleMemory` / 心动时刻（`private_message.heart_at` 列保留但已不读不写）
-> 已从本表移除，判据与连带改造见 `docs/adr/0010-couple-trim-to-v8-features.md`。
-> 再引入同名概念前，必须先回答「它和保留的四项功能是什么关系」。
+> 已从本表移除，判据见 `docs/adr/0010-couple-trim-to-v8-features.md`。
+> 2026-10-20 三轮裁剪又删掉：**每日一问** `QuestionAnswer`·`DailyQuestion`、**打卡日与连续互动** `StreakDay`·`StreakDays`·`StreakTier`·`MakeupPolicy`、
+> **愿望清单** `Wish`、**心动值** `Intimacy`·`IntimacyCalculator`·`IntimacySource`、**空间个性化**（宣言 `slogan` / 主题 `theme` / 爱称 `nickOf`·`renamePartner`）——
+> 心动值的五项供数里四项随这三张卡一起消失，留着就是一串恒为 0 的数字，故整条下线；`couple_space` 的对应六列留作死存储不读写。
+> 再引入同名概念前，必须先回答「它和保留的在一起天数、纪念日、亲密日历是什么关系」。
 
 ## 事件命名口径
 
-WS 事件名 = 小写连字符、动词或过去分词结尾，前缀族即聚合归属：现役 **15 个**，按族分四组（实测命令：
+WS 事件名 = 小写连字符、动词或过去分词结尾，前缀族即聚合归属：现役 **6 个**，全部属于地基（实测命令：
 `grep -rho -E 'pushCoupleEvent(Both)?\("[a-z-]+"' src/main/java | sed 's/.*("//' | tr -d '"' | sort -u`）。
 
 | 族 | 事件 |
 |---|---|
-| 建立与地基 | `invite` `invite-accepted` `invite-rejected` `dissolved` `anniversary-updated` `anniversary-reminder` `space-themed` `pet-name-changed` |
-| 连续互动打卡 | `streak-checkin` `streak-unlocked` `streak-makeup` |
-| 每日一问 | `question-daily` `question-answered` |
-| 愿望清单 | `wish-added` `wish-fulfilled` |
+| 建立与解散 | `invite` `invite-accepted` `invite-rejected` `dissolved` |
+| 在一起的日子 | `anniversary-updated`（对方改了日子）、`anniversary-reminder`（`CoupleReminderJob` 的周年倒数） |
 
-随 2026-10-05 二轮裁剪下线的族（`bond-*` `mood-*` `comfort-*` `catch-*` `dine-*` `factory-*` `quest-*`
-`ceremony-*` `echo-*` `scratch-*` `box-*` `anniversaries-changed` `birthday-*` `night-care`）不得复活。
-`pet-name-changed` 是**保留**的那一个：爱称的写入口从 `PUT /api/couple/bond/pet-name` 合并进了
-`PUT /api/couple/profile`，但「对方给你起了新爱称」必须单独成一条事件——三项个性化共用一条
-`space-themed` 会把一件心事说成一次装修（分流见 `CoupleProfilePushTest`）。
+随历轮裁剪下线的族（`bond-*` `mood-*` `comfort-*` `catch-*` `dine-*` `factory-*` `quest-*` `ceremony-*`
+`echo-*` `scratch-*` `box-*` `anniversaries-changed` `birthday-*` `night-care`，以及 2026-10-20 删的
+`streak-*` `question-*` `wish-*` `pet-name-changed` `space-themed`）不得复活。
 
-刻意**不存在**的事件：`wish-prepared` / `wish-unprepared`。愿望被偷偷标记「已准备」不推任何事件，
-这是产品规则而不是遗漏（`CoupleWishServiceTest.markingPreparedPushesNothingAtAll` 用
-`verifyNoInteractions(push)` 锁死）——将来谁"顺手补上"这个推送，就等于把惊喜删掉。
+刻意**不存在**的事件：经期与亲密记录这一条链路**一个事件都不发**。这是两个人的私密账本，
+不因对方点了一下就弹提醒——前端写完自己重拉当月日历。
 
 ## 产品红线（长期约束）
 

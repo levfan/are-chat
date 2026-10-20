@@ -21,11 +21,11 @@
 
 按**限界上下文**分包（`couple` / `messaging` / `identity` / `platform` / `filestorage` + `sharedkernel` + `bootstrap`），
 每个上下文内部四层，2026-10-05 五个上下文全部完成战术改造（判据与实测见 `docs/ddd/06-ddd-standard.md`、决策见 `docs/adr/0001-0008`）；
-同日核心域 `couple` 又经历一轮功能大裁剪（`docs/adr/0010-couple-trim-to-v8-features.md`），百日隐藏页与心动时刻随后也按「用不上就裁」下线，裁剪后只留三张功能卡（每日一问 / 连续互动打卡 / 愿望清单）与地基，2026-10-20 又依次新增第四张卡「经期记录」、第五张卡「亲密记录」与第六张卡「亲密日历」；三张卡之外的表、Controller、领域包与内容库全部下线，`couple` 从 167 个 Java 文件缩到 45 个、`couple_*` 表从 22 缩到 6，经期、亲密记录与日历落地后为 63 个文件 / 8 张表。要点：
+同日核心域 `couple` 又经历一轮功能大裁剪（`docs/adr/0010-couple-trim-to-v8-features.md`），百日隐藏页与心动时刻随后也按「用不上就裁」下线；2026-10-20 先依次新增经期记录、亲密记录与亲密日历三张卡，同日的三轮裁剪再按「只保留在一起天数与日历记录」把每日一问、连续互动打卡与六档解锁、愿望清单、心动值与七级恋爱等级、空间个性化（宣言·主题·爱称）全部下线，现役只剩一张功能卡「亲密日历」加地基；功能卡之外的表、Controller、领域包与内容库全部下线，`couple` 从 167 个 Java 文件缩到 34 个、`couple_*` 表从 22 缩到 5 张。要点：
 
 - 表映射（`infrastructure/persistence/XxxPO`）：`@Data @TableName` + `@TableId(IdType.INPUT)`（UUID 由应用层生成），**只有映射职责**，业务名让给领域类型（ADR-0002）。
 - Mapper：`@Mapper interface extends com.smart.chat.sharedkernel.persistence.BaseMapperCompat<XxxPO>`（项目对 MP `BaseMapper` 的统一兼容层），常用查询写成 default 方法；**Mapper 不感知领域类型**。
-- 领域（`domain/<集合>/`）：`Xxx` 聚合或薄实体（私有构造 + `restore()` 不校验 + 带语义的工厂校验并抛 `RuleViolation`，访问器用记录式短名）、`XxxRepository` **端口**、无状态规则做策略对象（`IntimacyCalculator`、`MakeupPolicy`、`AccountRules`）。domain 不 import Spring/MyBatis，也不带容器与 ORM 注解。
+- 领域（`domain/<集合>/`）：`Xxx` 聚合或薄实体（私有构造 + `restore()` 不校验 + 带语义的工厂校验并抛 `RuleViolation`，访问器用记录式短名）、`XxxRepository` **端口**、无状态规则做策略对象（`AccountRules`、`FileNaming`），跨行统计与推算走读时算值对象（`PeriodCycles`、`IntimateLogs`）。domain 不 import Spring/MyBatis，也不带容器与 ORM 注解。
 - 适配器（`infrastructure/persistence/XxxRepositoryAdapter`）：PO↔领域双向翻译**只在这里**；更新只回写聚合纳管的列，聚合没建模的列保持原值。
 - Service（`application/`）：构造注入**端口而非 Mapper**，只做「取会话身份 → 组聚合 → 调领域方法 → 落库 → 推事件 → 投 VO」；VO 用嵌套 `record` 留在 application（ADR-0008 第 5 条）；领域异常经 `application/DomainRules.rule|guard` 翻成 `BusinessException(400/403/404/409)`，**文案由领域说了算**。
 - Controller（`api/`）：`@RestController @RequestMapping("/api/...")`，请求体用 record，每方法一句 javadoc；不 import 本上下文的 PO/Mapper。
@@ -53,11 +53,11 @@
 - 推送门面：`messaging/infrastructure/transport/ImPushService` —— `push(username, payload)` / `pushAll` / `pushToUsers` / `isOnline(username)`；payload 均为带 `type` 字段的 record（dm/typing/recall/friend/reaction/edit/read/pin/announcement/admin 等）。
 - **情侣事件**：`pushCoupleEvent(event, actor, toUser, detail)` 推单人、`pushCoupleEventBoth(...)` 推双方，payload `type=couple`；前端（are-chat-web）把 `arechat:couple` 自定义事件按 event 名分发到 `stores/couple.ts` 刷新对应面板——**新增事件名必须前后端同步注册**。
 - **情侣事件只推 WS，不落库**：F41 通知中心与 `couple_notify` 读写代码（`CoupleNotifyRecorder`/`NotifySink*`）已于 2026-10-20 删除；表保留未删，离线用户不再有补看副本。
-- 情侣空间事件名现役 **15 个**（实测 `grep -rhoE 'pushCoupleEvent(Both)?\("[a-z-]+"' src/main/java | sort -u`），按前缀族分四组（口径见 `CONTEXT.md`「事件命名口径」）：建立与地基 `invite`/`invite-accepted`/`invite-rejected`/`dissolved`/`anniversary-updated`/`anniversary-reminder`/`space-themed`/`pet-name-changed`（爱称的写入口在 `PUT /profile`，推送按改了什么分流，见 ADR-0010 第 12 条）；连续互动打卡 `streak-checkin`/`streak-unlocked`/`streak-makeup`；每日一问 `question-daily`/`question-answered`；愿望清单 `wish-added`/`wish-fulfilled`。命名规则为小写连字符、动词/过去分词结尾。**刻意不存在** `wish-prepared`/`wish-unprepared`（偷偷标记不推事件是产品规则）。原 `bond-*`/`mood-*`/`comfort-*`/`catch-*`/`dine-*`/`factory-*`/`quest-*`/`ceremony-*`/`echo-*`/`scratch-*`/`box-*` 等事件族已随功能卡于 2026-10-05 二轮裁剪（ADR-0010）下线，从 44 种收缩到 15 种。全列见 are-chat-web/wiki/ws-events.md。
+- 情侣空间事件名现役 **6 个**（实测 `grep -rhoE 'pushCoupleEvent(Both)?\("[a-z-]+"' src/main/java | sort -u`），按前缀族分两组（口径见 `CONTEXT.md`「事件命名口径」）：建立与地基 `invite`/`invite-accepted`/`invite-rejected`/`dissolved`/`anniversary-updated`，加纪念日倒数定时任务发的 `anniversary-reminder`。命名规则为小写连字符、动词/过去分词结尾。`space-themed` 与 `pet-name-changed`（爱称的写入口原在 `PUT /profile`，推送按改了什么分流，见 ADR-0010 第 12 条）、连续互动打卡的 `streak-checkin`/`streak-unlocked`/`streak-makeup`、每日一问的 `question-daily`/`question-answered`、愿望清单的 `wish-added`/`wish-fulfilled` 都随 2026-10-20 三轮裁剪下线，已无生产者；**刻意不存在** `wish-prepared`/`wish-unprepared`（偷偷标记不推事件是当时的产品规则，如今整张卡都没了）。原 `bond-*`/`mood-*`/`comfort-*`/`catch-*`/`dine-*`/`factory-*`/`quest-*`/`ceremony-*`/`echo-*`/`scratch-*`/`box-*` 等事件族已随功能卡于 2026-10-05 二轮裁剪（ADR-0010）下线，事件数从 44 种收缩到 15 种，再收缩到现役 6 种。全列见 are-chat-web/wiki/ws-events.md。
 
 ## Flyway 迁移策略
 
-- `spring.flyway.locations=classpath:db`，脚本命名 `V{n}__{描述}.sql`，当前 V1→V55（V50/V51 是 2026-10-04 裁剪的下线脚本，V52 是 2026-10-05 v8 第一批的三张新表，V53 是 2026-10-05 二轮裁剪 `drop` 16 张 + `couple_bond_day` 改名重建为 `couple_streak_day` + 删 `couple_space.stickers` 列，V54 是 2026-10-20 新建经期记录表 `couple_period`，V55 是同日新建亲密记录表 `couple_intimacy_log`；见 [database.md](database.md)）。
+- `spring.flyway.locations=classpath:db`，脚本命名 `V{n}__{描述}.sql`，当前 V1→V56（V50/V51 是 2026-10-04 裁剪的下线脚本，V52 是 2026-10-05 v8 第一批的三张新表，V53 是 2026-10-05 二轮裁剪 `drop` 16 张 + `couple_bond_day` 改名重建为 `couple_streak_day` + 删 `couple_space.stickers` 列，V54 是 2026-10-20 新建经期记录表 `couple_period`，V55 是同日新建亲密记录表 `couple_intimacy_log`，V56 是同日三轮裁剪 `drop` 每日一问/打卡/愿望三张表 `couple_question_answer`、`couple_streak_day`、`couple_wish`（`couple_space` 的 `nick_a`/`nick_b`/`slogan`/`theme`/`city_a`/`city_b` 六列保留为死存储，聚合已不再持有）；见 [database.md](database.md)）。
 - `baseline-on-migrate=true` + `baseline-version=0`：存量老库（有表无 flyway 历史）首次启动自动打 0 基线后**从 V1 全量重放**——推论：**每个脚本必须幂等**（`CREATE TABLE IF NOT EXISTS` / `ADD COLUMN ... IF NOT EXISTS`）。
 - `spring.sql.init.mode=never`：`src/main/resources/schema.sql` 已退役为**全量结构文档**，不再被执行；改表时必须"新增 V 脚本 + 同步 schema.sql"双写。
 - 已入库脚本不可再修改；新版本号 = db 目录最大版本 + 1。完整规范见 `.agents/skills/db-migration/SKILL.md`。
