@@ -1,10 +1,10 @@
 # 数据库
 
-> 本页回答：全库数据约定、V1→V53 Flyway 迁移时间线、schema 中的 19 张表（其中 2 张已无代码）的逐表清单、随 ADR-0010 下线的 16 张 `couple_*` 表。
+> 本页回答：全库数据约定、V1→V54 Flyway 迁移时间线、schema 中的 20 张表（其中 2 张已无代码）的逐表清单、随 ADR-0010 下线的 16 张 `couple_*` 表。
 
-结构事实源：真正被运行时执行的是 `src/main/resources/db/V*.sql`（Flyway 增量脚本，**V1→V53 共 53 个**）；`src/main/resources/schema.sql` 是**全量结构文档、不再被执行**（`spring.sql.init.mode=never`）。生产 MariaDB 10.11 与测试 H2（MODE=MySQL）跑同一批 V 脚本。
+结构事实源：真正被运行时执行的是 `src/main/resources/db/V*.sql`（Flyway 增量脚本，**V1→V54 共 54 个**）；`src/main/resources/schema.sql` 是**全量结构文档、不再被执行**（`spring.sql.init.mode=never`）。生产 MariaDB 10.11 与测试 H2（MODE=MySQL）跑同一批 V 脚本。
 
-**当前规模（实测 `grep -c "^CREATE TABLE" src/main/resources/schema.sql` = 19）**：schema 里 **19 张表 = 6 张 `couple_*` + 13 张非情侣表**；`couple_notify` 与 `message_star` 已无读写代码，按「不破坏性删表」原则保留。其中 couple 侧在 2026-10-04 裁剪（V50/V51）后为 19 张、2026-10-05 v8 第一批（V52）加到 22 张、**同日二轮裁剪（V53）删到 6 张**（`docs/adr/0010-couple-trim-to-v8-features.md` 第 1/9 条）。13 张非情侣表自 V2 基线以来未受这两轮情侣裁剪影响。
+**当前规模（实测 `grep -c "^CREATE TABLE" src/main/resources/schema.sql` = 20）**：schema 里 **20 张表 = 7 张 `couple_*` + 13 张非情侣表**；`couple_notify` 与 `message_star` 已无读写代码，按「不破坏性删表」原则保留。其中 couple 侧在 2026-10-04 裁剪（V50/V51）后为 19 张、2026-10-05 v8 第一批（V52）加到 22 张、**同日二轮裁剪（V53）删到 6 张**（`docs/adr/0010-couple-trim-to-v8-features.md` 第 1/9 条）、**2026-10-20 新增经期记录（V54）后为 7 张**。13 张非情侣表自 V2 基线以来未受这些情侣裁剪影响。
 
 ## 数据约定（硬性）
 
@@ -21,9 +21,9 @@
 
 改表流程与幂等细则：`.agents/skills/db-migration/SKILL.md`；「新增 V 脚本 + 同步 schema.sql + 独立 db commit」为硬性要求（见 [dev-guide.md](dev-guide.md)）。
 
-## 迁移时间线（V1 → V53）
+## 迁移时间线（V1 → V54）
 
-> 下表记录每个脚本**当时**建过/删过什么，是历史事实；其中大量 `couple_*` 表已在 V50/V51/V53 被 drop，不代表现役（现役只有 19 张）。
+> 下表记录每个脚本**当时**建过/删过什么，是历史事实；其中大量 `couple_*` 表已在 V50/V51/V53 被 drop，不代表现役（现役只有 20 张）。
 
 | 版本 | 主题 | 变更摘要 |
 |---|---|---|
@@ -36,11 +36,12 @@
 | V51 | 系统裁剪第十六/十七轮（2026-10-04） | 再 drop 85 张，情侣空间收口到 19 张；**不改 V50** |
 | V52 | v8 第一批（2026-10-05） | 新建 3 张：`couple_bond_day`（贴贴打卡日）、`couple_question_answer`、`couple_wish`；索引统一 `uk_couple8_/idx_couple8_` 前缀；连续天数与解锁读时算不建表；`couple_*` 增至 22 张 |
 | **V53** | **二轮裁剪（2026-10-05）** | **drop 16 张**被删功能表；`couple_bond_day` 改名重建为 `couple_streak_day`（索引 `uk_couple8_bond_day`→`uk_couple9_streak_day`，用 DROP+CREATE 因 H2 索引名全库唯一、跨库改名无双兼容写法，且该表 V52 才建、库外无数据）；`couple_space` DROP COLUMN `stickers`。现役 `couple_*` 收口到 **6 张**、全库 **19 张**。不做数据迁移、不建备份表（被删功能数据作废，生产库执行前手动备份）。 |
+| **V54** | **新增经期记录（2026-10-20）** | 新建 `couple_period`（一行=一次经期的开始日，结束日可后补；索引 `uk_couple10_period_start(space_id, start_day)`）。`schema.sql` 同步追加该表定义；现役 `couple_*` 增至 **7 张**、全库 **20 张**。存量库首启只有这一条新增脚本，无需迁移数据。 |
 
-> **索引/唯一键名全库唯一**（H2 索引不随表隔离，重名报 42S11「Index already exists」）：V52 用 `uk_couple8_` 前缀、V53 新增 `uk_couple9_streak_day`，写入前均对全部 `db/V*.sql` 查过重。
+> **索引/唯一键名全库唯一**（H2 索引不随表隔离，重名报 42S11「Index already exists」）：V52 用 `uk_couple8_` 前缀、V53 新增 `uk_couple9_streak_day`、V54 新增 `uk_couple10_period_start`，写入前均对全部 `db/V*.sql` 查过重。
 > **已入库脚本一律不得再修改**：每轮裁剪都新增脚本（V51 不改 V50、V53 不改 V52），因为回改会让打过该版本的库在 Flyway 校验和上失败。
 
-## schema 表清单（19 张，实测自 schema.sql 的 CREATE TABLE）
+## schema 表清单（20 张，实测自 schema.sql 的 CREATE TABLE）
 
 ### identity — 账号与准入（3 张）
 
@@ -75,7 +76,7 @@
 |---|---|---|---|
 | `uploaded_file` | 上传文件档案（内容寻址去重） | `original_name`/`stored_path`/`content_type`/`size`/`sha256` | `uq_uploaded_file_sha256(sha256)` |
 
-### couple — 情侣空间（6 张，详写）
+### couple — 情侣空间（7 张，详写）
 
 | 表 | 用途 | 关键字段 | 唯一键 / 索引 |
 |---|---|---|---|
@@ -85,6 +86,7 @@
 | `couple_streak_day` | 连续互动打卡日（原 `couple_bond_day`，V53 改名） | `space_id`、`day`(yyyy-MM-dd)、`source` AUTO/MAKEUP、`operator_user`、`created`；连续天数与六档解锁由本表 day 集合**读时算**，无缓存列 | `uk_couple9_streak_day(space_id,day)` |
 | `couple_question_answer` | 每日一问回答（同时是打卡触发源） | `space_id`、`day`、`question_index`（按 space+day 稳定哈希，落快照）、`question`(≤200)、`username`、`answer`(≤300)、`created`/`updated_at`；「双方都答过才互看」是读时判定，库里不存可见位 | `uk_couple8_question_day_user(space_id,day,username)` |
 | `couple_wish` | 愿望清单 | `space_id`、`owner_user`（想要的人）、`creator_user`（记录的人，可不同）、`title`(≤80)、`note`(≤200)、`status` OPEN/PREPARED/FULFILLED、`prepared_by`/`prepared_at`（对被许愿人保密）、`fulfilled_at` | `uk_couple8_wish_title(space_id,owner_user,title)` |
+| `couple_period` | 经期记录（V54） | `space_id`、`start_day`(yyyy-MM-dd)、`end_day`(yyyy-MM-dd，未结束为 `NULL`)、`recorder_user`（记录人，只留痕不作权限闸门）、`created`/`updated_at`；平均周期与下次预测**读时算**（`PeriodCycles`，有效间隔 15–45 天），表里不存缓存列 | `uk_couple10_period_start(space_id,start_day)` |
 
 > **随 ADR-0010 下线的 16 张 `couple_*` 表**（不再存在，确切表名的 DROP 列表见 `db/V53__trim_couple_space_to_v8_features.sql` 与 `docs/adr/0010` 第 1 条）：
 > 贴贴动作、共同日历（倒数日清单）、安全词约定、安全词使用记录、愿望券本、求抱抱、今晚饭票、好事簿、心情日记、心情回应、恋爱盲盒、
@@ -92,7 +94,7 @@
 
 ## Flyway 现状
 
-- 运行时建表**只走 Flyway**：`spring.flyway.locations=classpath:db`，脚本命名 `V{n}__{描述}.sql`，**最新到 V53**（53 个迁移在 H2 文件库从 V1 全量重放通过，见 ADR-0010 验证一节）。
+- 运行时建表**只走 Flyway**：`spring.flyway.locations=classpath:db`，脚本命名 `V{n}__{描述}.sql`，**最新到 V54**（54 个迁移在 H2 文件库从 V1 全量重放通过，见 ADR-0010 验证一节与 V54 新增后的全量 `mvn -o test`）。
 - `spring.sql.init.mode=never`：`src/main/resources/schema.sql` 已退役为**全量结构文档**（供人读与逐表核对），**不再被任何环境执行**；改表时必须「新增 V 脚本 + 同步 schema.sql」双写。
 - `baseline-on-migrate=true` + `baseline-version=0`：存量老库首次启动自动打 0 基线后**从 V1 全量重放**——所以**每个脚本都必须幂等**（`CREATE TABLE IF NOT EXISTS` / `ADD·DROP COLUMN ... IF NOT EXISTS` / `DROP TABLE IF EXISTS`）。`clean-disabled=true`。
 - 已入库脚本不可修改；新版本号 = `db` 目录最大版本 + 1。完整规范见 `.agents/skills/db-migration/SKILL.md`。

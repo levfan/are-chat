@@ -1,8 +1,8 @@
 # REST 接口总表
 
 > 本页回答：全部 Controller 的端点清单（方法 + 路径 + 请求体 + 响应字段 + 错误码）。路径省略类前缀 `/api`；couple 系前缀见各节标题。
-> **当前口径（2026-10-20 删除通知中心/运营看板/消息收藏/全局搜索后实测）**：全仓 **14 个 Controller / 70 个端点**（逐条读各 `*Controller.java` 的 `@GetMapping/@PostMapping/@PutMapping/@DeleteMapping`，类上 `@RequestMapping` 是基址；`GlobalExceptionHandler` 不是 Controller，不计入）。
-> 分上下文：identity 15、messaging 25、platform 6、filestorage 2、couple 20（全仓 68）。其中 **couple 侧 4 个 Controller / 20 个端点**——2026-10-05 按 `docs/adr/0010-couple-trim-to-v8-features.md` 从 70 收缩到 26，随后再下线百日隐藏页收缩到 25，2026-10-20 再删除通知中心（2）与运营看板（1）后为 22，同日再删问答回看与愿望改备注（2）后为 20。
+> **当前口径（2026-10-20 新增经期记录后逐条实测）**：全仓 **15 个 Controller / 72 个端点**（逐条读各 `*Controller.java` 的 `@GetMapping/@PostMapping/@PutMapping/@DeleteMapping`，类上 `@RequestMapping` 是基址；`GlobalExceptionHandler` 不是 Controller，不计入）。
+> 分上下文：identity 15、messaging 25、platform 6、filestorage 2、couple 24（合计 72）。其中 **couple 侧 5 个 Controller / 24 个端点**——2026-10-05 按 `docs/adr/0010-couple-trim-to-v8-features.md` 从 70 收缩到 26，随后再下线百日隐藏页收缩到 25，2026-10-20 再删除通知中心（2）与运营看板（1）后为 22，同日再删问答回看与愿望改备注（2）后为 20，随后新增经期记录（4）后为 24。
 > 非 couple 侧是 **10 个 Controller**（identity 2 + messaging 4 + platform 3 + filestorage 1）。
 
 来源：`src/main/java` 各 `*Controller.java` 的映射注解与 javadoc；响应字段取自对应 Service 内嵌的 `public record XxxVO(...)`。返回统一 `ApiResponse{code,message,data}`；除 `/api/auth/**` 与 `/api/health` 外均需登录会话。业务失败抛 `BusinessException(code, 中文原话)`，`code` 同时作为 HTTP 状态码。可空性按字段类型判断：`Long`/`Integer`/包装类型可为 `null`，`long`/`int`/`boolean` 不为 `null`。
@@ -44,7 +44,7 @@
 - `FileController` POST `/files`（multipart）上传 ｜ GET `/files/{id}/download` 下载
 - WS：`/ws/chat/{name}` 聊天室与推送通道（非 REST，见 [architecture.md](architecture.md)）
 
-## couple 接口（现役 4 个 Controller / 20 个端点）
+## couple 接口（现役 5 个 Controller / 24 个端点）
 
 > 逐端点写明：方法、路径、请求体字段、响应 record 逐字段（含可空性）、错误码与中文原话。
 > 原 10 张历史卡的 Controller（贴贴 `CoupleBondController`、求抱抱 `CoupleCareController`、安全词 `CoupleCatchController`、
@@ -127,3 +127,18 @@
     - 错误：404「这条愿望不在你们的清单里」／400「这个愿望已经实现啦，不用再点一次」／400「只有许愿的人自己能确认愿望实现了」。事件 `wish-fulfilled`。
 20. `POST /remove` body `WishIdRequest{ String id }` → `WishBoardVO`（仅记录人可删，已实现删不掉）
     - 错误：404「这条愿望不在你们的清单里」／400「已经实现的愿望要留在记录里，删不掉咯」／400「只有记这条愿望的人能删掉它」。**不推事件**。
+
+### `CouplePeriodController` `/api/couple/period`（经期记录 · 4 个）
+
+**响应 record**（写接口一律返回整份看板，前端整体替换）：`PeriodBoardVO(List<PeriodRecordVO> records, int averageCycleDays, String predictedNextDay, Integer daysUntilNext, int cycleSampleCount)`
+- `records` 按 `startDay` 新→旧｜`averageCycleDays` 相邻开始日间隔的均值（只取 15–45 天样本，四舍五入；无有效样本时按 28 天估）｜`predictedNextDay` 最后一次开始日 + 平均周期（无记录为 `null`）｜`daysUntilNext` 预测日距今天的天数（已过期为负数，无预测为 `null`）｜`cycleSampleCount` 参与均值的有效间隔数（0=仍在按默认周期估）。
+- `PeriodRecordVO(String id, String startDay, String endDay, String recorderUser, Long created)`——`endDay` 还没记结束为 `null`｜`recorderUser` 记录人（只留痕，不作权限闸门，双方都能记/改/删）｜`created` 毫秒时间戳。
+- 周期与预测全部**读时算、不落缓存列**（`PeriodCycles`）；四个端点**都不推 WS 事件**（私密记录，不因对方操作弹提醒）。
+
+21. `GET /board` → `PeriodBoardVO`。错误 404「还没有建立情侣空间，先邀请一位好友吧」。
+22. `POST /add` body `AddRequest{ String startDay }`（`yyyy-MM-dd`，不能晚于今天；同空间同一天只能一条）→ `PeriodBoardVO`
+    - 错误：400「开始日得选一个日子呀」／400「开始日得是 yyyy-MM-dd 这样的日子呀」／400「还没到的日子记不了呀，今天之后的事留给明天 🩸」／400「这一天已经记过啦，看看下面的记录 🩸」／404「还没有建立情侣空间…」。**不推事件**。
+23. `POST /end` body `RecordIdRequest{ String id }` → `PeriodBoardVO`（把结束日记成**今天**，只给还没结束的记录补）
+    - 错误：404「这条经期记录不在你们的空间里」／400「这次已经记过结束日啦」／400「结束日不能早于开始日呀」（开始日被记到未来时才可能，正常入口已被 add 拦掉）。**不推事件**。
+24. `POST /remove` body `RecordIdRequest{ String id }` → `PeriodBoardVO`（删一条错记，双方都能删，不进回收站）
+    - 错误：404「这条经期记录不在你们的空间里」。**不推事件**。

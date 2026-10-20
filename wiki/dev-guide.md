@@ -20,7 +20,7 @@
 | `mvn -q compile` | 提交前必跑的最低验证 |
 | `mvn test` | 全量测试；测试库固定 H2（`src/test/resources/application.yml` 覆盖 datasource，MODE=MySQL），Flyway 与生产走同一批 V 脚本——**改了表必须跑 `mvn test` 验证脚本在 H2 可执行** |
 
-测试布局：`src/test/java/com/smart/chat/`（62 个测试文件），已有 auth / im / room / upload / couple 各模块测试与 `SmartChatApplicationTest` 上下文冒烟，另有 `ArchitectureGuardTest` 分层守卫与 `EntityReflectionGuardTest` 反射守卫。当前基线 **404 用例**（2026-10-20 四轮裁剪后实测 `mvn -o test` → `Tests run: 404, Failures: 0, Errors: 0, Skipped: 0`，`BUILD SUCCESS`）。新 Service 的核心算法（判定/统计/读时算）建议补单测。
+测试布局：`src/test/java/com/smart/chat/`（66 个测试文件），已有 auth / im / room / upload / couple 各模块测试与 `SmartChatApplicationTest` 上下文冒烟，另有 `ArchitectureGuardTest` 分层守卫与 `EntityReflectionGuardTest` 反射守卫。当前基线 **411 用例**（2026-10-20 四轮裁剪 + 经期记录后实测 `mvn -o test` → `Tests run: 411, Failures: 0, Errors: 0, Skipped: 0`，`BUILD SUCCESS`）。新 Service 的核心算法（判定/统计/读时算）建议补单测。
 
 ## 接口访问日志
 

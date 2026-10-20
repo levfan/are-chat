@@ -1,7 +1,7 @@
 # 情侣空间业务全景
 
 > 本页回答：couple 包现在有哪些功能、各自对应哪个 Controller/Service/表，以及贯穿全局的核心业务规则与内容库。
-> 事实源：`src/main/java/com/smart/chat/couple/**`（Controller/Service/domain）、`src/main/resources/schema.sql` + `db/V52/V53`、
+> 事实源：`src/main/java/com/smart/chat/couple/**`（Controller/Service/domain）、`src/main/resources/schema.sql` + `db/V52/V53/V54`、
 > 术语合同 `CONTEXT.md`、去留判据 `docs/adr/0010-couple-trim-to-v8-features.md`。
 
 ## 本轮裁剪（先读这段）
@@ -9,22 +9,23 @@
 情侣空间在 2026-10-05 经过三轮改造：先加四张功能卡（每日一问 / 愿望清单 / 连续互动打卡 + 七档解锁 / 百日隐藏回顾，见
 `docs/adr/0007`），随后按用户指令「除了这几项，其余功能全部删除」做了**一轮大裁剪**——判据从「排名高低」换成
 「这四项及其赖以成立的地基还活不活」，取舍、连带改造与被删清单的唯一依据是 **`docs/adr/0010-couple-trim-to-v8-features.md`**；
-最后又按「用不上的功能也裁掉」下线了百日隐藏回顾与心动时刻，只留三张卡。
+最后又按「用不上的功能也裁掉」下线了百日隐藏回顾与心动时刻，只留三张卡；2026-10-20 按用户要求新增第四张卡「经期记录」。
 
-现役规模（实测自源码与 `schema.sql`）：**45 个 java 文件 / 4 个 Controller / 20 个端点 / 6 张 `couple_*` 表（`couple_notify` 已无代码）/ 15 个 WS 事件 / 2 条定时任务**。
+现役规模（实测自源码与 `schema.sql`）：**53 个 java 文件 / 5 个 Controller / 24 个端点 / 7 张 `couple_*` 表（`couple_notify` 已无代码）/ 15 个 WS 事件 / 2 条定时任务**。
 按 ADR-0010 与随后几轮已下线、**不再存在**的功能（一句话点名即可，别当现役去找）：心情日记、贴贴宫格、求抱抱、安全词与暂停复盘、
 今晚饭桌、家务轮盘、加班预报与留灯、愿望券本、好事簿、刮刮乐与盲盒、共同日历（倒数日清单）、积分台账、卡片收藏与功能搜索、百日隐藏回顾、心动时刻、通知中心、运营看板。
 其中三处曾是别的功能算数的根据，已按 ADR-0010 重新改挂：**打卡触发源**改挂每日一问（原挂贴贴）、**补签稀缺性**改由次数守（原扣积分台账）、
 **心动值供数**整体换成现役五项（原六项的表全部消失）。
 
-## 现役的三张功能卡 + 地基
+## 现役的四张功能卡 + 地基
 
-三张卡各有自己的 Controller/Service；地基（邀请建立、空间本体、心动值）不是卡，删不得。
+四张卡各有自己的 Controller/Service；地基（邀请建立、空间本体、心动值）不是卡，删不得。
 
 | 卡（`?card=` 深链 key） | Controller（前缀） | Service | 表 |
 |---|---|---|---|
 | 每日一问 `couple-question` | `CoupleQuestionController` `/api/couple/question` | `CoupleQuestionService` | `couple_question_answer` |
 | 连续互动打卡 `couple-streak` | `CoupleStreakController` `/api/couple/streak` | `CoupleStreakService` | `couple_streak_day` |
+| 姨妈记录 `couple-period` | `CouplePeriodController` `/api/couple/period` | `CouplePeriodService` | `couple_period` |
 | 愿望清单 `couple-wish` | `CoupleWishController` `/api/couple/wish` | `CoupleWishService` | `couple_wish` |
 | 地基（建立/本体/心动值） | `CoupleController` `/api/couple` | `CoupleService` | `couple_space`, `couple_invite` |
 
@@ -90,7 +91,17 @@
 - **标记/撤销不推任何 WS 事件**（推了就等于替对方说出去）：`prepare`/`unprepare` 一个事件都不发，由 `CoupleWishServiceTest.markingPreparedPushesNothingAtAll`（`verifyNoInteractions(push)`）锁死。只有 `add`（给别人许时）推 `wish-added`、`fulfill` 推 `wish-fulfilled`。**刻意不存在** `wish-prepared`/`wish-unprepared`。
 - 关键闸门话术：空标题「想要什么总得写一句呀」、超 80 字「愿望最多 80 个字，剩下的见面再说」、非本人 confirm「只有许愿的人自己能确认愿望实现了」、已实现再点「这个愿望已经实现啦，不用再点一次」、删已实现「已经实现的愿望要留在记录里，删不掉咯」、他人删/改「只有记这条愿望的人能删掉它 / 能改它」。
 
-## 7 · 心动值（五项供数 · 七级阈值 0/60/150/260/400/560/760）
+## 7 · 经期记录（`couple_period`）
+
+- **一行 = 一次经期的开始日**：`start_day` 必填（`yyyy-MM-dd`，不能晚于今天），`end_day` 可当天或后补，未结束为 `NULL`；`recorder_user` 只留痕——这是两个人共享的记录，**双方都能记、都能补结束日、都能删**，不设「只有本人能改」的闸门（`PeriodRecord` 类注释锁死这条设计）。
+- **同一空间同一天只能一条**：`uk_couple10_period_start(space_id, start_day)`；重复记 400「这一天已经记过啦，看看下面的记录 🩸」。
+- **平均周期与下次预测读时算**（`domain/period/PeriodCycles`）：只取相邻开始日的间隔，**15–45 天之外视为漏记/补记造成的假样本并忽略**，有效样本取均值（四舍五入）；一条有效样本都没有时按默认 28 天估。表里**没有 average/predicted 缓存列**。
+- **`daysUntilNext` 可以为负**：预测日已过就是「已推迟 N 天」，不自动滚动预测；没有记录时 `predictedNextDay`/`daysUntilNext` 都是 `null`。推算只是提醒，前端文案固定写「按记录推算 / 先按 X 天估」，不做任何健康判断。
+- **不推任何 WS 事件**：四个端点都返回整份看板，对方记一条不会给你弹提醒（私密记录的口径与愿望「已准备」相同，但连事件都不发）。
+- **不参与心动值**：五项供数仍是 daysTogether/checkinDays/longestStreak/answerDays/wishFulfilled，经期记录只做展示与提醒，不改任何等级或积分。
+- 关键闸门话术：空开始日「开始日得选一个日子呀」、格式错「开始日得是 yyyy-MM-dd 这样的日子呀」、未来日「还没到的日子记不了呀，今天之后的事留给明天 🩸」、重复日「这一天已经记过啦…」、重复结束「这次已经记过结束日啦」、越界记录 404「这条经期记录不在你们的空间里」。
+
+## 8 · 心动值（五项供数 · 七级阈值 0/60/150/260/400/560/760）
 
 - **读时算、无表**（`CoupleService.intimacy()`）：取数只攒「多少」，加权与定级在 `domain/intimacy/IntimacyCalculator`。
 - **五项权重（越少见的行为越贵，ADR-0010 第 4 条）**：

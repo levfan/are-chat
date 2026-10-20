@@ -21,7 +21,7 @@
 
 按**限界上下文**分包（`couple` / `messaging` / `identity` / `platform` / `filestorage` + `sharedkernel` + `bootstrap`），
 每个上下文内部四层，2026-10-05 五个上下文全部完成战术改造（判据与实测见 `docs/ddd/06-ddd-standard.md`、决策见 `docs/adr/0001-0008`）；
-同日核心域 `couple` 又经历一轮功能大裁剪（`docs/adr/0010-couple-trim-to-v8-features.md`），百日隐藏页与心动时刻随后也按「用不上就裁」下线，现役三张功能卡（每日一问 / 连续互动打卡 / 愿望清单）之外的表、Controller、领域包与内容库全部下线，`couple` 从 167 个 Java 文件缩到 45 个、`couple_*` 表从 22 缩到 6。要点：
+同日核心域 `couple` 又经历一轮功能大裁剪（`docs/adr/0010-couple-trim-to-v8-features.md`），百日隐藏页与心动时刻随后也按「用不上就裁」下线，裁剪后只留三张功能卡（每日一问 / 连续互动打卡 / 愿望清单）与地基，2026-10-20 又新增第四张卡「经期记录」；三张卡之外的表、Controller、领域包与内容库全部下线，`couple` 从 167 个 Java 文件缩到 45 个、`couple_*` 表从 22 缩到 6，经期记录落地后为 53 个文件 / 7 张表。要点：
 
 - 表映射（`infrastructure/persistence/XxxPO`）：`@Data @TableName` + `@TableId(IdType.INPUT)`（UUID 由应用层生成），**只有映射职责**，业务名让给领域类型（ADR-0002）。
 - Mapper：`@Mapper interface extends com.smart.chat.sharedkernel.persistence.BaseMapperCompat<XxxPO>`（项目对 MP `BaseMapper` 的统一兼容层），常用查询写成 default 方法；**Mapper 不感知领域类型**。
@@ -57,7 +57,7 @@
 
 ## Flyway 迁移策略
 
-- `spring.flyway.locations=classpath:db`，脚本命名 `V{n}__{描述}.sql`，当前 V1→V53（V50/V51 是 2026-10-04 裁剪的下线脚本，V52 是 2026-10-05 v8 第一批的三张新表，V53 是 2026-10-05 二轮裁剪 `drop` 16 张 + `couple_bond_day` 改名重建为 `couple_streak_day` + 删 `couple_space.stickers` 列；见 [database.md](database.md)）。
+- `spring.flyway.locations=classpath:db`，脚本命名 `V{n}__{描述}.sql`，当前 V1→V54（V50/V51 是 2026-10-04 裁剪的下线脚本，V52 是 2026-10-05 v8 第一批的三张新表，V53 是 2026-10-05 二轮裁剪 `drop` 16 张 + `couple_bond_day` 改名重建为 `couple_streak_day` + 删 `couple_space.stickers` 列，V54 是 2026-10-20 新建经期记录表 `couple_period`；见 [database.md](database.md)）。
 - `baseline-on-migrate=true` + `baseline-version=0`：存量老库（有表无 flyway 历史）首次启动自动打 0 基线后**从 V1 全量重放**——推论：**每个脚本必须幂等**（`CREATE TABLE IF NOT EXISTS` / `ADD COLUMN ... IF NOT EXISTS`）。
 - `spring.sql.init.mode=never`：`src/main/resources/schema.sql` 已退役为**全量结构文档**，不再被执行；改表时必须"新增 V 脚本 + 同步 schema.sql"双写。
 - 已入库脚本不可再修改；新版本号 = db 目录最大版本 + 1。完整规范见 `.agents/skills/db-migration/SKILL.md`。
