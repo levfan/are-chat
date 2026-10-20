@@ -163,7 +163,7 @@ Service → ImPushService.pushCoupleEvent(Both) → WS 帧 {type:'couple', event
 规范全集在各专项 skill 里（db-migration / lombok-data / git-commit），本节只做流程串联与红线登记，不复述细节：
 
 1. **开工**：必读本 skill；任务触及表结构/初始化数据 → db-migration；新建 Java 数据类 → lombok-data；提交推送 → git-commit
-2. **编码**：照抄第三节分层模板（加"XX卡"类功能可参考愿望清单全链路：`domain/wish/Wish` + `WishRepository` + `WishRepositoryAdapter` + `CoupleWishService` + `CoupleWishController`，或每日一问那条含"读时算 + 触发打卡"的链路）；静态内容库只增不改顺序（第四节）；用户可见文案要可爱、口语化、带 emoji（模仿现有推送文案）；新增 WS 事件须同步前端 `stores/couple.ts` 注册 case + api/types（见 are-chat-web-map skill）
+2. **编码**：照抄第三节分层模板（加"XX卡"类功能可参考愿望清单全链路：`domain/wish/Wish` + `WishRepository` + `WishRepositoryAdapter` + `CoupleWishService` + `CoupleWishController`，或每日一问那条含"读时算 + 触发打卡"的链路）；静态内容库只增不改顺序（第四节）；用户可见文案：情侣空间内的要可爱、口语化、带 emoji（模仿现有问答/打卡文案），**聊天与账号侧保持中性口语，不要撒情话**（2026-10-20 按用户要求把情侣风收进情侣空间）；站名一律 `sharedkernel.Brand.NAME`（天枢 / DUBHE），别在字符串里写死；新增 WS 事件须同步前端 `stores/couple.ts` 注册 case + api/types（见 are-chat-web-map skill）
 3. **自检**：git-commit skill 的「架构师 Code Review 五项」清单全过
 4. **构建**：提交前必跑 `mvn -q compile`；改了表跑 `mvn test` 验证 Flyway 脚本 H2 可执行；涉测试改动 `mvn test` 全绿
 5. **提交**：按改动性质分组，一类一 commit；数据库脚本（V*.sql+schema.sql）永远独立成 commit；信息 `type(scope): 中文描述`
