@@ -6,6 +6,7 @@ import com.smart.chat.identity.domain.audit.AdminAudit;
 import com.smart.chat.identity.domain.audit.AdminAuditRepository;
 import com.smart.chat.identity.domain.registration.RegistrationApplication;
 import com.smart.chat.identity.domain.registration.RegistrationApplicationRepository;
+import com.smart.chat.sharedkernel.Brand;
 import com.smart.chat.sharedkernel.web.BusinessException;
 import com.smart.chat.identity.domain.WelcomeMessenger;
 import com.smart.chat.identity.domain.AdminNotifyChannel;
@@ -155,7 +156,7 @@ public class AdminService {
 
     /** 93 新用户欢迎消息：以审批人身份发一条系统消息，登录即可见未读 */
     private void sendWelcome(String username, String reviewer) {
-        String content = "欢迎加入小帆船！你的注册申请已由管理员 " + reviewer + " 审批通过。"
+        String content = "欢迎加入" + Brand.NAME + "！你的注册申请已由管理员 " + reviewer + " 审批通过。"
                 + "入门指引：① 到「好友」页添加好友；② Enter 发送、Shift+Enter 换行，可直接粘贴图片；"
                 + "③ 「我的」菜单可快切在线状态，个人中心里有皮肤/背景等外观设置。祝你聊得开心！";
         welcomeMessenger.sendSystemWelcome(reviewer, username, content);

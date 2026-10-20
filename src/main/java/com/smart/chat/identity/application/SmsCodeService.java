@@ -1,6 +1,7 @@
 package com.smart.chat.identity.application;
 
 import com.smart.chat.identity.domain.verification.SmsCode;
+import com.smart.chat.sharedkernel.Brand;
 import com.smart.chat.sharedkernel.web.BusinessException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -32,7 +33,7 @@ public class SmsCodeService {
         }
         String code = String.format("%06d", random.nextInt(1_000_000));
         codes.put(phone, SmsCode.fresh(code, now));
-        log.info("【小帆船 演示】手机号 {} 的注册验证码：{}", phone, code);
+        log.info("【" + Brand.NAME + " 演示】手机号 {} 的注册验证码：{}", phone, code);
         return code;
     }
 

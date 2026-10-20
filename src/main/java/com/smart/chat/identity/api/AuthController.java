@@ -7,6 +7,7 @@ import com.smart.chat.identity.domain.account.Account;
 import com.smart.chat.identity.infrastructure.throttle.LoginRateLimiter;
 import com.smart.chat.sharedkernel.web.ApiResponse;
 import com.smart.chat.sharedkernel.web.BusinessException;
+import com.smart.chat.sharedkernel.Brand;
 import com.smart.chat.sharedkernel.web.Sessions;
 import jakarta.servlet.http.HttpSession;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -44,7 +45,7 @@ public class AuthController {
                               String role) {
         static LoginResult of(Account user) {
             return new LoginResult(user.username(), user.nickname(), user.maskedPhone(),
-                    "success:欢迎进入小帆船！", user.lastLoginAt(),
+                    "success:欢迎进入" + Brand.NAME + "！", user.lastLoginAt(),
                     user.role() == null ? Account.ROLE_USER : user.role());
         }
     }

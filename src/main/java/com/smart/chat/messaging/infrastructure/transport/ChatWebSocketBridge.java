@@ -2,6 +2,7 @@ package com.smart.chat.messaging.infrastructure.transport;
 
 import com.alibaba.fastjson2.JSON;
 import com.smart.chat.messaging.application.PresenceService;
+import com.smart.chat.sharedkernel.Brand;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -41,7 +42,7 @@ public class ChatWebSocketBridge {
         broadcastPresence(name, true);
         presenceService.touch(name);
         ChatSessionRegistry.sendToSession(session,
-                ChatMessage.system(name, "欢迎来到小帆船，" + name + "！").toJson());
+                ChatMessage.system(name, "欢迎来到" + Brand.NAME + "，" + name + "！").toJson());
         log.info("有新连接加入！昵称：{}，当前连接数：{}", name, registry.connectionCount());
         return connection;
     }
