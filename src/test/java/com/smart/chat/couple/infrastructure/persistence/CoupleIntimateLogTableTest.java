@@ -54,6 +54,21 @@ class CoupleIntimateLogTableTest {
         assertThat(logRepository.findBySpace(SPACE)).hasSize(2);
     }
 
+    /** 日历按月取数：区间是左含右不含，同一天按记录时刻正序——真表上的边界只有打库才验得出来。 */
+    @Test
+    void rangeQueryKeepsOneMonthAndSortsAscending() {
+        logRepository.save(IntimateLog.restore("rng_last", SPACE, "2026-08-31", "SEX", null, "alice", 1L));
+        logRepository.save(IntimateLog.restore("rng_next", SPACE, "2026-10-01", "SEX", null, "bob", 2L));
+        logRepository.save(IntimateLog.restore("rng_late", SPACE, "2026-09-05", "EDGE", "后记的", "bob", 300L));
+        logRepository.save(IntimateLog.restore("rng_early", SPACE, "2026-09-05", "SEX", null, "alice", 100L));
+
+        List<IntimateLog> september = logRepository.findInRange(SPACE, LocalDate.of(2026, 9, 1),
+                LocalDate.of(2026, 10, 1));
+
+        assertThat(september).extracting(IntimateLog::id).containsExactly("rng_early", "rng_late");
+        assertThat(september).allSatisfy(row -> assertThat(row.day()).startsWith("2026-09"));
+    }
+
     @Test
     void deletingOneRowLeavesTheRestUntouched() {
         IntimateLog kept = IntimateLog.record(SPACE, "2026-10-19", "EDGE", null, "alice", TODAY);

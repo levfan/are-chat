@@ -45,4 +45,34 @@ class PeriodRecordTest {
         assertThatThrownBy(() -> record.markEnded(TODAY))
                 .isInstanceOf(RuleViolation.class).hasMessageContaining("已经记过结束日");
     }
+
+    /** 日历按天铺经期格子的判据：记了结束日就含首含尾，没记结束日只到今天。 */
+    @Test
+    void coversIncludesBothEndsAndStopsAtTodayWhenStillOpen() {
+        PeriodRecord ended = PeriodRecord.restore("p1", "s1", "2026-10-10", "2026-10-13", "alice", 1L);
+        assertThat(ended.covers("2026-10-09", "2026-10-20")).isFalse();
+        assertThat(ended.covers("2026-10-10", "2026-10-20")).isTrue();
+        assertThat(ended.covers("2026-10-13", "2026-10-20")).isTrue();
+        assertThat(ended.covers("2026-10-14", "2026-10-20")).isFalse();
+        assertThat(ended.startsOn("2026-10-10")).isTrue();
+        assertThat(ended.endsOn("2026-10-13")).isTrue();
+        assertThat(ended.endsOn("2026-10-12")).isFalse();
+
+        PeriodRecord open = PeriodRecord.restore("p2", "s1", "2026-10-18", null, "bob", 2L);
+        assertThat(open.covers("2026-10-19", "2026-10-20")).isTrue();
+        assertThat(open.covers("2026-10-20", "2026-10-20")).isTrue();
+        assertThat(open.covers("2026-10-21", "2026-10-20")).isFalse();
+        assertThat(open.endsOn("2026-10-20")).isFalse();
+    }
+
+    /** 历史脏行不该让日历 500：非法日期一律算「没覆盖」，结束日早于开始日按开始日那天收。 */
+    @Test
+    void dirtyRowsAreTreatedAsCoveringNothingOrJustTheirStart() {
+        PeriodRecord dirty = PeriodRecord.restore("p3", "s1", "2026/10/01", "2026-10-05", "alice", 1L);
+        assertThat(dirty.covers("2026-10-03", "2026-10-20")).isFalse();
+
+        PeriodRecord backwards = PeriodRecord.restore("p4", "s1", "2026-10-06", "2026-10-02", "bob", 2L);
+        assertThat(backwards.covers("2026-10-06", "2026-10-20")).isTrue();
+        assertThat(backwards.covers("2026-10-05", "2026-10-20")).isFalse();
+    }
 }
