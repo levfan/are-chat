@@ -15,6 +15,8 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -43,6 +45,8 @@ class RequestLogEndToEndTest {
     void attachAppender() {
         logger = (Logger) LoggerFactory.getLogger(RequestLogFilter.class);
         appender = new ListAppender<>();
+        // 请求线程写完成行与这里读日志是并发的：用同一个互斥对象包住写，读时再持锁拍快照
+        appender.list = Collections.synchronizedList(new ArrayList<>());
         appender.start();
         logger.addAppender(appender);
     }
@@ -54,7 +58,11 @@ class RequestLogEndToEndTest {
 
     /** 只取本次请求产生的日志行（上下文与别的测试共用一个 JVM） */
     private List<String> linesFor(String path) {
-        return appender.list.stream()
+        List<ILoggingEvent> snapshot;
+        synchronized (appender.list) {
+            snapshot = new ArrayList<>(appender.list);
+        }
+        return snapshot.stream()
                 .map(ILoggingEvent::getFormattedMessage)
                 .filter(m -> m.contains(" " + path))
                 .toList();
