@@ -1,6 +1,7 @@
 package com.smart.chat.messaging.infrastructure.transport;
 
 import com.smart.chat.messaging.application.PresenceService;
+import com.smart.chat.sharedkernel.Brand;
 import jakarta.websocket.RemoteEndpoint;
 import jakarta.websocket.Session;
 import org.junit.jupiter.api.BeforeEach;
@@ -89,7 +90,7 @@ class ChatWebSocketBridgeTest {
         bridge.onOpen(session, "dave");
 
         verify(registry).register(eq("dave"), any(ChatSessionRegistry.Connection.class));
-        verify(basic).sendText(contains("欢迎来到小帆船，dave！"));
+        verify(basic).sendText(contains("欢迎来到" + Brand.NAME + "，dave！"));
         verify(presenceService).touch("dave");
     }
 
