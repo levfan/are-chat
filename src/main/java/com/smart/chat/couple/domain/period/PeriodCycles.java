@@ -68,7 +68,8 @@ public final class PeriodCycles {
         return new PeriodCycles(average, intervals.size(), predicted, until);
     }
 
-    private static LocalDate parse(String value) {
+    /** yyyy-MM-dd → LocalDate；脏行静默给 null（同包的 {@link PeriodRecord} 判覆盖日也要用这套宽松口径）。 */
+    static LocalDate parse(String value) {
         if (value == null || value.isBlank()) {
             return null;
         }

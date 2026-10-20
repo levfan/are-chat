@@ -1,5 +1,6 @@
 package com.smart.chat.couple.domain.intimatelog;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 
@@ -8,6 +9,9 @@ public interface IntimateLogRepository {
 
     /** 整个空间的记录：日期倒序，同一天按记录时刻倒序 */
     List<IntimateLog> findBySpace(String spaceId);
+
+    /** 区间的记录：日期正序、同一天按记录时刻正序，供日历按月铺格子（尾端不含） */
+    List<IntimateLog> findInRange(String spaceId, LocalDate startInclusive, LocalDate endExclusive);
 
     Optional<IntimateLog> findById(String recordId);
 

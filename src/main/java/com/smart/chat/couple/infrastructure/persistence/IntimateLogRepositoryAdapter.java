@@ -4,8 +4,10 @@ import com.smart.chat.couple.domain.intimatelog.IntimateLog;
 import com.smart.chat.couple.domain.intimatelog.IntimateLogRepository;
 import org.springframework.stereotype.Component;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
+
 
 /**
  * {@link IntimateLogRepository} 的 MyBatis-Plus 适配器：PO ↔ 领域对象的翻译只在这里。
@@ -23,6 +25,12 @@ public class IntimateLogRepositoryAdapter implements IntimateLogRepository {
     @Override
     public List<IntimateLog> findBySpace(String spaceId) {
         return logMapper.findBySpace(spaceId).stream().map(IntimateLogRepositoryAdapter::toDomain).toList();
+    }
+
+    @Override
+    public List<IntimateLog> findInRange(String spaceId, LocalDate startInclusive, LocalDate endExclusive) {
+        return logMapper.findInRange(spaceId, startInclusive.toString(), endExclusive.toString()).stream()
+                .map(IntimateLogRepositoryAdapter::toDomain).toList();
     }
 
     @Override

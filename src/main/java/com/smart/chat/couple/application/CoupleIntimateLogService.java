@@ -18,7 +18,7 @@ import static com.smart.chat.couple.application.DomainRules.rule;
  * 亲密记录：双方都能记一笔、删一笔；本月与累计次数由 {@link IntimateLogs} 读时算。
  * <p>
  * 刻意不推 WS 事件：这是两个人的私密账本，不该因为对方点了一下就弹提醒。
- * 看板只回最近 {@value #RECENT_LIMIT} 条，统计仍按全量算。
+ * 看板只回最近 {@value #RECENT_LIMIT} 条，统计仍按全量算；日历要整月，走 {@link CoupleCalendarService}。
  */
 @Service
 public class CoupleIntimateLogService {
@@ -47,8 +47,7 @@ public class CoupleIntimateLogService {
         IntimateLogs stats = IntimateLogs.of(logs, LocalDate.now());
         List<IntimateLogVO> rows = logs.stream()
                 .limit(RECENT_LIMIT)
-                .map(log -> new IntimateLogVO(log.id(), log.day(), log.kind(), log.note(), log.recorderUser(),
-                        log.created()))
+                .map(CoupleIntimateLogService::toRow)
                 .toList();
         IntimateLog last = stats.last();
         return new IntimateBoardVO(rows, last == null ? null : last.day(), last == null ? null : last.kind(),
@@ -76,5 +75,9 @@ public class CoupleIntimateLogService {
     private CoupleSpace requireSpace(String me) {
         return spaceRepository.findActiveByMember(me)
                 .orElseThrow(() -> new BusinessException(404, "还没有建立情侣空间，先邀请一位好友吧"));
+    }
+
+    private static IntimateLogVO toRow(IntimateLog log) {
+        return new IntimateLogVO(log.id(), log.day(), log.kind(), log.note(), log.recorderUser(), log.created());
     }
 }

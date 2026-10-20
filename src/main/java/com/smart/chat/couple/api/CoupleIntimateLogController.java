@@ -11,8 +11,8 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * 亲密记录（新卡 `couple-intimate`）：记一笔边缘亲昵/性生活、删一笔。
- * 三个接口都返回整份看板，前端拿最新统计直接替换。
+ * 亲密记录（卡根 `couple-intimate`）：记一笔边缘亲昵/性生活、删一笔。
+ * 三个接口都返回整份看板，前端拿最新统计直接替换。按月的日历视图走 {@code /api/couple/calendar}。
  */
 @RestController
 @RequestMapping("/api/couple/intimate")

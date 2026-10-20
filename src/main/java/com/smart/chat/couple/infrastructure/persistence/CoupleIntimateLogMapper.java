@@ -16,4 +16,14 @@ public interface CoupleIntimateLogMapper extends BaseMapperCompat<CoupleIntimate
                 .orderByDesc(CoupleIntimateLogPO::getDay)
                 .orderByDesc(CoupleIntimateLogPO::getCreated));
     }
+
+    /** 某空间在 [fromDay, toDayExclusive) 内的亲密记录：日期正序，日历按月取数用。 */
+    default List<CoupleIntimateLogPO> findInRange(String spaceId, String fromDay, String toDayExclusive) {
+        return selectList(new LambdaQueryWrapper<CoupleIntimateLogPO>()
+                .eq(CoupleIntimateLogPO::getSpaceId, spaceId)
+                .ge(CoupleIntimateLogPO::getDay, fromDay)
+                .lt(CoupleIntimateLogPO::getDay, toDayExclusive)
+                .orderByAsc(CoupleIntimateLogPO::getDay)
+                .orderByAsc(CoupleIntimateLogPO::getCreated));
+    }
 }

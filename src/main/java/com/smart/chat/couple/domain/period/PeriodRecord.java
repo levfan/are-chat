@@ -73,6 +73,36 @@ public final class PeriodRecord {
         }
     }
 
+    /**
+     * 某一天落在不在这次经期里：记了结束日按 [开始日, 结束日]，还没结束就只到今天为止
+     * （今天由调用方给，聚合自己不读时钟）。脏日期静默算没覆盖，日历卡不该因为一行历史脏数据就 500。
+     */
+    public boolean covers(String day, String today) {
+        LocalDate start = PeriodCycles.parse(startDay);
+        LocalDate probe = PeriodCycles.parse(day);
+        if (start == null || probe == null) {
+            return false;
+        }
+        LocalDate end = endDay == null ? PeriodCycles.parse(today) : PeriodCycles.parse(endDay);
+        if (end == null) {
+            return false;
+        }
+        if (end.isBefore(start)) {
+            end = start;
+        }
+        return !probe.isBefore(start) && !probe.isAfter(end);
+    }
+
+    /** 这天是不是开始日（字符串等值即可，两边都是 yyyy-MM-dd）。 */
+    public boolean startsOn(String day) {
+        return startDay.equals(day);
+    }
+
+    /** 这天是不是结束日；还没记结束日时永远 false。 */
+    public boolean endsOn(String day) {
+        return endDay != null && endDay.equals(day);
+    }
+
     public String id() {
         return id;
     }
