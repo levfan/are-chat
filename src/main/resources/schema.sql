@@ -933,3 +933,18 @@ CREATE TABLE `couple_wish` (
     PRIMARY KEY (`id`),
     UNIQUE KEY `uk_couple8_wish_title` (`space_id`,`owner_user`,`title`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='愿望清单表：双方互相添加想要的东西，PREPARED 状态对被许愿人保密直到本人确认实现';
+
+
+-- smart_collections.couple_period definition（V54）
+
+CREATE TABLE `couple_period` (
+    `id` varchar(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '主键UUID',
+    `space_id` varchar(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '所属情侣空间ID，关联 couple_space.id',
+    `start_day` varchar(10) NOT NULL COMMENT '经期开始日期（yyyy-MM-dd，自然日）',
+    `end_day` varchar(10) DEFAULT NULL COMMENT '经期结束日期（yyyy-MM-dd；还没结束为 NULL）',
+    `recorder_user` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '记录人用户名',
+    `created` bigint(20) NOT NULL COMMENT '记录时间（毫秒时间戳）',
+    `updated_at` bigint(20) DEFAULT NULL COMMENT '最近修改时间（毫秒时间戳）',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_couple10_period_start` (`space_id`,`start_day`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='经期记录表：一行=一次经期的开始日（结束日可后补），平均周期与下次预测读时算';
