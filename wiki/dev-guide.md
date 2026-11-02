@@ -61,7 +61,7 @@
 6. 推送：commit → `git pull --no-rebase` → push；失败保留本地 commit 并报告，禁止 force push。
 7. 收尾：模块/表/接口/定时任务有增删 → 同步更新 are-chat-map skill（及本 wiki）。
 
-以上仅为串联摘要，**规范细节一律以现有文档为准**：仓库规则见 `agents.md`；完整规范见 `.agents/skills/git-commit/SKILL.md`、`.agents/skills/db-migration/SKILL.md`、`.agents/skills/lombok-data/SKILL.md`。
+以上仅为串联摘要，**规范细节一律以现有文档为准**：仓库规则入口见根目录 `AGENTS.md`（只按场景指路，不复述细则）；完整规范见 `.agents/skills/git-commit/SKILL.md`、`.agents/skills/db-migration/SKILL.md`、`.agents/skills/lombok-data/SKILL.md`。
 
 ## 数据层硬性约定（速记）
 
@@ -81,4 +81,4 @@
 
 - `README.md` / `DEPLOY.md`：面向部署运行；本 wiki 面向理解与二次开发。
 - `.agents/skills/are-chat-map`：规范与速查的单一事实源（改代码前必读）；wiki 不复述分层模板/命名规范。
-- 前端仓库配套文档：`are-chat-web` 的 `agents.md` 与 `are-chat-web-map` skill（新 WS 事件需两端同步注册）。
+- 前端仓库配套文档：`are-chat-web` 的 `AGENTS.md`（入口指路）与 `are-chat-web-map` skill（新 WS 事件需两端同步注册）。

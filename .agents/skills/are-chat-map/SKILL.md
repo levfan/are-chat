@@ -38,7 +38,7 @@ are-chat/                             # 单模块 Maven（无多 module），坐
 │                                     # （v1~v7 与 acceptance-v5~v7 是过程存档，描述的多数功能已在 V50/V51/V53 下线，读它只为看当时的判据）
 ├── deploy/  Dockerfile  are-chat-1.0.0.tar   # 私有化部署产物与脚本
 ├── uploads/                          # 本地文件存储根（FileStorageProperties.base-dir=./uploads，随 cwd）
-└── AGENTS.md                         # 仓库级 agent 约束（优先级高于个人记忆，如绿后必推）
+└── AGENTS.md                         # 仓库级 agent 入口：按场景指路到 .agents/skills，细则不在这里复述
 ```
 
 ### 端口与联调速查
