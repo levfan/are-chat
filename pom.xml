@@ -13,7 +13,7 @@
 
     <groupId>com.smart.chat</groupId>
     <artifactId>are-chat</artifactId>
-    <version>1.0.0</version>
+    <version>1.8.0</version>
     <name>are-chat</name>
     <description>are-chat 前后端分离即时通讯 —— 后端服务（JDK 25 + Spring Boot 4.1 + fastjson2）</description>
 

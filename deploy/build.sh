@@ -20,7 +20,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-VERSION="${VERSION:-1.0.0}"
+VERSION="${VERSION:-1.8.0}"
 
 SKIP_BASE=0; RUN_UP=0
 for arg in "$@"; do

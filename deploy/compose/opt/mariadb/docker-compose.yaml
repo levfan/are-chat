@@ -1,0 +1,65 @@
+networks:
+  are_chat_external_network:
+    external: true
+
+services:
+  are-chat-mariadb:
+    image: mariadb:12.3.3
+    container_name: are-chat-mariadb
+    ports:
+      - "3307:3306"
+    restart: always
+
+    # ---- 精确限制 1GB ----
+    mem_limit: 1G
+    memswap_limit: 1G              # 等于 mem_limit = 禁用 swap，确保性能不因换页抖动
+
+    ulimits:
+      memlock: -1
+
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+    env_file:
+      - ../.env
+    volumes:
+      - ./data/mariadb_data:/var/lib/mysql
+      - ./data/mariadb/cnf:/etc/mysql/conf.d
+      - /etc/localtime:/etc/localtime:ro
+      - ./init-scripts:/docker-entrypoint-initdb.d
+      - ./logs:/var/log/mysql
+    environment:
+      - TZ=Asia/Shanghai
+      - MARIADB_ROOT_PASSWORD=Ht@706706706
+
+    command: >
+      --character-set-server=utf8mb4
+      --collation-server=utf8mb4_unicode_ci
+      --max-connections=100
+      --innodb-read-io-threads=4
+      --innodb-write-io-threads=4
+      --innodb-buffer-pool-size=512M
+      --innodb-log-file-size=256M
+      --innodb-flush-method=O_DIRECT
+      --log-error=/var/log/mysql/error.log
+      --slow-query-log=1
+      --slow-query-log-file=/var/log/mysql/slow.log
+      --long-query-time=2
+      --lower_case_table_names=1
+      --innodb-snapshot-isolation=OFF
+      --table-open-cache=1000
+      --thread-cache-size=32
+      --tmp-table-size=64M
+      --max-heap-table-size=64M
+
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    networks:
+      - are_chat_external_network

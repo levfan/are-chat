@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # 打最终业务镜像（日常构建入口，在 WSL2 中运行）
-# 构建成功后自动导出镜像 tar 包到脚本同目录: are-chat-${VERSION:-1.0.0}.tar
+# 构建成功后自动导出镜像 tar 包到脚本同目录: are-chat-${VERSION:-1.8.0}.tar
 #
 # 前置（产物放在 deploy/ 下，见 deploy/README.md）：
 #   - app.jar  Windows 上 mvn package 出的后端 jar
@@ -8,12 +8,12 @@
 #   - 基础镜像 are-chat-base:$VERSION 已存在（没有就先跑 build-base.sh 或 build.sh）
 #
 # 用法：
-#   ./deploy/build-business.sh                # 打 are-chat:${VERSION:-1.0.0}
+#   ./deploy/build-business.sh                # 打 are-chat:${VERSION:-1.8.0}
 #   VERSION=1.2.0 ./deploy/build-business.sh  # 指定版本（需已有同版本 base）
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-VERSION="${VERSION:-1.0.0}"
+VERSION="${VERSION:-1.8.0}"
 
 if [ "$#" -gt 0 ]; then
   echo "本脚本不接收参数。需要 --skip-base / --up 请改用 build.sh" >&2
