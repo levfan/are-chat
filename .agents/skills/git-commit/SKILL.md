@@ -63,3 +63,10 @@ feat(chat): 聊天窗口展示撤回提示
 - pull/push 失败（网络、凭据、冲突、非快进）时：保留本地 commit，向用户报告原因等待处理；冲突不自动解决，禁止 force push、自动 rebase 改写历史
 - 不 rebase 已有历史、不使用 --no-verify、不 force push
 - 用户对拆分/合并或推送时机有明确要求时，以用户要求优先
+
+## 与 major 发版衔接（硬性）
+
+- 版本来源是 `pom.xml` 的 `<version>`；提交前若判到 major（X.0.0，含 `-alpha` / `-beta` / `-rc` 后缀），commit → `git pull --no-rebase` → push 完成后必须立即接 `release-assets` skill，不再等用户开口
+- 只有 major 自动发版；minor/patch 不发布 Releases assets，用户明确要求时由 `release-assets --force` 处理
+- 前端 `are-chat-web` 的版本与后端对齐后，各自仓库的 `release-assets` skill 分别发布自己的资产，不要混发
+- 汇报必须给 Release URL、资产名与 SHA-256 是否一致；详见 `.agents/skills/release-assets/SKILL.md`

@@ -8,5 +8,6 @@
 | 改数据库表结构，或要向表里初始化数据 | [.agents/skills/db-migration/SKILL.md](.agents/skills/db-migration/SKILL.md) — V 脚本命名、幂等与双兼容、schema.sql 同步 |
 | 新建或修改实体、DTO、VO、配置属性类 | [.agents/skills/lombok-data/SKILL.md](.agents/skills/lombok-data/SKILL.md) — 注解选型与 MyBatis-Plus/fastjson2 注意事项 |
 | 提交与推送（含提交前构建门禁） | [.agents/skills/git-commit/SKILL.md](.agents/skills/git-commit/SKILL.md) — 架构师复审清单、拆分原则、commit 格式、pull 后 push |
+| major 版本发版（X.0.0，含 rc 等后缀） | [.agents/skills/release-assets/SKILL.md](.agents/skills/release-assets/SKILL.md) — 后端 jar 与镜像 tar 同步到 GitHub Releases assets，minor/patch 不发 |
 
-长期约束与产品红线见 [CONTEXT.md](CONTEXT.md)；本文件每轮自动进上下文，所以以上四个场景只要出现，就必须先加载对应 skill。
+长期约束与产品红线见 [CONTEXT.md](CONTEXT.md)；本文件每轮自动进上下文，所以以上场景只要出现，就必须先加载对应 skill。
