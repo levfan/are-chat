@@ -48,7 +48,7 @@ are-chat/                             # 单模块 Maven（无多 module），坐
 | 后端 HTTP | `server.port=8080`；REST 统一前缀 `/api`；健康检查 `/api/health`；HTTPS 由 nginx 终结，`forward-headers-strategy=framework` 使 Cookie 自动带 Secure |
 | WebSocket 聊天室 | `@ServerEndpoint("/ws/chat/{name}")`（room/ChatEndpoint；@ServerEndpoint 实例由容器创建，经 ChatWebSocketBridge 桥接静态 Spring 引用） |
 | 前端 dev | 5173；vite 代理 `/api`→8080、`/ws`→8080（ws:true） |
-| 开发库（默认） | MariaDB `117.72.73.149:3307/smart_collections`；`DB_CONNECT_URL/DB_CONNECT_USER/DB_CONNECT_PASSWORD/DB_CONNECT_DRIVER` 环境变量可整体覆盖（真实口令不落仓库文档） |
+| 开发库（默认） | MariaDB `117.72.73.149:3307/are_chat`；`DB_CONNECT_URL/DB_CONNECT_USER/DB_CONNECT_PASSWORD/DB_CONNECT_DRIVER` 环境变量可整体覆盖（真实口令不落仓库文档） |
 | 测试库 | H2 内存 `MODE=MySQL;DATABASE_TO_LOWER=TRUE;CASE_INSENSITIVE_IDENTIFIERS=TRUE`，与生产跑同一批 V 脚本 |
 | 登录态 | HttpSession Cookie；后端 `Sessions.requireUser(session)`，除 `/api/auth/**`、`/api/health` 外全部需会话 |
 | Flyway | `baseline-on-migrate` + `baseline-version=0`：存量老库自动打 0 基线后从 V1 全量执行——所以每个 V 脚本都必须幂等；`clean-disabled=true` |
